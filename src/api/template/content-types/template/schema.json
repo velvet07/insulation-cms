@@ -1,0 +1,38 @@
+{
+  "kind": "collectionType",
+  "collectionName": "templates",
+  "info": {
+    "singularName": "template",
+    "pluralName": "templates",
+    "displayName": "Template",
+    "description": "Dokumentum sablonok"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "type": {
+      "type": "enumeration",
+      "enum": ["contract", "worksheet", "invoice"],
+      "required": true
+    },
+    "tokens": {
+      "type": "json"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant"
+    },
+    "template_file": {
+      "type": "media",
+      "multiple": false,
+      "required": false
+    }
+  }
+}

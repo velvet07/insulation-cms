@@ -1,0 +1,42 @@
+{
+  "kind": "collectionType",
+  "collectionName": "tenants",
+  "info": {
+    "singularName": "tenant",
+    "pluralName": "tenants",
+    "displayName": "Tenant",
+    "description": "Multi-tenancy kezelés"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "subdomain": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "mode": {
+      "type": "enumeration",
+      "enum": ["b2b", "standalone"],
+      "default": "b2b"
+    },
+    "export_structure_template": {
+      "type": "json"
+    },
+    "material_norms": {
+      "type": "json"
+    },
+    "projects": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::project.project",
+      "mappedBy": "tenant"
+    }
+  }
+}

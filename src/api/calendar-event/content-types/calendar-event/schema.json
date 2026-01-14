@@ -1,0 +1,52 @@
+{
+  "kind": "collectionType",
+  "collectionName": "calendar_events",
+  "info": {
+    "singularName": "calendar-event",
+    "pluralName": "calendar-events",
+    "displayName": "Calendar Event",
+    "description": "Naptár események"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "scheduled_date": {
+      "type": "date",
+      "required": true
+    },
+    "start_time": {
+      "type": "time"
+    },
+    "end_time": {
+      "type": "time"
+    },
+    "materials_required": {
+      "type": "json"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["planned", "in_progress", "completed"],
+      "default": "planned"
+    },
+    "notes": {
+      "type": "text"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant"
+    },
+    "project": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project.project"
+    },
+    "assigned_to": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "plugin::users-permissions.user"
+    }
+  }
+}

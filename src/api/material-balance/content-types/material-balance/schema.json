@@ -1,0 +1,40 @@
+{
+  "kind": "collectionType",
+  "collectionName": "material_balances",
+  "info": {
+    "singularName": "material-balance",
+    "pluralName": "material-balances",
+    "displayName": "Material Balance",
+    "description": "Anyagegyenlegek"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "total_picked_up": {
+      "type": "json"
+    },
+    "total_used": {
+      "type": "json"
+    },
+    "balance": {
+      "type": "json"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["surplus", "balanced", "deficit"],
+      "default": "balanced"
+    },
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "material": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::material.material"
+    }
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "kind": "collectionType",
+  "collectionName": "billing_records",
+  "info": {
+    "singularName": "billing-record",
+    "pluralName": "billing-records",
+    "displayName": "Billing Record",
+    "description": "Számlázási tételek"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "billing_month": {
+      "type": "string",
+      "required": true
+    },
+    "area_sqm": {
+      "type": "decimal",
+      "required": true
+    },
+    "document_count": {
+      "type": "integer",
+      "default": 0
+    },
+    "amount_net": {
+      "type": "decimal"
+    },
+    "amount_vat": {
+      "type": "decimal"
+    },
+    "amount_gross": {
+      "type": "decimal"
+    },
+    "generated_at": {
+      "type": "datetime"
+    },
+    "invoice_generated": {
+      "type": "boolean",
+      "default": false
+    },
+    "invoice_number": {
+      "type": "string"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant"
+    },
+    "project": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project.project"
+    }
+  }
+}
