@@ -1,0 +1,44 @@
+{
+  "kind": "collectionType",
+  "collectionName": "materials",
+  "info": {
+    "singularName": "material",
+    "pluralName": "materials",
+    "displayName": "Material",
+    "description": "Anyagok"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "category": {
+      "type": "enumeration",
+      "enum": ["insulation", "vapor_barrier", "breathable_membrane"],
+      "required": true
+    },
+    "thickness_cm": {
+      "type": "enumeration",
+      "enum": ["cm10", "cm12_5", "cm15"]
+    },
+    "coverage_per_roll": {
+      "type": "decimal"
+    },
+    "rolls_per_pallet": {
+      "type": "integer",
+      "default": 24
+    },
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "current_stock": {
+      "type": "json"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant"
+    }
+  }
+}

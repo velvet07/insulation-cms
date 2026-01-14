@@ -17,6 +17,9 @@ insulation-crm/
 │   ├── components/        # React komponensek
 │   ├── lib/              # Utilities, API clients
 │   └── types/            # TypeScript típusok
+├── src/                   # Strapi backend (self-hosted)
+│   ├── api/              # Strapi content types
+│   └── ...
 ├── strapi-export/         # Strapi API fájlok (schemas, routes, controllers, services)
 ├── docs/                  # Dokumentáció
 └── deploy.sh              # Deployment script
@@ -31,10 +34,12 @@ insulation-crm/
 
 ### Lokális Fejlesztés
 
+#### Frontend
+
 ```bash
 # 1. Projekt klónozása
-git clone <repo-url>
-cd insulation-crm
+git clone https://github.com/velvet07/insulation-cms.git
+cd insulation-cms
 
 # 2. Frontend függőségek telepítése
 cd frontend
@@ -49,6 +54,17 @@ npm run dev
 ```
 
 A frontend elérhető: `http://localhost:3000`
+
+#### Strapi Backend
+
+```bash
+# Strapi development szerver
+npm run develop
+# vagy
+npm run dev
+```
+
+A Strapi admin elérhető: `http://localhost:1337/admin`
 
 ## 📦 Deployment
 

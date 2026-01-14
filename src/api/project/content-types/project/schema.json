@@ -1,0 +1,91 @@
+{
+  "kind": "collectionType",
+  "collectionName": "projects",
+  "info": {
+    "singularName": "project",
+    "pluralName": "projects",
+    "displayName": "Project",
+    "description": "Projektek (ügyfelek)"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "client_name": {
+      "type": "string",
+      "required": true
+    },
+    "client_address": {
+      "type": "string",
+      "required": true
+    },
+    "client_phone": {
+      "type": "string"
+    },
+    "client_email": {
+      "type": "email"
+    },
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "area_sqm": {
+      "type": "decimal",
+      "required": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["pending", "in_progress", "ready_for_review", "approved", "completed"],
+      "default": "pending"
+    },
+    "insulation_option": {
+      "type": "enumeration",
+      "enum": ["A", "B"]
+    },
+    "documents_generated_count": {
+      "type": "integer",
+      "default": 0
+    },
+    "billing_amount": {
+      "type": "decimal"
+    },
+    "scheduled_date": {
+      "type": "date"
+    },
+    "completed_at": {
+      "type": "datetime"
+    },
+    "approved_at": {
+      "type": "datetime"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "projects"
+    },
+    "assigned_to": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "approved_by": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "documents": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::document.document",
+      "mappedBy": "project"
+    },
+    "photos": {
+      "type": "media",
+      "multiple": true,
+      "required": false,
+      "allowedTypes": ["images"]
+    }
+  }
+}

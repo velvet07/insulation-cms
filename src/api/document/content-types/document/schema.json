@@ -1,0 +1,53 @@
+{
+  "kind": "collectionType",
+  "collectionName": "documents",
+  "info": {
+    "singularName": "document",
+    "pluralName": "documents",
+    "displayName": "Document",
+    "description": "Dokumentumok"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "type": {
+      "type": "enumeration",
+      "enum": ["contract", "worksheet", "invoice", "completion_certificate", "other"],
+      "required": true
+    },
+    "file_name": {
+      "type": "string"
+    },
+    "file_size": {
+      "type": "integer"
+    },
+    "signed": {
+      "type": "boolean",
+      "default": false
+    },
+    "signature_data": {
+      "type": "json"
+    },
+    "signed_at": {
+      "type": "datetime"
+    },
+    "project": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project.project",
+      "inversedBy": "documents"
+    },
+    "file": {
+      "type": "media",
+      "multiple": false,
+      "required": false
+    },
+    "uploaded_by": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    }
+  }
+}

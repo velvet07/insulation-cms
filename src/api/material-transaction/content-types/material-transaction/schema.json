@@ -1,0 +1,64 @@
+{
+  "kind": "collectionType",
+  "collectionName": "material_transactions",
+  "info": {
+    "singularName": "material-transaction",
+    "pluralName": "material-transactions",
+    "displayName": "Material Transaction",
+    "description": "Anyag tranzakciók"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "type": {
+      "type": "enumeration",
+      "enum": ["pickup", "usage"],
+      "required": true
+    },
+    "pickup_date": {
+      "type": "date"
+    },
+    "quantity_pallets": {
+      "type": "integer"
+    },
+    "quantity_rolls": {
+      "type": "integer"
+    },
+    "used_date": {
+      "type": "date"
+    },
+    "calculated_usage": {
+      "type": "json"
+    },
+    "notes": {
+      "type": "text"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant"
+    },
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "material": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::material.material"
+    },
+    "project": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::project.project"
+    },
+    "delivery_note": {
+      "type": "media",
+      "multiple": false,
+      "required": false
+    }
+  }
+}

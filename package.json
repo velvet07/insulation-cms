@@ -1,13 +1,42 @@
 {
+  "name": "insulation-cms",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A Strapi application",
+  "scripts": {
+    "build": "strapi build",
+    "console": "strapi console",
+    "deploy": "strapi deploy",
+    "dev": "strapi develop",
+    "develop": "strapi develop",
+    "start": "strapi start",
+    "strapi": "strapi",
+    "upgrade": "npx @strapi/upgrade latest",
+    "upgrade:dry": "npx @strapi/upgrade latest --dry"
+  },
   "dependencies": {
-    "@tanstack/react-query": "^5.90.17",
-    "axios": "^1.13.2",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
-    "lucide-react": "^0.562.0",
-    "react-hook-form": "^7.71.1",
-    "tailwind-merge": "^3.4.0",
-    "zod": "^4.3.5",
-    "zustand": "^5.0.10"
+    "@strapi/plugin-cloud": "5.33.3",
+    "@strapi/plugin-users-permissions": "5.33.3",
+    "@strapi/strapi": "5.33.3",
+    "better-sqlite3": "12.4.1",
+    "pg": "^8.16.3",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "react-router-dom": "^6.0.0",
+    "styled-components": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=20.0.0 <=24.x.x",
+    "npm": ">=6.0.0"
+  },
+  "strapi": {
+    "uuid": "1992f183-e46c-4344-bdf6-a627e1042efc",
+    "installId": "88c7e20cca118abb2227aa6e196f737f2803f528a7a940d5be4ded3a8e8dceb6"
   }
 }
