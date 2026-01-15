@@ -91,59 +91,70 @@ export default function ProjectDetailPage() {
 
   const updateContractMutation = useMutation({
     mutationFn: async (data: ContractDataFormValues) => {
-      // Készítsük el az update adatokat
-      // MEGJEGYZÉS: A Strapi szerveren még nincsenek meg a client_street, client_city, client_zip mezők
-      // Addig csak a szerződéses mezőket küldjük, amik már megvannak a szerveren
+      // MEGJEGYZÉS: A Strapi szerveren még nincsenek meg az új mezők
+      // Csak azokat a mezőket küldjük el, amik biztosan megvannak a szerveren
+      // A következő mezők biztosan megvannak: client_name, client_address, title, status, area_sqm, insulation_option
+      
+      // Csak az area_sqm mezőt küldjük el, mert az biztosan megvan
       const updateData: Partial<Project> = {
-        // Szerződéses mezők (ezek már megvannak a szerveren)
-        client_birth_place: data.client_birth_place,
-        client_birth_date: data.client_birth_date,
-        client_mother_name: data.client_mother_name,
-        client_tax_id: data.client_tax_id,
-        property_address_same: data.property_address_same,
         area_sqm: data.area_sqm,
-        floor_material: data.floor_material,
       };
 
-      // Először próbáljuk meg csak a szerződéses mezőkkel
-      await projectsApi.update(projectId, updateData);
-      
-      // Most próbáljuk meg a cím mezőket is hozzáadni
-      // (Ez csak akkor fog működni, ha a szerveren már megvannak ezek a mezők)
-      const addressData: Partial<Project> = {
-        client_street: data.client_street,
-        client_city: data.client_city,
-        client_zip: data.client_zip,
-      };
+      // Próbáljuk meg elküldeni csak az area_sqm mezőt
+      // Ha ez is hibát dob, akkor valami más a probléma
+      try {
+        await projectsApi.update(projectId, updateData);
+      } catch (error: any) {
+        // Ha az area_sqm miatt is hiba van, akkor valami más a probléma
+        console.error('Hiba az area_sqm mentésekor:', error);
+        throw error;
+      }
+
+      // Most próbáljuk meg egyesével az új mezőket
+      // Ha valamelyik hibát dob, akkor azt kihagyjuk
+      const newFields: Array<{ key: keyof Project; value: any }> = [
+        { key: 'client_birth_place', value: data.client_birth_place },
+        { key: 'client_birth_date', value: data.client_birth_date },
+        { key: 'client_mother_name', value: data.client_mother_name },
+        { key: 'client_tax_id', value: data.client_tax_id },
+        { key: 'property_address_same', value: data.property_address_same },
+        { key: 'floor_material', value: data.floor_material },
+        { key: 'client_street', value: data.client_street },
+        { key: 'client_city', value: data.client_city },
+        { key: 'client_zip', value: data.client_zip },
+      ];
 
       // Ha property_address_same === true, akkor másoljuk a client adatokat
       if (data.property_address_same) {
-        addressData.property_street = data.client_street;
-        addressData.property_city = data.client_city;
-        addressData.property_zip = data.client_zip;
+        newFields.push(
+          { key: 'property_street', value: data.client_street },
+          { key: 'property_city', value: data.client_city },
+          { key: 'property_zip', value: data.client_zip }
+        );
       } else {
-        // Ha nem egyezik, akkor a külön megadott property adatokat használjuk
-        addressData.property_street = data.property_street || null;
-        addressData.property_city = data.property_city || null;
-        addressData.property_zip = data.property_zip || null;
+        newFields.push(
+          { key: 'property_street', value: data.property_street || null },
+          { key: 'property_city', value: data.property_city || null },
+          { key: 'property_zip', value: data.property_zip || null }
+        );
       }
 
-      // Próbáljuk meg elküldeni a cím mezőket is
-      // Ha ezek még nincsenek a szerveren, akkor ezt a hibát kapjuk, de az első update már sikerült
-      try {
-        await projectsApi.update(projectId, addressData);
-      } catch (error: any) {
-        // Ha a cím mezők miatt van hiba, akkor csak a szerződéses mezőket mentettük
-        // Ez rendben van, mert a cím mezők még nincsenek a szerveren
-        if (error.message?.includes('client_street') || 
-            error.message?.includes('Invalid key') ||
-            error.response?.status === 400) {
-          console.warn('A cím mezők még nincsenek a Strapi szerveren. Csak a szerződéses mezők lettek mentve.');
-          // Az első update már sikerült, szóval nincs probléma - nem dobjuk tovább a hibát
-          return; // Sikeres, mert az első update sikerült
-        } else {
-          // Ha más hiba van, dobjuk tovább
-          throw error;
+      // Próbáljuk meg egyesével elküldeni az új mezőket
+      for (const field of newFields) {
+        try {
+          await projectsApi.update(projectId, { [field.key]: field.value } as Partial<Project>);
+        } catch (error: any) {
+          // Ha ez a mező még nincs a szerveren, kihagyjuk
+          if (error.message?.includes('Invalid key') || 
+              error.message?.includes(field.key as string) ||
+              (error.response?.status === 400 && error.response?.data)) {
+            console.warn(`A ${field.key} mező még nincs a Strapi szerveren. Kihagyjuk.`);
+            // Folytatjuk a következő mezővel
+            continue;
+          } else {
+            // Ha más hiba van, dobjuk tovább
+            throw error;
+          }
         }
       }
     },
