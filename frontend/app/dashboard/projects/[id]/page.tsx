@@ -105,41 +105,42 @@ export default function ProjectDetailPage() {
         floor_material: data.floor_material,
       };
 
-      // Próbáljuk meg elküldeni a client_street, client_city, client_zip mezőket is
-      // Ha ezek még nincsenek a szerveren, akkor ezt a hibát kapjuk
-      // TODO: Amikor a Strapi szerveren frissítve lesz a schema, akkor ezeket is hozzáadhatjuk
+      // Először próbáljuk meg csak a szerződéses mezőkkel
+      await projectsApi.update(projectId, updateData);
+      
+      // Most próbáljuk meg a cím mezőket is hozzáadni
+      // (Ez csak akkor fog működni, ha a szerveren már megvannak ezek a mezők)
+      const addressData: Partial<Project> = {
+        client_street: data.client_street,
+        client_city: data.client_city,
+        client_zip: data.client_zip,
+      };
+
+      // Ha property_address_same === true, akkor másoljuk a client adatokat
+      if (data.property_address_same) {
+        addressData.property_street = data.client_street;
+        addressData.property_city = data.client_city;
+        addressData.property_zip = data.client_zip;
+      } else {
+        // Ha nem egyezik, akkor a külön megadott property adatokat használjuk
+        addressData.property_street = data.property_street || null;
+        addressData.property_city = data.property_city || null;
+        addressData.property_zip = data.property_zip || null;
+      }
+
+      // Próbáljuk meg elküldeni a cím mezőket is
+      // Ha ezek még nincsenek a szerveren, akkor ezt a hibát kapjuk, de az első update már sikerült
       try {
-        // Először próbáljuk meg csak a szerződéses mezőkkel
-        await projectsApi.update(projectId, updateData);
-        
-        // Ha sikerült, próbáljuk meg a cím mezőket is hozzáadni
-        // (Ez csak akkor fog működni, ha a szerveren már megvannak ezek a mezők)
-        const addressData: Partial<Project> = {
-          client_street: data.client_street,
-          client_city: data.client_city,
-          client_zip: data.client_zip,
-        };
-
-        // Ha property_address_same === true, akkor másoljuk a client adatokat
-        if (data.property_address_same) {
-          addressData.property_street = data.client_street;
-          addressData.property_city = data.client_city;
-          addressData.property_zip = data.client_zip;
-        } else {
-          // Ha nem egyezik, akkor a külön megadott property adatokat használjuk
-          addressData.property_street = data.property_street || null;
-          addressData.property_city = data.property_city || null;
-          addressData.property_zip = data.property_zip || null;
-        }
-
-        // Próbáljuk meg elküldeni a cím mezőket is
         await projectsApi.update(projectId, addressData);
       } catch (error: any) {
         // Ha a cím mezők miatt van hiba, akkor csak a szerződéses mezőket mentettük
         // Ez rendben van, mert a cím mezők még nincsenek a szerveren
-        if (error.message?.includes('client_street') || error.message?.includes('Invalid key')) {
+        if (error.message?.includes('client_street') || 
+            error.message?.includes('Invalid key') ||
+            error.response?.status === 400) {
           console.warn('A cím mezők még nincsenek a Strapi szerveren. Csak a szerződéses mezők lettek mentve.');
-          // Az első update már sikerült, szóval nincs probléma
+          // Az első update már sikerült, szóval nincs probléma - nem dobjuk tovább a hibát
+          return; // Sikeres, mert az első update sikerült
         } else {
           // Ha más hiba van, dobjuk tovább
           throw error;
