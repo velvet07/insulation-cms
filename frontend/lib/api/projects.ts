@@ -79,14 +79,25 @@ export const projectsApi = {
 
   update: async (id: number | string, data: Partial<Project>) => {
     try {
-      const response = await strapiApi.put<StrapiResponse<Project>>(`/projects/${id}`, { data });
+      // Szűrjük ki az undefined értékeket
+      const cleanData = Object.fromEntries(
+        Object.entries(data).filter(([_, value]) => value !== undefined)
+      );
+      const response = await strapiApi.put<StrapiResponse<Project>>(`/projects/${id}`, { data: cleanData });
       return unwrapStrapiResponse(response);
     } catch (error: any) {
       if (error.response) {
         console.error('Strapi API Error:', error.response.data);
-        const errorMessage = error.response.data?.error?.message || 
-                           JSON.stringify(error.response.data) || 
-                           'Hiba történt a projekt frissítése során';
+        console.error('Request data:', data);
+        // Részletesebb hibaüzenet
+        let errorMessage = 'Hiba történt a projekt frissítése során';
+        if (error.response.data?.error?.message) {
+          errorMessage = error.response.data.error.message;
+        } else if (error.response.data?.error) {
+          errorMessage = JSON.stringify(error.response.data.error);
+        } else if (error.response.data) {
+          errorMessage = JSON.stringify(error.response.data);
+        }
         throw new Error(errorMessage);
       }
       throw error;
