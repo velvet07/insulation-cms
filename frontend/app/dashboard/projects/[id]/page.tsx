@@ -94,11 +94,19 @@ export default function ProjectDetailPage() {
       // Először lekérjük a jelenlegi projektet, hogy megtartsuk a meglévő mezőket
       const currentProject = await projectsApi.getOne(projectId);
       
+      // Strapi belső mezők, amiket nem szabad elküldeni az update során
+      const strapiInternalFields = ['id', 'documentId', 'createdAt', 'updatedAt', 'publishedAt'];
+      
+      // Szűrjük ki a Strapi belső mezőket a jelenlegi projektből
+      const cleanCurrentProject = Object.fromEntries(
+        Object.entries(currentProject).filter(([key]) => !strapiInternalFields.includes(key))
+      ) as Partial<Project>;
+      
       // Készítsük el az update adatokat a jelenlegi projekt alapján
       // Csak azokat a mezőket frissítjük, amik megvannak a szerveren
       const updateData: Partial<Project> = {
-        // Megtartjuk az összes meglévő mezőt
-        ...currentProject,
+        // Megtartjuk az összes meglévő mezőt (belső mezők nélkül)
+        ...cleanCurrentProject,
         // Frissítjük az area_sqm mezőt (ez biztosan megvan)
         area_sqm: data.area_sqm,
       };
@@ -153,7 +161,7 @@ export default function ProjectDetailPage() {
       // Ha hibát dob, akkor egyesével próbáljuk meg
       try {
         await projectsApi.update(projectId, {
-          ...currentProject,
+          ...cleanCurrentProject,
           area_sqm: data.area_sqm,
           ...fieldsToUpdate,
         });
