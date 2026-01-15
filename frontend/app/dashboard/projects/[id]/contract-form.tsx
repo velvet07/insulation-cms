@@ -196,13 +196,32 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
               name="client_birth_date"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Születési idő *</FormLabel>
+                  <FormLabel>Születési idő * (ÉÉÉÉ-HH-NN)</FormLabel>
                   <FormControl>
                     <Input 
                       type="date" 
                       value={field.value || ''} 
-                      onChange={(e) => field.onChange(e.target.value)}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        // Biztosítjuk, hogy yyyy-mm-dd formátumban legyen
+                        if (value && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+                          field.onChange(value);
+                        } else if (value) {
+                          // Ha más formátumban jön, próbáljuk konvertálni
+                          const date = new Date(value);
+                          if (!isNaN(date.getTime())) {
+                            const year = date.getFullYear();
+                            const month = String(date.getMonth() + 1).padStart(2, '0');
+                            const day = String(date.getDate()).padStart(2, '0');
+                            field.onChange(`${year}-${month}-${day}`);
+                          }
+                        } else {
+                          field.onChange('');
+                        }
+                      }}
                       onBlur={field.onBlur}
+                      pattern="\d{4}-\d{2}-\d{2}"
+                      placeholder="ÉÉÉÉ-HH-NN"
                     />
                   </FormControl>
                   <FormMessage />
