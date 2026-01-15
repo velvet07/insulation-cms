@@ -97,80 +97,78 @@ export default function ProjectDetailPage() {
       // Strapi belső mezők, amiket nem szabad elküldeni az update során
       const strapiInternalFields = ['id', 'documentId', 'createdAt', 'updatedAt', 'publishedAt'];
       
-      // Szűrjük ki a Strapi belső mezőket a jelenlegi projektből
+      // Új mezők, amik még nincsenek a szerveren (ezeket nem küldjük el)
+      const newFieldsNotOnServer = [
+        'client_street', 'client_city', 'client_zip',
+        'client_birth_place', 'client_birth_date', 'client_mother_name', 'client_tax_id',
+        'property_address_same', 'property_street', 'property_city', 'property_zip',
+        'floor_material'
+      ];
+      
+      // Szűrjük ki a Strapi belső mezőket ÉS az új mezőket a jelenlegi projektből
       const cleanCurrentProject = Object.fromEntries(
-        Object.entries(currentProject).filter(([key]) => !strapiInternalFields.includes(key))
+        Object.entries(currentProject).filter(([key]) => 
+          !strapiInternalFields.includes(key) && !newFieldsNotOnServer.includes(key)
+        )
       ) as Partial<Project>;
       
-      // Készítsük el az update adatokat a jelenlegi projekt alapján
-      // Csak azokat a mezőket frissítjük, amik megvannak a szerveren
+      // Készítsük el az update adatokat - csak a meglévő mezőket küldjük el
       const updateData: Partial<Project> = {
-        // Megtartjuk az összes meglévő mezőt (belső mezők nélkül)
+        // Megtartjuk az összes meglévő mezőt (belső és új mezők nélkül)
         ...cleanCurrentProject,
         // Frissítjük az area_sqm mezőt (ez biztosan megvan)
         area_sqm: data.area_sqm,
       };
 
-      // Próbáljuk meg hozzáadni az új mezőket egyesével
-      // Ha valamelyik hibát dob, akkor azt kihagyjuk
-      const newFields: Array<{ key: keyof Project; value: any }> = [
-        { key: 'client_birth_place', value: data.client_birth_place },
-        { key: 'client_birth_date', value: data.client_birth_date },
-        { key: 'client_mother_name', value: data.client_mother_name },
-        { key: 'client_tax_id', value: data.client_tax_id },
-        { key: 'property_address_same', value: data.property_address_same },
-        { key: 'floor_material', value: data.floor_material },
-        { key: 'client_street', value: data.client_street },
-        { key: 'client_city', value: data.client_city },
-        { key: 'client_zip', value: data.client_zip },
-      ];
-
-      // Ha property_address_same === true, akkor másoljuk a client adatokat
-      if (data.property_address_same) {
-        newFields.push(
-          { key: 'property_street', value: data.client_street },
-          { key: 'property_city', value: data.client_city },
-          { key: 'property_zip', value: data.client_zip }
-        );
-      } else {
-        newFields.push(
-          { key: 'property_street', value: data.property_street || null },
-          { key: 'property_city', value: data.property_city || null },
-          { key: 'property_zip', value: data.property_zip || null }
-        );
-      }
-
-      // Összegyűjtjük azokat a mezőket, amik sikeresen hozzáadhatók
-      const fieldsToUpdate: Partial<Project> = {};
-      
-      // Először próbáljuk meg elküldeni csak az area_sqm mezőt a meglévő adatokkal
+      // Próbáljuk meg elküldeni csak a meglévő mezőket
       try {
         await projectsApi.update(projectId, updateData);
+        console.log('Alap mezők sikeresen mentve (area_sqm)');
       } catch (error: any) {
-        console.error('Hiba az area_sqm mentésekor:', error);
+        console.error('Hiba az alap mezők mentésekor:', error);
         throw error;
       }
 
       // Most próbáljuk meg hozzáadni az új mezőket egyesével
       // Ha valamelyik hibát dob, akkor azt kihagyjuk
-      for (const field of newFields) {
-        fieldsToUpdate[field.key] = field.value;
+      const newFields: Partial<Project> = {
+        client_birth_place: data.client_birth_place,
+        client_birth_date: data.client_birth_date,
+        client_mother_name: data.client_mother_name,
+        client_tax_id: data.client_tax_id,
+        property_address_same: data.property_address_same,
+        floor_material: data.floor_material,
+        client_street: data.client_street,
+        client_city: data.client_city,
+        client_zip: data.client_zip,
+      };
+
+      // Ha property_address_same === true, akkor másoljuk a client adatokat
+      if (data.property_address_same) {
+        newFields.property_street = data.client_street;
+        newFields.property_city = data.client_city;
+        newFields.property_zip = data.client_zip;
+      } else {
+        newFields.property_street = data.property_street || null;
+        newFields.property_city = data.property_city || null;
+        newFields.property_zip = data.property_zip || null;
       }
 
-      // Próbáljuk meg elküldeni az összes új mezőt egyszerre
-      // Ha hibát dob, akkor egyesével próbáljuk meg
+      // Próbáljuk meg elküldeni az új mezőket
+      // Ha hibát dob, akkor csak figyelmeztetést írunk, mert az alap mezők már mentve lettek
       try {
         await projectsApi.update(projectId, {
           ...cleanCurrentProject,
           area_sqm: data.area_sqm,
-          ...fieldsToUpdate,
+          ...newFields,
         });
+        console.log('Új mezők is sikeresen mentve');
       } catch (error: any) {
         // Ha hibát dob, akkor csak az area_sqm-et mentettük, de az már sikerült
         if (error.message?.includes('Invalid key') || 
             error.response?.status === 400) {
-          console.warn('Néhány mező még nincs a Strapi szerveren. Csak az area_sqm lett mentve.');
-          // Az area_sqm már mentve lett, szóval nincs probléma
+          console.warn('Az új mezők még nincsenek a Strapi szerveren. Csak az area_sqm lett mentve.');
+          // Az area_sqm már mentve lett, szóval nincs probléma - nem dobjuk tovább a hibát
         } else {
           // Ha más hiba van, dobjuk tovább
           throw error;
