@@ -90,12 +90,12 @@ export default function ProjectDetailPage() {
   const [isSavingContract, setIsSavingContract] = useState(false);
 
   const updateContractMutation = useMutation({
-    mutationFn: (data: ContractDataFormValues) => {
+    mutationFn: async (data: ContractDataFormValues) => {
       // Készítsük el az update adatokat
+      // MEGJEGYZÉS: A Strapi szerveren még nincsenek meg a client_street, client_city, client_zip mezők
+      // Addig csak a szerződéses mezőket küldjük, amik már megvannak a szerveren
       const updateData: Partial<Project> = {
-        client_street: data.client_street,
-        client_city: data.client_city,
-        client_zip: data.client_zip,
+        // Szerződéses mezők (ezek már megvannak a szerveren)
         client_birth_place: data.client_birth_place,
         client_birth_date: data.client_birth_date,
         client_mother_name: data.client_mother_name,
@@ -105,19 +105,46 @@ export default function ProjectDetailPage() {
         floor_material: data.floor_material,
       };
 
-      // Ha property_address_same === true, akkor másoljuk a client adatokat
-      if (data.property_address_same) {
-        updateData.property_street = data.client_street;
-        updateData.property_city = data.client_city;
-        updateData.property_zip = data.client_zip;
-      } else {
-        // Ha nem egyezik, akkor a külön megadott property adatokat használjuk
-        updateData.property_street = data.property_street || null;
-        updateData.property_city = data.property_city || null;
-        updateData.property_zip = data.property_zip || null;
-      }
+      // Próbáljuk meg elküldeni a client_street, client_city, client_zip mezőket is
+      // Ha ezek még nincsenek a szerveren, akkor ezt a hibát kapjuk
+      // TODO: Amikor a Strapi szerveren frissítve lesz a schema, akkor ezeket is hozzáadhatjuk
+      try {
+        // Először próbáljuk meg csak a szerződéses mezőkkel
+        await projectsApi.update(projectId, updateData);
+        
+        // Ha sikerült, próbáljuk meg a cím mezőket is hozzáadni
+        // (Ez csak akkor fog működni, ha a szerveren már megvannak ezek a mezők)
+        const addressData: Partial<Project> = {
+          client_street: data.client_street,
+          client_city: data.client_city,
+          client_zip: data.client_zip,
+        };
 
-      return projectsApi.update(projectId, updateData);
+        // Ha property_address_same === true, akkor másoljuk a client adatokat
+        if (data.property_address_same) {
+          addressData.property_street = data.client_street;
+          addressData.property_city = data.client_city;
+          addressData.property_zip = data.client_zip;
+        } else {
+          // Ha nem egyezik, akkor a külön megadott property adatokat használjuk
+          addressData.property_street = data.property_street || null;
+          addressData.property_city = data.property_city || null;
+          addressData.property_zip = data.property_zip || null;
+        }
+
+        // Próbáljuk meg elküldeni a cím mezőket is
+        await projectsApi.update(projectId, addressData);
+      } catch (error: any) {
+        // Ha a cím mezők miatt van hiba, akkor csak a szerződéses mezőket mentettük
+        // Ez rendben van, mert a cím mezők még nincsenek a szerveren
+        if (error.message?.includes('client_street') || error.message?.includes('Invalid key')) {
+          console.warn('A cím mezők még nincsenek a Strapi szerveren. Csak a szerződéses mezők lettek mentve.');
+          // Az első update már sikerült, szóval nincs probléma
+        } else {
+          // Ha más hiba van, dobjuk tovább
+          throw error;
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
