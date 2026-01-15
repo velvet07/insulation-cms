@@ -193,7 +193,12 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
                 <FormItem>
                   <FormLabel>Születési idő *</FormLabel>
                   <FormControl>
-                    <Input type="date" {...field} />
+                    <Input 
+                      type="date" 
+                      value={field.value || ''} 
+                      onChange={(e) => field.onChange(e.target.value)}
+                      onBlur={field.onBlur}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
