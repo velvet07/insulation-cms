@@ -23,7 +23,7 @@ import {
 import { projectsApi } from '@/lib/api/projects';
 import type { Project, ProjectAuditLogEntry } from '@/types';
 import { ContractForm, type ContractDataFormValues } from './contract-form';
-import { formatDate } from '@/lib/utils';
+import { formatDate, formatPhoneNumber } from '@/lib/utils';
 import { useAuthStore } from '@/lib/store/auth';
 import {
   ArrowLeft,
@@ -396,7 +396,7 @@ export default function ProjectDetailPage() {
                   <div className="flex items-start gap-3">
                     <Phone className="h-5 w-5 text-gray-400 mt-0.5" />
                     <div>
-                      <p className="text-gray-900 dark:text-gray-100">{project.client_phone}</p>
+                      <p className="text-gray-900 dark:text-gray-100">{formatPhoneNumber(project.client_phone)}</p>
                     </div>
                   </div>
                 )}

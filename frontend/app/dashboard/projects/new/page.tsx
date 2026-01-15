@@ -30,6 +30,7 @@ import {
 import { projectsApi } from '@/lib/api/projects';
 import { useAuthStore } from '@/lib/store/auth';
 import type { ProjectAuditLogEntry } from '@/types';
+import { formatPhoneNumber, cleanPhoneNumber } from '@/lib/utils';
 import { ArrowLeft } from 'lucide-react';
 
 const projectSchema = z.object({

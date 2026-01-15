@@ -28,7 +28,7 @@ import {
   FormDescription,
 } from '@/components/ui/form';
 import { projectsApi } from '@/lib/api/projects';
-import { formatDate } from '@/lib/utils';
+import { formatDate, formatPhoneNumber, cleanPhoneNumber } from '@/lib/utils';
 import { ArrowLeft } from 'lucide-react';
 
 const projectSchema = z.object({
@@ -225,7 +225,14 @@ export default function EditProjectPage() {
                             <Input
                               type="tel"
                               placeholder="+36 20 123 4567"
-                              {...field}
+                              value={field.value ? formatPhoneNumber(field.value) : ''}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                // Távolítsuk el a +36 előtagot és formázást a mentéshez
+                                const cleaned = cleanPhoneNumber(value);
+                                field.onChange(cleaned || undefined);
+                              }}
+                              onBlur={field.onBlur}
                             />
                           </FormControl>
                           <FormMessage />
