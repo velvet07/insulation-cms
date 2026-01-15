@@ -21,9 +21,10 @@ import {
   FormDescription,
 } from '@/components/ui/form';
 import { projectsApi } from '@/lib/api/projects';
-import type { Project } from '@/types';
+import type { Project, ProjectAuditLogEntry } from '@/types';
 import { ContractForm, type ContractDataFormValues } from './contract-form';
 import { formatDate } from '@/lib/utils';
+import { useAuthStore } from '@/lib/store/auth';
 import {
   ArrowLeft,
   Edit,
@@ -58,6 +59,7 @@ export default function ProjectDetailPage() {
   const params = useParams();
   const projectId = params.id as string;
   const queryClient = useQueryClient();
+  const user = useAuthStore((state) => state.user);
   const [activeTab, setActiveTab] = useState<'info' | 'contract' | 'documents' | 'photos'>('info');
 
   const { data: project, isLoading, error } = useQuery({
@@ -102,7 +104,7 @@ export default function ProjectDetailPage() {
         'client_street', 'client_city', 'client_zip',
         'client_birth_place', 'client_birth_date', 'client_mother_name', 'client_tax_id',
         'property_address_same', 'property_street', 'property_city', 'property_zip',
-        'floor_material', 'floor_material_extra'
+        'floor_material', 'floor_material_extra', 'audit_log'
       ];
       
       // Szűrjük ki a Strapi belső mezőket ÉS az új mezőket a jelenlegi projektből
@@ -162,6 +164,25 @@ export default function ProjectDetailPage() {
       if (data.scheduled_date) {
         newFields.scheduled_date = data.scheduled_date;
       }
+
+      // Ellenőrizzük, hogy volt-e már szerződés adat (az első mentés vagy módosítás)
+      const hasExistingContractData = currentProject.client_birth_place || 
+                                      currentProject.client_birth_date || 
+                                      currentProject.client_tax_id;
+      
+      // Audit log bejegyzés hozzáadása
+      const auditLogEntry: ProjectAuditLogEntry = {
+        action: hasExistingContractData ? 'contract_data_modified' : 'contract_data_filled',
+        timestamp: new Date().toISOString(),
+        user: user ? {
+          email: user.email,
+          username: user.username,
+        } : undefined,
+      };
+      
+      // Hozzáadjuk az audit log bejegyzést a meglévő audit log-hoz
+      const existingAuditLog = currentProject.audit_log || [];
+      newFields.audit_log = [...existingAuditLog, auditLogEntry];
 
       // Próbáljuk meg elküldeni az új mezőket
       // Csak az új mezőket küldjük el, ne a cleanCurrentProject-et is, mert az tartalmazhat olyan mezőket, amik még nincsenek
@@ -485,19 +506,74 @@ export default function ProjectDetailPage() {
               <CardHeader>
                 <CardTitle>Metaadatok</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-500 dark:text-gray-400">Létrehozva:</span>
-                  <span>
-                    {formatDate(project.createdAt)}
-                  </span>
+              <CardContent className="space-y-4">
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500 dark:text-gray-400">Létrehozva:</span>
+                    <span>
+                      {formatDate(project.createdAt)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500 dark:text-gray-400">Módosítva:</span>
+                    <span>
+                      {formatDate(project.updatedAt)}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500 dark:text-gray-400">Módosítva:</span>
-                  <span>
-                    {formatDate(project.updatedAt)}
-                  </span>
-                </div>
+                
+                {/* Audit Log */}
+                {project.audit_log && project.audit_log.length > 0 && (
+                  <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                    <h4 className="text-sm font-semibold mb-3 text-gray-700 dark:text-gray-300">Eseménytörténet</h4>
+                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                      {project.audit_log
+                        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                        .map((entry, index) => {
+                          const actionLabels: Record<string, string> = {
+                            'contract_data_filled': 'Szerződés adatok kitöltve',
+                            'contract_data_modified': 'Szerződés adatok módosítva',
+                            'document_generated': 'Dokumentum generálva',
+                            'document_modified': 'Dokumentum módosítva',
+                            'photo_uploaded': 'Fénykép feltöltve',
+                            'photo_deleted': 'Fénykép törölve',
+                            'status_changed': 'Státusz módosítva',
+                            'project_created': 'Projekt létrehozva',
+                            'project_modified': 'Projekt módosítva',
+                          };
+                          
+                          const actionLabel = actionLabels[entry.action] || entry.action;
+                          const timestamp = new Date(entry.timestamp);
+                          const formattedDate = timestamp.toLocaleDateString('hu-HU', {
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          });
+                          
+                          return (
+                            <div key={index} className="flex items-start gap-2 text-xs">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-gray-700 dark:text-gray-300">{actionLabel}</span>
+                                  {entry.user && (
+                                    <span className="text-gray-500 dark:text-gray-400">
+                                      ({entry.user.email || entry.user.username || 'Ismeretlen felhasználó'})
+                                    </span>
+                                  )}
+                                </div>
+                                {entry.details && (
+                                  <p className="text-gray-500 dark:text-gray-400 mt-1">{entry.details}</p>
+                                )}
+                                <p className="text-gray-400 dark:text-gray-500 mt-1">{formattedDate}</p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

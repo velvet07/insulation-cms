@@ -70,6 +70,18 @@ export interface Project extends StrapiEntity {
   property_zip?: string; // Ingatlan IRSZ
   floor_material?: 'wood' | 'prefab_rc' | 'monolithic_rc' | 'rc_slab' | 'hollow_block' | 'other'; // Padlásfödém anyaga
   floor_material_extra?: string; // Egyéb födém anyaga
+  audit_log?: ProjectAuditLogEntry[]; // Audit log az események követésére
+}
+
+// Project Audit Log Types
+export interface ProjectAuditLogEntry {
+  action: 'contract_data_filled' | 'contract_data_modified' | 'document_generated' | 'document_modified' | 'photo_uploaded' | 'photo_deleted' | 'status_changed' | 'project_created' | 'project_modified';
+  timestamp: string;
+  user?: {
+    email?: string;
+    username?: string;
+  };
+  details?: string; // További részletek
 }
 
 // Document Types

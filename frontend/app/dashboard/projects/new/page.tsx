@@ -28,6 +28,8 @@ import {
   FormDescription,
 } from '@/components/ui/form';
 import { projectsApi } from '@/lib/api/projects';
+import { useAuthStore } from '@/lib/store/auth';
+import type { ProjectAuditLogEntry } from '@/types';
 import { ArrowLeft } from 'lucide-react';
 
 const projectSchema = z.object({
@@ -44,6 +46,7 @@ type ProjectFormValues = z.infer<typeof projectSchema>;
 export default function NewProjectPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const user = useAuthStore((state) => state.user);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<ProjectFormValues>({
@@ -60,11 +63,22 @@ export default function NewProjectPage() {
 
   const mutation = useMutation({
     mutationFn: (data: ProjectFormValues & { title: string }) => {
+      // Audit log bejegyzés a projekt létrehozásához
+      const auditLogEntry: ProjectAuditLogEntry = {
+        action: 'project_created',
+        timestamp: new Date().toISOString(),
+        user: user ? {
+          email: user.email,
+          username: user.username,
+        } : undefined,
+      };
+      
       return projectsApi.create({
         ...data,
         status: 'pending',
         client_email: data.client_email || undefined,
         client_phone: data.client_phone || undefined,
+        audit_log: [auditLogEntry],
       });
     },
     onSuccess: () => {
