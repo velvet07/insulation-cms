@@ -2,13 +2,28 @@
 
 import { useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ProtectedRoute } from '@/components/auth/protected-route';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+  FormDescription,
+} from '@/components/ui/form';
 import { projectsApi } from '@/lib/api/projects';
 import type { Project } from '@/types';
+import { ContractForm, type ContractDataFormValues } from './contract-form';
+import { formatDate } from '@/lib/utils';
 import {
   ArrowLeft,
   Edit,
@@ -69,6 +84,43 @@ export default function ProjectDetailPage() {
   const handleDelete = () => {
     if (confirm('Biztosan törölni szeretné ezt a projektet?')) {
       deleteMutation.mutate();
+    }
+  };
+
+  const [isSavingContract, setIsSavingContract] = useState(false);
+
+  const updateContractMutation = useMutation({
+    mutationFn: (data: ContractDataFormValues) => {
+      // Ha property_address_same === true, akkor másoljuk a client adatokat
+      const updateData: Partial<Project> = {
+        ...data,
+        // Ha megegyezik a cím, akkor másoljuk
+        ...(data.property_address_same && {
+          property_street: data.client_street,
+          property_city: data.client_city,
+          property_zip: data.client_zip,
+        }),
+      };
+      return projectsApi.update(projectId, updateData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      alert('Szerződés adatok sikeresen mentve!');
+    },
+    onError: (error: any) => {
+      console.error('Error updating contract data:', error);
+      const errorMessage = error?.message || 'Hiba történt a szerződés adatok mentése során.';
+      alert(errorMessage);
+    },
+  });
+
+  const onContractSubmit = async (values: ContractDataFormValues) => {
+    setIsSavingContract(true);
+    try {
+      await updateContractMutation.mutateAsync(values);
+    } finally {
+      setIsSavingContract(false);
     }
   };
 
@@ -283,7 +335,7 @@ export default function ProjectDetailPage() {
                       <div>
                         <p className="text-sm text-gray-500 dark:text-gray-400">Ütemezett dátum</p>
                         <p className="font-medium">
-                          {new Date(project.scheduled_date).toLocaleDateString('hu-HU')}
+                          {formatDate(project.scheduled_date)}
                         </p>
                       </div>
                     </div>
@@ -312,13 +364,13 @@ export default function ProjectDetailPage() {
                 <div className="flex justify-between">
                   <span className="text-gray-500 dark:text-gray-400">Létrehozva:</span>
                   <span>
-                    {new Date(project.createdAt).toLocaleString('hu-HU')}
+                    {formatDate(project.createdAt)}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500 dark:text-gray-400">Módosítva:</span>
                   <span>
-                    {new Date(project.updatedAt).toLocaleString('hu-HU')}
+                    {formatDate(project.updatedAt)}
                   </span>
                 </div>
               </CardContent>
@@ -326,7 +378,7 @@ export default function ProjectDetailPage() {
           </div>
         )}
 
-        {activeTab === 'contract' && (
+        {activeTab === 'contract' && project && (
           <div className="space-y-6">
             <Card>
               <CardHeader>
@@ -336,240 +388,11 @@ export default function ProjectDetailPage() {
                 <p className="text-gray-500 mb-6">
                   A szerződés kötéséhez szükséges adatok. Töltse ki az összes mezőt a szerződés generálásához.
                 </p>
-                <div className="space-y-6">
-                  {/* Szerződő lakcíme */}
-                  <div>
-                    <h4 className="font-semibold mb-4">Szerződő lakcíme</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Utca, házszám *
-                        </label>
-                        <input
-                          type="text"
-                          className="mt-1 w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2"
-                          placeholder="utca, házszám"
-                          defaultValue={project.client_street || ''}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Város *
-                        </label>
-                        <input
-                          type="text"
-                          className="mt-1 w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2"
-                          placeholder="Város"
-                          defaultValue={project.client_city || ''}
-                        />
-                      </div>
-                    </div>
-                    <div className="mt-4">
-                      <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        IRSZ *
-                      </label>
-                      <input
-                        type="text"
-                        className="mt-1 w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2"
-                        placeholder="IRSZ"
-                        defaultValue={project.client_zip || ''}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Születési adatok */}
-                  <div>
-                    <h4 className="font-semibold mb-4">Születési adatok</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Születési hely *
-                        </label>
-                        <input
-                          type="text"
-                          className="mt-1 w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2"
-                          defaultValue={project.client_birth_place || ''}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Születési idő *
-                        </label>
-                        <input
-                          type="date"
-                          className="mt-1 w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2"
-                          defaultValue={project.client_birth_date ? new Date(project.client_birth_date).toISOString().split('T')[0] : ''}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Anyja neve és adóazonosító */}
-                  <div>
-                    <h4 className="font-semibold mb-4">Egyéb adatok</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Anyja neve *
-                        </label>
-                        <input
-                          type="text"
-                          className="mt-1 w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2"
-                          defaultValue={project.client_mother_name || ''}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Adóazonosító *
-                        </label>
-                        <input
-                          type="text"
-                          className="mt-1 w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2"
-                          defaultValue={project.client_tax_id || ''}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Ingatlan adatok */}
-                  <div>
-                    <h4 className="font-semibold mb-4">A szigetelendő ingatlan adatai</h4>
-                    <div className="mb-4">
-                      <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
-                        Az ingatlan címe megegyezik a szerződő címével?
-                      </label>
-                      <div className="flex gap-4">
-                        <label className="flex items-center">
-                          <input
-                            type="radio"
-                            name="property_address_same"
-                            value="yes"
-                            className="mr-2"
-                            defaultChecked={project.property_address_same === true}
-                          />
-                          Igen
-                        </label>
-                        <label className="flex items-center">
-                          <input
-                            type="radio"
-                            name="property_address_same"
-                            value="no"
-                            className="mr-2"
-                            defaultChecked={project.property_address_same === false}
-                          />
-                          Nem
-                        </label>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Utca, házszám *
-                        </label>
-                        <input
-                          type="text"
-                          className="mt-1 w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2"
-                          placeholder="utca, házszám"
-                          defaultValue={project.property_street || ''}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Város *
-                        </label>
-                        <input
-                          type="text"
-                          className="mt-1 w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2"
-                          placeholder="Város"
-                          defaultValue={project.property_city || ''}
-                        />
-                      </div>
-                    </div>
-                    <div className="mt-4">
-                      <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        IRSZ *
-                      </label>
-                      <input
-                        type="text"
-                        className="mt-1 w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2"
-                        placeholder="IRSZ"
-                        defaultValue={project.property_zip || ''}
-                      />
-                    </div>
-                    <div className="mt-4">
-                      <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Padlás alapterülete (m²) *
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        className="mt-1 w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2"
-                        defaultValue={project.area_sqm || ''}
-                      />
-                    </div>
-                    <div className="mt-4">
-                      <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Padlásfödém anyaga *
-                      </label>
-                      <div className="mt-2 space-y-2">
-                        <label className="flex items-center">
-                          <input
-                            type="radio"
-                            name="floor_material"
-                            value="wood"
-                            className="mr-2"
-                            defaultChecked={project.floor_material === 'wood'}
-                          />
-                          Fa
-                        </label>
-                        <label className="flex items-center">
-                          <input
-                            type="radio"
-                            name="floor_material"
-                            value="prefab_rc"
-                            className="mr-2"
-                            defaultChecked={project.floor_material === 'prefab_rc'}
-                          />
-                          Előre gyártott vb. (betongerendás)
-                        </label>
-                        <label className="flex items-center">
-                          <input
-                            type="radio"
-                            name="floor_material"
-                            value="monolithic_rc"
-                            className="mr-2"
-                            defaultChecked={project.floor_material === 'monolithic_rc'}
-                          />
-                          Monolit v.b.
-                        </label>
-                        <label className="flex items-center">
-                          <input
-                            type="radio"
-                            name="floor_material"
-                            value="rc_slab"
-                            className="mr-2"
-                            defaultChecked={project.floor_material === 'rc_slab'}
-                          />
-                          Vasbeton tálcás
-                        </label>
-                        <label className="flex items-center">
-                          <input
-                            type="radio"
-                            name="floor_material"
-                            value="hollow_block"
-                            className="mr-2"
-                            defaultChecked={project.floor_material === 'hollow_block'}
-                          />
-                          Horcsik
-                        </label>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end">
-                    <Button>Adatok mentése</Button>
-                  </div>
-                </div>
+                <ContractForm
+                  project={project}
+                  onSubmit={onContractSubmit}
+                  isSubmitting={isSavingContract}
+                />
               </CardContent>
             </Card>
           </div>

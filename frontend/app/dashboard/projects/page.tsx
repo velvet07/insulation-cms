@@ -153,6 +153,7 @@ export default function ProjectsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Projekt neve</TableHead>
                   <TableHead>Ügyfél neve</TableHead>
                   <TableHead>Cím</TableHead>
                   <TableHead>Terület (m²)</TableHead>
@@ -165,6 +166,14 @@ export default function ProjectsPage() {
               <TableBody>
                 {projects.map((project) => (
                   <TableRow key={project.id}>
+                    <TableCell>
+                      <button
+                        onClick={() => handleView(project)}
+                        className="font-medium text-blue-600 dark:text-blue-400 hover:underline cursor-pointer text-left"
+                      >
+                        {project.title}
+                      </button>
+                    </TableCell>
                     <TableCell className="font-medium">{project.client_name}</TableCell>
                     <TableCell>{project.client_address}</TableCell>
                     <TableCell>{project.area_sqm ? `${project.area_sqm} m²` : '-'}</TableCell>

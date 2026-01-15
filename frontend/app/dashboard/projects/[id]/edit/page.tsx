@@ -28,6 +28,7 @@ import {
   FormDescription,
 } from '@/components/ui/form';
 import { projectsApi } from '@/lib/api/projects';
+import { formatDate } from '@/lib/utils';
 import { ArrowLeft } from 'lucide-react';
 
 const projectSchema = z.object({
@@ -64,9 +65,7 @@ export default function EditProjectPage() {
           title: project.title || '',
           area_sqm: project.area_sqm || 0,
           insulation_option: project.insulation_option || 'A',
-          scheduled_date: project.scheduled_date
-            ? new Date(project.scheduled_date).toISOString().split('T')[0]
-            : '',
+          scheduled_date: formatDate(project.scheduled_date),
           status: project.status || 'pending',
         }
       : undefined,
