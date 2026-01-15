@@ -196,32 +196,57 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
               name="client_birth_date"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Születési idő * (ÉÉÉÉ-HH-NN)</FormLabel>
+                  <FormLabel>Születési idő *</FormLabel>
                   <FormControl>
                     <Input 
-                      type="date" 
+                      type="text" 
                       value={field.value || ''} 
                       onChange={(e) => {
-                        const value = e.target.value;
-                        // Biztosítjuk, hogy yyyy-mm-dd formátumban legyen
-                        if (value && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+                        let value = e.target.value;
+                        // Csak számokat és kötőjeleket engedünk
+                        value = value.replace(/[^\d-]/g, '');
+                        // Automatikus formázás: yyyy-mm-dd
+                        if (value.length <= 4) {
+                          // Csak év
                           field.onChange(value);
-                        } else if (value) {
-                          // Ha más formátumban jön, próbáljuk konvertálni
-                          const date = new Date(value);
-                          if (!isNaN(date.getTime())) {
-                            const year = date.getFullYear();
-                            const month = String(date.getMonth() + 1).padStart(2, '0');
-                            const day = String(date.getDate()).padStart(2, '0');
-                            field.onChange(`${year}-${month}-${day}`);
+                        } else if (value.length <= 7) {
+                          // Év-kötőjel-hónap
+                          if (value.length === 5 && !value.endsWith('-')) {
+                            field.onChange(value.slice(0, 4) + '-' + value.slice(4));
+                          } else {
+                            field.onChange(value);
+                          }
+                        } else if (value.length <= 10) {
+                          // Év-kötőjel-hónap-kötőjel-nap
+                          if (value.length === 8 && !value.endsWith('-')) {
+                            field.onChange(value.slice(0, 7) + '-' + value.slice(7));
+                          } else {
+                            field.onChange(value);
                           }
                         } else {
-                          field.onChange('');
+                          // Túl hosszú, vágjuk le
+                          field.onChange(value.slice(0, 10));
                         }
                       }}
-                      onBlur={field.onBlur}
+                      onBlur={(e) => {
+                        field.onBlur();
+                        // Validáljuk a dátumot
+                        const value = e.target.value;
+                        if (value && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+                          const [year, month, day] = value.split('-').map(Number);
+                          const date = new Date(year, month - 1, day);
+                          if (date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day) {
+                            // Érvényes dátum
+                            field.onChange(value);
+                          } else {
+                            // Érvénytelen dátum, töröljük
+                            field.onChange('');
+                          }
+                        }
+                      }}
                       pattern="\d{4}-\d{2}-\d{2}"
-                      placeholder="ÉÉÉÉ-HH-NN"
+                      placeholder="ÉÉÉÉ-HH-NN (pl. 1990-01-15)"
+                      maxLength={10}
                     />
                   </FormControl>
                   <FormMessage />
