@@ -101,12 +101,13 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
 
   // Frissítsd a form értékeit amikor a projekt adatok változnak
   useEffect(() => {
+    const formattedBirthDate = formatDate(project.client_birth_date);
     form.reset({
       client_street: project.client_street || '',
       client_city: project.client_city || '',
       client_zip: project.client_zip || '',
       client_birth_place: project.client_birth_place || '',
-      client_birth_date: formatDate(project.client_birth_date),
+      client_birth_date: formattedBirthDate,
       client_mother_name: project.client_mother_name || '',
       client_tax_id: project.client_tax_id || '',
       property_address_same: project.property_address_same ?? false,
@@ -116,6 +117,10 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
       area_sqm: project.area_sqm || 0,
       floor_material: project.floor_material || 'wood',
     });
+    // Explicit módon állítsd be a dátum mező értékét, hogy biztosan frissüljön
+    if (formattedBirthDate) {
+      form.setValue('client_birth_date', formattedBirthDate, { shouldValidate: false });
+    }
   }, [project, form]);
 
   return (
