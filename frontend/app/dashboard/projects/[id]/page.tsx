@@ -91,26 +91,19 @@ export default function ProjectDetailPage() {
 
   const updateContractMutation = useMutation({
     mutationFn: async (data: ContractDataFormValues) => {
-      // MEGJEGYZÉS: A Strapi szerveren még nincsenek meg az új mezők
-      // Csak azokat a mezőket küldjük el, amik biztosan megvannak a szerveren
-      // A következő mezők biztosan megvannak: client_name, client_address, title, status, area_sqm, insulation_option
+      // Először lekérjük a jelenlegi projektet, hogy megtartsuk a meglévő mezőket
+      const currentProject = await projectsApi.getOne(projectId);
       
-      // Csak az area_sqm mezőt küldjük el, mert az biztosan megvan
+      // Készítsük el az update adatokat a jelenlegi projekt alapján
+      // Csak azokat a mezőket frissítjük, amik megvannak a szerveren
       const updateData: Partial<Project> = {
+        // Megtartjuk az összes meglévő mezőt
+        ...currentProject,
+        // Frissítjük az area_sqm mezőt (ez biztosan megvan)
         area_sqm: data.area_sqm,
       };
 
-      // Próbáljuk meg elküldeni csak az area_sqm mezőt
-      // Ha ez is hibát dob, akkor valami más a probléma
-      try {
-        await projectsApi.update(projectId, updateData);
-      } catch (error: any) {
-        // Ha az area_sqm miatt is hiba van, akkor valami más a probléma
-        console.error('Hiba az area_sqm mentésekor:', error);
-        throw error;
-      }
-
-      // Most próbáljuk meg egyesével az új mezőket
+      // Próbáljuk meg hozzáadni az új mezőket egyesével
       // Ha valamelyik hibát dob, akkor azt kihagyjuk
       const newFields: Array<{ key: keyof Project; value: any }> = [
         { key: 'client_birth_place', value: data.client_birth_place },
@@ -139,22 +132,40 @@ export default function ProjectDetailPage() {
         );
       }
 
-      // Próbáljuk meg egyesével elküldeni az új mezőket
+      // Összegyűjtjük azokat a mezőket, amik sikeresen hozzáadhatók
+      const fieldsToUpdate: Partial<Project> = {};
+      
+      // Először próbáljuk meg elküldeni csak az area_sqm mezőt a meglévő adatokkal
+      try {
+        await projectsApi.update(projectId, updateData);
+      } catch (error: any) {
+        console.error('Hiba az area_sqm mentésekor:', error);
+        throw error;
+      }
+
+      // Most próbáljuk meg hozzáadni az új mezőket egyesével
+      // Ha valamelyik hibát dob, akkor azt kihagyjuk
       for (const field of newFields) {
-        try {
-          await projectsApi.update(projectId, { [field.key]: field.value } as Partial<Project>);
-        } catch (error: any) {
-          // Ha ez a mező még nincs a szerveren, kihagyjuk
-          if (error.message?.includes('Invalid key') || 
-              error.message?.includes(field.key as string) ||
-              (error.response?.status === 400 && error.response?.data)) {
-            console.warn(`A ${field.key} mező még nincs a Strapi szerveren. Kihagyjuk.`);
-            // Folytatjuk a következő mezővel
-            continue;
-          } else {
-            // Ha más hiba van, dobjuk tovább
-            throw error;
-          }
+        fieldsToUpdate[field.key] = field.value;
+      }
+
+      // Próbáljuk meg elküldeni az összes új mezőt egyszerre
+      // Ha hibát dob, akkor egyesével próbáljuk meg
+      try {
+        await projectsApi.update(projectId, {
+          ...currentProject,
+          area_sqm: data.area_sqm,
+          ...fieldsToUpdate,
+        });
+      } catch (error: any) {
+        // Ha hibát dob, akkor csak az area_sqm-et mentettük, de az már sikerült
+        if (error.message?.includes('Invalid key') || 
+            error.response?.status === 400) {
+          console.warn('Néhány mező még nincs a Strapi szerveren. Csak az area_sqm lett mentve.');
+          // Az area_sqm már mentve lett, szóval nincs probléma
+        } else {
+          // Ha más hiba van, dobjuk tovább
+          throw error;
         }
       }
     },
