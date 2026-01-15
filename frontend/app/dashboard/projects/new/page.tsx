@@ -73,13 +73,22 @@ export default function NewProjectPage() {
         } : undefined,
       };
       
-      return projectsApi.create({
+      // Mezők, amik még nincsenek a Strapi szerveren (ezeket nem küldjük el)
+      const fieldsNotOnServer = ['audit_log'];
+      
+      // Készítjük el a projekt adatokat, kihagyva a szerveren még nem létező mezőket
+      const projectData: any = {
         ...data,
         status: 'pending',
         client_email: data.client_email || undefined,
         client_phone: data.client_phone || undefined,
-        audit_log: [auditLogEntry],
-      });
+      };
+      
+      // Csak akkor adjuk hozzá az audit_log-ot, ha már létezik a szerveren
+      // Egyelőre kihagyjuk, mert még nincs a sémában
+      // projectData.audit_log = [auditLogEntry];
+      
+      return projectsApi.create(projectData);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
