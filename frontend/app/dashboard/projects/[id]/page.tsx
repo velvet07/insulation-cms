@@ -162,11 +162,18 @@ export default function ProjectDetailPage() {
         console.log('Új mezők is sikeresen mentve');
       } catch (error: any) {
         // Ha hibát dob, akkor csak az area_sqm-et mentettük, de az már sikerült
-        if (error.message?.includes('Invalid key') || 
-            error.response?.status === 400) {
+        const errorMessage = error?.message || '';
+        const errorData = error?.response?.data;
+        const hasInvalidKeyError = errorMessage.includes('Invalid key') || 
+                                   errorMessage.includes('invalid key') ||
+                                   (errorData?.error?.message && errorData.error.message.toLowerCase().includes('invalid key'));
+        
+        if (hasInvalidKeyError || error.response?.status === 400) {
           console.warn('Az új mezők még nincsenek a Strapi szerveren. Csak az area_sqm lett mentve.');
+          console.warn('Hiba részletek:', errorData);
           // Az area_sqm már mentve lett, szóval nincs probléma - nem dobjuk tovább a hibát
           // A mutation sikeres, mert az első update sikerült
+          return; // Sikeres, mert az első update sikerült
         } else {
           // Ha más hiba van, dobjuk tovább
           throw error;
