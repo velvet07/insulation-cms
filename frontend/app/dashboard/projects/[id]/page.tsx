@@ -102,7 +102,7 @@ export default function ProjectDetailPage() {
         'client_street', 'client_city', 'client_zip',
         'client_birth_place', 'client_birth_date', 'client_mother_name', 'client_tax_id',
         'property_address_same', 'property_street', 'property_city', 'property_zip',
-        'floor_material'
+        'floor_material', 'floor_material_extra'
       ];
       
       // Szűrjük ki a Strapi belső mezőket ÉS az új mezőket a jelenlegi projektből
@@ -138,6 +138,7 @@ export default function ProjectDetailPage() {
         client_tax_id: data.client_tax_id,
         property_address_same: data.property_address_same,
         floor_material: data.floor_material,
+        floor_material_extra: data.floor_material_extra,
         client_street: data.client_street,
         client_city: data.client_city,
         client_zip: data.client_zip,
@@ -152,6 +153,14 @@ export default function ProjectDetailPage() {
         newFields.property_street = data.property_street || undefined;
         newFields.property_city = data.property_city || undefined;
         newFields.property_zip = data.property_zip || undefined;
+      }
+
+      // Opcionális mezők
+      if (data.insulation_option) {
+        newFields.insulation_option = data.insulation_option;
+      }
+      if (data.scheduled_date) {
+        newFields.scheduled_date = data.scheduled_date;
       }
 
       // Próbáljuk meg elküldeni az új mezőket
@@ -417,6 +426,23 @@ export default function ProjectDetailPage() {
                         <p className="text-sm text-gray-500 dark:text-gray-400">Ütemezett dátum</p>
                         <p className="font-medium">
                           {formatDate(project.scheduled_date)}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  {project.floor_material && (
+                    <div className="flex items-start gap-3">
+                      <Package className="h-5 w-5 text-gray-400 mt-0.5" />
+                      <div>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Födém anyaga</p>
+                        <p className="font-medium">
+                          {project.floor_material === 'wood' && 'Fa'}
+                          {project.floor_material === 'prefab_rc' && 'Előre gyártott vb. (betongerendás)'}
+                          {project.floor_material === 'monolithic_rc' && 'Monolit v.b.'}
+                          {project.floor_material === 'rc_slab' && 'Vasbeton tálcás'}
+                          {project.floor_material === 'hollow_block' && 'Horcsik'}
+                          {project.floor_material === 'other' && (project.floor_material_extra || 'Egyéb')}
+                          {!['wood', 'prefab_rc', 'monolithic_rc', 'rc_slab', 'hollow_block', 'other'].includes(project.floor_material) && project.floor_material}
                         </p>
                       </div>
                     </div>

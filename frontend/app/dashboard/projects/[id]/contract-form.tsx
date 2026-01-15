@@ -26,22 +26,25 @@ const contractDataSchema = z.object({
   // Szerződő lakcíme
   client_street: z.string().min(1, 'Az utca, házszám kötelező'),
   client_city: z.string().min(1, 'A város kötelező'),
-  client_zip: z.string().min(1, 'Az IRSZ kötelező'),
+  client_zip: z.string().length(4, 'Az irányítószám 4 karakter hosszú kell legyen').regex(/^\d+$/, 'Csak számokat tartalmazhat'),
   // Születési adatok
   client_birth_place: z.string().min(1, 'A születési hely kötelező'),
   client_birth_date: z.string().min(1, 'A születési idő kötelező'),
   // Egyéb adatok
   client_mother_name: z.string().min(1, 'Az anyja neve kötelező'),
-  client_tax_id: z.string().min(1, 'Az adóazonosító kötelező'),
+  client_tax_id: z.string().min(1, 'Az adóazonosító kötelező').regex(/^\d+$/, 'Csak számokat tartalmazhat'),
   // Ingatlan adatok
   property_address_same: z.boolean(),
   property_street: z.string().optional(),
   property_city: z.string().optional(),
-  property_zip: z.string().optional(),
+  property_zip: z.string().length(4, 'Az irányítószám 4 karakter hosszú kell legyen').regex(/^\d+$/, 'Csak számokat tartalmazhat').optional().or(z.literal('')),
   area_sqm: z.number().min(0.01, 'A padlás alapterülete kötelező'),
-  floor_material: z.enum(['wood', 'prefab_rc', 'monolithic_rc', 'rc_slab', 'hollow_block'], {
+  floor_material: z.enum(['wood', 'prefab_rc', 'monolithic_rc', 'rc_slab', 'hollow_block', 'other'], {
     message: 'A padlásfödém anyaga kötelező',
   }),
+  floor_material_extra: z.string().optional(),
+  insulation_option: z.enum(['A', 'B']).optional(),
+  scheduled_date: z.string().optional(),
 }).superRefine((data, ctx) => {
   // Ha property_address_same === false, akkor a property mezők kötelezőek
   if (!data.property_address_same) {
@@ -65,7 +68,22 @@ const contractDataSchema = z.object({
         message: 'Az ingatlan IRSZ kötelező',
         path: ['property_zip'],
       });
+    } else if (data.property_zip.length !== 4 || !/^\d+$/.test(data.property_zip)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Az irányítószám 4 számjegy kell legyen',
+        path: ['property_zip'],
+      });
     }
+  }
+
+  // Ha floor_material === 'other', akkor a floor_material_extra kötelező
+  if (data.floor_material === 'other' && (!data.floor_material_extra || data.floor_material_extra.trim() === '')) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Kérjük, adja meg a födém anyagát',
+      path: ['floor_material_extra'],
+    });
   }
 });
 
@@ -94,10 +112,14 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
       property_zip: project.property_zip || '',
       area_sqm: project.area_sqm || 0,
       floor_material: project.floor_material || 'wood',
+      floor_material_extra: project.floor_material_extra || '',
+      insulation_option: project.insulation_option || undefined,
+      scheduled_date: project.scheduled_date || undefined,
     },
   });
 
   const propertyAddressSame = form.watch('property_address_same');
+  const floorMaterial = form.watch('floor_material');
 
   // Frissítsd a form értékeit amikor a projekt adatok változnak
   useEffect(() => {
@@ -116,6 +138,9 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
       property_zip: project.property_zip || '',
       area_sqm: project.area_sqm || 0,
       floor_material: project.floor_material || 'wood',
+      floor_material_extra: project.floor_material_extra || '',
+      insulation_option: project.insulation_option || undefined,
+      scheduled_date: project.scheduled_date || undefined,
     });
     // Explicit módon állítsd be a dátum mező értékét, hogy biztosan frissüljön
     if (formattedBirthDate) {
@@ -165,7 +190,17 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
                 <FormItem>
                   <FormLabel>IRSZ *</FormLabel>
                   <FormControl>
-                    <Input placeholder="IRSZ" {...field} />
+                    <Input 
+                      placeholder="1234" 
+                      maxLength={4}
+                      pattern="[0-9]*"
+                      {...field}
+                      onChange={(e) => {
+                        // Csak számokat engedélyez
+                        const value = e.target.value.replace(/[^0-9]/g, '');
+                        field.onChange(value);
+                      }}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -280,7 +315,16 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
                 <FormItem>
                   <FormLabel>Adóazonosító *</FormLabel>
                   <FormControl>
-                    <Input {...field} />
+                    <Input 
+                      placeholder="Adóazonosító"
+                      pattern="[0-9]*"
+                      {...field}
+                      onChange={(e) => {
+                        // Csak számokat engedélyez
+                        const value = e.target.value.replace(/[^0-9]/g, '');
+                        field.onChange(value);
+                      }}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -358,7 +402,17 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
                   <FormItem>
                     <FormLabel>IRSZ *</FormLabel>
                     <FormControl>
-                      <Input placeholder="IRSZ" {...field} />
+                      <Input 
+                        placeholder="1234" 
+                        maxLength={4}
+                        pattern="[0-9]*"
+                        {...field}
+                        onChange={(e) => {
+                          // Csak számokat engedélyez
+                          const value = e.target.value.replace(/[^0-9]/g, '');
+                          field.onChange(value);
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -421,12 +475,33 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
                         <RadioGroupItem value="hollow_block" id="floor-hollow" />
                         <Label htmlFor="floor-hollow">Horcsik</Label>
                       </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="other" id="floor-other" />
+                        <Label htmlFor="floor-other">Egyéb</Label>
+                      </div>
                     </RadioGroup>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
+            {floorMaterial === 'other' && (
+              <div className="mt-4">
+                <FormField
+                  control={form.control}
+                  name="floor_material_extra"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Födém anyaga (egyéb) *</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Adja meg a födém anyagát" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
           </div>
         </div>
 

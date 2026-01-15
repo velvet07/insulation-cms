@@ -68,7 +68,8 @@ export interface Project extends StrapiEntity {
   property_street?: string; // Ingatlan utca, házszám
   property_city?: string; // Ingatlan város
   property_zip?: string; // Ingatlan IRSZ
-  floor_material?: 'wood' | 'prefab_rc' | 'monolithic_rc' | 'rc_slab' | 'hollow_block'; // Padlásfödém anyaga
+  floor_material?: 'wood' | 'prefab_rc' | 'monolithic_rc' | 'rc_slab' | 'hollow_block' | 'other'; // Padlásfödém anyaga
+  floor_material_extra?: string; // Egyéb födém anyaga
 }
 
 // Document Types
