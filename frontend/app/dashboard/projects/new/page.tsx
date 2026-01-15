@@ -92,7 +92,7 @@ export default function NewProjectPage() {
   });
 
   const generateProjectTitle = (clientName: string, city: string): string => {
-    // Generáljuk az azonosítót: yyyymmddhhmmss
+    // Generáljuk az azonosítót: yyyy mmdd hhmmss (szóközökkel tagolva)
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -100,8 +100,8 @@ export default function NewProjectPage() {
     const hours = String(now.getHours()).padStart(2, '0');
     const minutes = String(now.getMinutes()).padStart(2, '0');
     const seconds = String(now.getSeconds()).padStart(2, '0');
-    const identifier = `${year}${month}${day}${hours}${minutes}${seconds}`;
-    
+    const identifier = `${year} ${month}${day} ${hours}${minutes}${seconds}`;
+
     return `${clientName} - ${city} - ${identifier}`;
   };
 
