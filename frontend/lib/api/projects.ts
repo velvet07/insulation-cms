@@ -83,21 +83,56 @@ export const projectsApi = {
       const cleanData = Object.fromEntries(
         Object.entries(data).filter(([_, value]) => value !== undefined)
       );
+      
+      console.log('Updating project with ID:', id);
+      console.log('Update data:', cleanData);
+      
       const response = await strapiApi.put<StrapiResponse<Project>>(`/projects/${id}`, { data: cleanData });
       return unwrapStrapiResponse(response);
     } catch (error: any) {
+      console.error('Full error object:', error);
+      console.error('Error response:', error.response);
+      console.error('Error response status:', error.response?.status);
+      console.error('Error response headers:', error.response?.headers);
+      
       if (error.response) {
-        console.error('Strapi API Error:', error.response.data);
-        console.error('Request data:', data);
+        console.error('Strapi API Error - response.data:', error.response.data);
+        console.error('Strapi API Error - response.status:', error.response.status);
+        console.error('Strapi API Error - response.statusText:', error.response.statusText);
+        console.error('Request data sent:', data);
+        console.error('Request URL:', `/projects/${id}`);
+        
         // Részletesebb hibaüzenet
         let errorMessage = 'Hiba történt a projekt frissítése során';
+        
+        // Próbáljuk meg kinyerni a hibaüzenetet különböző helyekről
         if (error.response.data?.error?.message) {
           errorMessage = error.response.data.error.message;
         } else if (error.response.data?.error) {
-          errorMessage = JSON.stringify(error.response.data.error);
-        } else if (error.response.data) {
+          errorMessage = typeof error.response.data.error === 'string' 
+            ? error.response.data.error 
+            : JSON.stringify(error.response.data.error);
+        } else if (error.response.data?.message) {
+          errorMessage = error.response.data.message;
+        } else if (typeof error.response.data === 'string') {
+          errorMessage = error.response.data;
+        } else if (error.response.data && Object.keys(error.response.data).length > 0) {
           errorMessage = JSON.stringify(error.response.data);
+        } else {
+          // Ha üres az error.response.data, nézzük meg a status kódot
+          if (error.response.status === 400) {
+            errorMessage = 'Érvénytelen adatok (400 Bad Request). Ellenőrizd, hogy minden mező helyes-e.';
+          } else if (error.response.status === 404) {
+            errorMessage = 'Projekt nem található (404 Not Found)';
+          } else if (error.response.status === 403) {
+            errorMessage = 'Nincs jogosultság a projekt frissítéséhez (403 Forbidden)';
+          } else if (error.response.status === 401) {
+            errorMessage = 'Hitelesítési hiba (401 Unauthorized)';
+          } else {
+            errorMessage = `Hiba történt (${error.response.status}): ${error.response.statusText || 'Ismeretlen hiba'}`;
+          }
         }
+        
         throw new Error(errorMessage);
       }
       throw error;
