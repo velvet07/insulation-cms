@@ -447,6 +447,24 @@ export default function ProjectDetailPage() {
                       </div>
                     </div>
                   )}
+                  {/* Ingatlan címe */}
+                  {(project.property_address_same !== undefined || project.property_street || project.property_city || project.property_zip) && (
+                    <div className="flex items-start gap-3">
+                      <MapPin className="h-5 w-5 text-gray-400 mt-0.5" />
+                      <div>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Ingatlan címe</p>
+                        <p className="font-medium">
+                          {project.property_address_same === true || (!project.property_street && !project.property_city && !project.property_zip)
+                            ? (project.client_street && project.client_city && project.client_zip
+                                ? `${project.client_zip} ${project.client_city}, ${project.client_street}`
+                                : project.client_address || '-')
+                            : (project.property_zip && project.property_city && project.property_street
+                                ? `${project.property_zip} ${project.property_city}, ${project.property_street}`
+                                : '-')}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                   {project.assigned_to && (
                     <div className="flex items-start gap-3">
                       <User className="h-5 w-5 text-gray-400 mt-0.5" />
