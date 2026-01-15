@@ -150,7 +150,20 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <form 
+        onSubmit={form.handleSubmit(
+          (data) => {
+            console.log('=== FORM VALIDÁCIÓ SIKERES ===');
+            console.log('Validált adatok:', data);
+            return onSubmit(data);
+          },
+          (errors) => {
+            console.error('=== FORM VALIDÁCIÓ HIBA ===');
+            console.error('Validációs hibák:', errors);
+          }
+        )} 
+        className="space-y-6"
+      >
         {/* Szerződő lakcíme */}
         <div>
           <h4 className="font-semibold mb-4">Szerződő lakcíme</h4>

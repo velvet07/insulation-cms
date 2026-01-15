@@ -93,8 +93,14 @@ export default function ProjectDetailPage() {
 
   const updateContractMutation = useMutation({
     mutationFn: async (data: ContractDataFormValues) => {
+      console.log('=== MENTÉS KEZDETE ===');
+      console.log('Form adatok:', data);
+      console.log('Project ID:', projectId);
+      
       // Lekérjük a jelenlegi projektet, hogy megtartsuk a meglévő mezőket
+      console.log('Projekt lekérése...');
       const currentProject = await projectsApi.getOne(projectId);
+      console.log('Jelenlegi projekt:', currentProject);
       
       // Strapi belső mezők, amiket nem szabad elküldeni az update során
       const strapiInternalFields = ['id', 'documentId', 'createdAt', 'updatedAt', 'publishedAt'];
@@ -173,11 +179,16 @@ export default function ProjectDetailPage() {
       ) as Partial<Project>;
 
       // Elküldjük az összes mezőt egyetlen update-ben
+      console.log('Update adatok elküldése:', cleanUpdateData);
       try {
-        await projectsApi.update(projectId, cleanUpdateData);
-        console.log('Összes mező sikeresen mentve');
+        const result = await projectsApi.update(projectId, cleanUpdateData);
+        console.log('=== MENTÉS SIKERES ===');
+        console.log('Eredmény:', result);
+        return result;
       } catch (error: any) {
+        console.error('=== MENTÉS HIBA ===');
         console.error('Hiba az adatok mentésekor:', error);
+        console.error('Hiba részletek:', error.response?.data);
         throw error;
       }
     },
@@ -194,11 +205,19 @@ export default function ProjectDetailPage() {
   });
 
   const onContractSubmit = async (values: ContractDataFormValues) => {
+    console.log('=== FORM SUBMIT KEZDETE ===');
+    console.log('Form értékek:', values);
     setIsSavingContract(true);
     try {
+      console.log('Mutation hívás...');
       await updateContractMutation.mutateAsync(values);
+      console.log('Mutation sikeres');
+    } catch (error: any) {
+      console.error('Mutation hiba:', error);
+      throw error;
     } finally {
       setIsSavingContract(false);
+      console.log('=== FORM SUBMIT VÉGE ===');
     }
   };
 
