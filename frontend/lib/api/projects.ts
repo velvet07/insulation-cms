@@ -102,6 +102,17 @@ export const projectsApi = {
         console.error('Request data sent:', data);
         console.error('Request URL:', `/projects/${id}`);
         
+        // Próbáljuk meg kinyerni a pontos hibaüzenetet
+        if (error.response.data?.error) {
+          console.error('Strapi API Error - error object:', error.response.data.error);
+          if (error.response.data.error.message) {
+            console.error('Strapi API Error - error message:', error.response.data.error.message);
+          }
+          if (error.response.data.error.details) {
+            console.error('Strapi API Error - error details:', error.response.data.error.details);
+          }
+        }
+        
         // Részletesebb hibaüzenet
         let errorMessage = 'Hiba történt a projekt frissítése során';
         
