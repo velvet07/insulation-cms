@@ -149,9 +149,9 @@ export default function ProjectDetailPage() {
         newFields.property_city = data.client_city;
         newFields.property_zip = data.client_zip;
       } else {
-        newFields.property_street = data.property_street || null;
-        newFields.property_city = data.property_city || null;
-        newFields.property_zip = data.property_zip || null;
+        newFields.property_street = data.property_street || undefined;
+        newFields.property_city = data.property_city || undefined;
+        newFields.property_zip = data.property_zip || undefined;
       }
 
       // Próbáljuk meg elküldeni az új mezőket
