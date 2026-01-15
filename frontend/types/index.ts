@@ -45,9 +45,9 @@ export interface Project extends StrapiEntity {
   client_phone?: string;
   client_email?: string;
   title: string;
-  area_sqm: number;
+  area_sqm?: number;
   status: 'pending' | 'in_progress' | 'ready_for_review' | 'approved' | 'completed';
-  insulation_option: 'A' | 'B';
+  insulation_option?: 'A' | 'B';
   assigned_to?: User;
   tenant?: Tenant;
   scheduled_date?: string;
@@ -56,6 +56,19 @@ export interface Project extends StrapiEntity {
   completed_at?: string;
   approved_at?: string;
   approved_by?: User;
+  // Szerződés adatok
+  client_street?: string; // Utca, házszám
+  client_city?: string; // Város
+  client_zip?: string; // IRSZ
+  client_birth_place?: string; // Születési hely
+  client_birth_date?: string; // Születési idő
+  client_mother_name?: string; // Anyja neve
+  client_tax_id?: string; // Adóazonosító
+  property_address_same?: boolean; // Az ingatlan címe megegyezik a szerződő címével?
+  property_street?: string; // Ingatlan utca, házszám
+  property_city?: string; // Ingatlan város
+  property_zip?: string; // Ingatlan IRSZ
+  floor_material?: 'wood' | 'prefab_rc' | 'monolithic_rc' | 'rc_slab' | 'hollow_block'; // Padlásfödém anyaga
 }
 
 // Document Types

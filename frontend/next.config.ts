@@ -1,8 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Production optimizations
-  output: 'standalone', // For better Docker/PM2 compatibility
+  // Production optimizations (only in production)
+  ...(process.env.NODE_ENV === 'production' && {
+    output: 'standalone', // For better Docker/PM2 compatibility
+  }),
   compress: true,
   poweredByHeader: false,
   

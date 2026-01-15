@@ -27,27 +27,85 @@ export const projectsApi = {
     }
     
     params.append('populate', '*');
+    params.append('sort', 'createdAt:desc');
     
-    const response = await strapiApi.get<StrapiResponse<Project[]>>(`/projects?${params.toString()}`);
-    return unwrapStrapiArrayResponse(response);
+    try {
+      const response = await strapiApi.get<StrapiResponse<Project[]>>(`/projects?${params.toString()}`);
+      // Handle both Strapi v4 and v5 response formats
+      if (response.data && Array.isArray(response.data.data)) {
+        return response.data.data;
+      }
+      if (Array.isArray(response.data)) {
+        return response.data;
+      }
+      return [];
+    } catch (error) {
+      console.error('Error fetching projects:', error);
+      throw error;
+    }
   },
 
   getOne: async (id: number | string) => {
-    const response = await strapiApi.get<StrapiResponse<Project>>(`/projects/${id}?populate=*`);
-    return unwrapStrapiResponse(response);
+    try {
+      // Strapi v5 uses documentId, but we can try both
+      const response = await strapiApi.get<StrapiResponse<Project>>(`/projects/${id}?populate=*`);
+      return unwrapStrapiResponse(response);
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        // Try with documentId if regular id doesn't work
+        console.error('Project not found with id:', id);
+        throw new Error(`Projekt nem található (ID: ${id})`);
+      }
+      throw error;
+    }
   },
 
   create: async (data: Partial<Project>) => {
-    const response = await strapiApi.post<StrapiResponse<Project>>('/projects', { data });
-    return unwrapStrapiResponse(response);
+    try {
+      const response = await strapiApi.post<StrapiResponse<Project>>('/projects', { data });
+      return unwrapStrapiResponse(response);
+    } catch (error: any) {
+      // Részletesebb hibaüzenet
+      if (error.response) {
+        console.error('Strapi API Error:', error.response.data);
+        const errorMessage = error.response.data?.error?.message || 
+                           JSON.stringify(error.response.data) || 
+                           'Hiba történt a projekt létrehozása során';
+        throw new Error(errorMessage);
+      }
+      throw error;
+    }
   },
 
   update: async (id: number | string, data: Partial<Project>) => {
-    const response = await strapiApi.put<StrapiResponse<Project>>(`/projects/${id}`, { data });
-    return unwrapStrapiResponse(response);
+    try {
+      const response = await strapiApi.put<StrapiResponse<Project>>(`/projects/${id}`, { data });
+      return unwrapStrapiResponse(response);
+    } catch (error: any) {
+      if (error.response) {
+        console.error('Strapi API Error:', error.response.data);
+        const errorMessage = error.response.data?.error?.message || 
+                           JSON.stringify(error.response.data) || 
+                           'Hiba történt a projekt frissítése során';
+        throw new Error(errorMessage);
+      }
+      throw error;
+    }
   },
 
   delete: async (id: number | string) => {
-    await strapiApi.delete(`/projects/${id}`);
+    try {
+      await strapiApi.delete(`/projects/${id}`);
+    } catch (error: any) {
+      // Részletesebb hibaüzenet
+      if (error.response) {
+        console.error('Strapi API Error:', error.response.data);
+        const errorMessage = error.response.data?.error?.message || 
+                           JSON.stringify(error.response.data) || 
+                           'Hiba történt a projekt törlése során';
+        throw new Error(errorMessage);
+      }
+      throw error;
+    }
   },
 };

@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Dependencies
 node_modules/
 /.pnp
@@ -47,42 +46,6 @@ next-env.d.ts
 
 # OS
 Thumbs.db
-
-# Logs
-logs/
-*.log
-
-# PM2
-.pm2/
-
-# Strapi
-strapi-export/node_modules/
-=======
-############################
-# OS X
-############################
-
-.DS_Store
-.AppleDouble
-.LSOverride
-Icon
-.Spotlight-V100
-.Trashes
-._*
-
-
-############################
-# Linux
-############################
-
-*~
-
-
-############################
-# Windows
-############################
-
-Thumbs.db
 ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
@@ -90,77 +53,33 @@ $RECYCLE.BIN/
 *.msi
 *.msm
 *.msp
-
-
-############################
-# Packages
-############################
-
-*.7z
-*.csv
-*.dat
-*.dmg
-*.gz
-*.iso
-*.jar
-*.rar
-*.tar
-*.zip
-*.com
-*.class
-*.dll
-*.exe
-*.o
-*.seed
-*.so
-*.swo
-*.swp
-*.swn
-*.swm
-*.out
-*.pid
-
-
-############################
-# Logs and databases
-############################
-
-.tmp
+.AppleDouble
+.LSOverride
+Icon
+.Spotlight-V100
+.Trashes
+._*# Logs
+logs/
 *.log
 *.sql
 *.sqlite
 *.sqlite3
 
+# PM2
+.pm2/
 
-############################
-# Misc.
-############################
-
-*#
-ssl
-.idea
-nbproject
+# Strapi
+strapi-export/node_modules/
+license.txt
+exports
+.strapi
+dist
+.strapi-updater.json
+.strapi-cloud.json
 public/uploads/*
 !public/uploads/.gitkeep
-.tsbuildinfo
-.eslintcache
 
-############################
-# Node.js
-############################
-
-lib-cov
-lcov.info
-pids
-logs
-results
-node_modules
-.node_history
-
-############################
 # Package managers
-############################
-
 .yarn/*
 !.yarn/cache
 !.yarn/unplugged
@@ -171,22 +90,9 @@ node_modules
 .pnp.*
 yarn-error.log
 
-############################
-# Tests
-############################
-
-coverage
-
-############################
-# Strapi
-############################
-
-.env
-license.txt
-exports
-.strapi
-dist
-build
-.strapi-updater.json
-.strapi-cloud.json
->>>>>>> f288e8ecfebdb10cc5f60eea8bed4114321981ce
+# Misc
+*#
+ssl
+nbproject
+.tmp
+.eslintcache
