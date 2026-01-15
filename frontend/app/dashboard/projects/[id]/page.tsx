@@ -155,13 +155,10 @@ export default function ProjectDetailPage() {
       }
 
       // Próbáljuk meg elküldeni az új mezőket
-      // Ha hibát dob, akkor csak figyelmeztetést írunk, mert az alap mezők már mentve lettek
+      // Csak az új mezőket küldjük el, ne a cleanCurrentProject-et is, mert az tartalmazhat olyan mezőket, amik még nincsenek
       try {
-        await projectsApi.update(projectId, {
-          ...cleanCurrentProject,
-          area_sqm: data.area_sqm,
-          ...newFields,
-        });
+        // Csak az új mezőket próbáljuk meg elküldeni, az area_sqm-et már mentettük
+        await projectsApi.update(projectId, newFields);
         console.log('Új mezők is sikeresen mentve');
       } catch (error: any) {
         // Ha hibát dob, akkor csak az area_sqm-et mentettük, de az már sikerült
@@ -169,6 +166,7 @@ export default function ProjectDetailPage() {
             error.response?.status === 400) {
           console.warn('Az új mezők még nincsenek a Strapi szerveren. Csak az area_sqm lett mentve.');
           // Az area_sqm már mentve lett, szóval nincs probléma - nem dobjuk tovább a hibát
+          // A mutation sikeres, mert az első update sikerült
         } else {
           // Ha más hiba van, dobjuk tovább
           throw error;
