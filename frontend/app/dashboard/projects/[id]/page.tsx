@@ -91,16 +91,32 @@ export default function ProjectDetailPage() {
 
   const updateContractMutation = useMutation({
     mutationFn: (data: ContractDataFormValues) => {
-      // Ha property_address_same === true, akkor másoljuk a client adatokat
+      // Készítsük el az update adatokat
       const updateData: Partial<Project> = {
-        ...data,
-        // Ha megegyezik a cím, akkor másoljuk
-        ...(data.property_address_same && {
-          property_street: data.client_street,
-          property_city: data.client_city,
-          property_zip: data.client_zip,
-        }),
+        client_street: data.client_street,
+        client_city: data.client_city,
+        client_zip: data.client_zip,
+        client_birth_place: data.client_birth_place,
+        client_birth_date: data.client_birth_date,
+        client_mother_name: data.client_mother_name,
+        client_tax_id: data.client_tax_id,
+        property_address_same: data.property_address_same,
+        area_sqm: data.area_sqm,
+        floor_material: data.floor_material,
       };
+
+      // Ha property_address_same === true, akkor másoljuk a client adatokat
+      if (data.property_address_same) {
+        updateData.property_street = data.client_street;
+        updateData.property_city = data.client_city;
+        updateData.property_zip = data.client_zip;
+      } else {
+        // Ha nem egyezik, akkor a külön megadott property adatokat használjuk
+        updateData.property_street = data.property_street || null;
+        updateData.property_city = data.property_city || null;
+        updateData.property_zip = data.property_zip || null;
+      }
+
       return projectsApi.update(projectId, updateData);
     },
     onSuccess: () => {
