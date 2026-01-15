@@ -173,10 +173,20 @@ export default function ProjectDetailPage() {
       const existingAuditLog = currentProject.audit_log || [];
       updateData.audit_log = [...existingAuditLog, auditLogEntry];
 
-      // Szűrjük ki az undefined értékeket, hogy ne küldjünk felesleges adatot
+      // Mezők, amik még nincsenek a Strapi szerveren (ezeket nem küldjük el)
+      const fieldsNotOnServer = ['floor_material_extra', 'audit_log'];
+      
+      // Szűrjük ki az undefined értékeket ÉS a szerveren még nem létező mezőket
       const cleanUpdateData = Object.fromEntries(
-        Object.entries(updateData).filter(([_, value]) => value !== undefined)
+        Object.entries(updateData).filter(([key, value]) => 
+          value !== undefined && !fieldsNotOnServer.includes(key)
+        )
       ) as Partial<Project>;
+      
+      // Ha floor_material !== 'other', akkor ne küldjük el a floor_material_extra-t
+      if (data.floor_material !== 'other') {
+        delete cleanUpdateData.floor_material_extra;
+      }
 
       // Elküldjük az összes mezőt egyetlen update-ben
       console.log('Update adatok elküldése:', cleanUpdateData);
