@@ -93,47 +93,25 @@ export default function ProjectDetailPage() {
 
   const updateContractMutation = useMutation({
     mutationFn: async (data: ContractDataFormValues) => {
-      // Először lekérjük a jelenlegi projektet, hogy megtartsuk a meglévő mezőket
+      // Lekérjük a jelenlegi projektet, hogy megtartsuk a meglévő mezőket
       const currentProject = await projectsApi.getOne(projectId);
       
       // Strapi belső mezők, amiket nem szabad elküldeni az update során
       const strapiInternalFields = ['id', 'documentId', 'createdAt', 'updatedAt', 'publishedAt'];
       
-      // Új mezők, amik még nincsenek a szerveren (ezeket nem küldjük el)
-      const newFieldsNotOnServer = [
-        'client_street', 'client_city', 'client_zip',
-        'client_birth_place', 'client_birth_date', 'client_mother_name', 'client_tax_id',
-        'property_address_same', 'property_street', 'property_city', 'property_zip',
-        'floor_material', 'floor_material_extra', 'audit_log'
-      ];
-      
-      // Szűrjük ki a Strapi belső mezőket ÉS az új mezőket a jelenlegi projektből
+      // Szűrjük ki a Strapi belső mezőket a jelenlegi projektből
       const cleanCurrentProject = Object.fromEntries(
         Object.entries(currentProject).filter(([key]) => 
-          !strapiInternalFields.includes(key) && !newFieldsNotOnServer.includes(key)
+          !strapiInternalFields.includes(key)
         )
       ) as Partial<Project>;
       
-      // Készítsük el az update adatokat - csak a meglévő mezőket küldjük el
+      // Készítsük el az update adatokat: meglévő mezők + új form értékek
       const updateData: Partial<Project> = {
-        // Megtartjuk az összes meglévő mezőt (belső és új mezők nélkül)
+        // Megtartjuk az összes meglévő mezőt (belső mezők nélkül)
         ...cleanCurrentProject,
-        // Frissítjük az area_sqm mezőt (ez biztosan megvan)
+        // Frissítjük az összes form mezőt az új értékekkel
         area_sqm: data.area_sqm,
-      };
-
-      // Próbáljuk meg elküldeni csak a meglévő mezőket
-      try {
-        await projectsApi.update(projectId, updateData);
-        console.log('Alap mezők sikeresen mentve (area_sqm)');
-      } catch (error: any) {
-        console.error('Hiba az alap mezők mentésekor:', error);
-        throw error;
-      }
-
-      // Most próbáljuk meg hozzáadni az új mezőket egyesével
-      // Ha valamelyik hibát dob, akkor azt kihagyjuk
-      const newFields: Partial<Project> = {
         client_birth_place: data.client_birth_place,
         client_birth_date: data.client_birth_date,
         client_mother_name: data.client_mother_name,
@@ -148,21 +126,26 @@ export default function ProjectDetailPage() {
 
       // Ha property_address_same === true, akkor másoljuk a client adatokat
       if (data.property_address_same) {
-        newFields.property_street = data.client_street;
-        newFields.property_city = data.client_city;
-        newFields.property_zip = data.client_zip;
+        updateData.property_street = data.client_street;
+        updateData.property_city = data.client_city;
+        updateData.property_zip = data.client_zip;
       } else {
-        newFields.property_street = data.property_street || undefined;
-        newFields.property_city = data.property_city || undefined;
-        newFields.property_zip = data.property_zip || undefined;
+        updateData.property_street = data.property_street || undefined;
+        updateData.property_city = data.property_city || undefined;
+        updateData.property_zip = data.property_zip || undefined;
       }
 
       // Opcionális mezők
       if (data.insulation_option) {
-        newFields.insulation_option = data.insulation_option;
+        updateData.insulation_option = data.insulation_option;
+      } else {
+        // Ha nincs érték, töröljük (undefined)
+        updateData.insulation_option = undefined;
       }
       if (data.scheduled_date) {
-        newFields.scheduled_date = data.scheduled_date;
+        updateData.scheduled_date = data.scheduled_date;
+      } else {
+        updateData.scheduled_date = undefined;
       }
 
       // Ellenőrizzük, hogy volt-e már szerződés adat (az első mentés vagy módosítás)
@@ -182,32 +165,20 @@ export default function ProjectDetailPage() {
       
       // Hozzáadjuk az audit log bejegyzést a meglévő audit log-hoz
       const existingAuditLog = currentProject.audit_log || [];
-      newFields.audit_log = [...existingAuditLog, auditLogEntry];
+      updateData.audit_log = [...existingAuditLog, auditLogEntry];
 
-      // Próbáljuk meg elküldeni az új mezőket
-      // Csak az új mezőket küldjük el, ne a cleanCurrentProject-et is, mert az tartalmazhat olyan mezőket, amik még nincsenek
+      // Szűrjük ki az undefined értékeket, hogy ne küldjünk felesleges adatot
+      const cleanUpdateData = Object.fromEntries(
+        Object.entries(updateData).filter(([_, value]) => value !== undefined)
+      ) as Partial<Project>;
+
+      // Elküldjük az összes mezőt egyetlen update-ben
       try {
-        // Csak az új mezőket próbáljuk meg elküldeni, az area_sqm-et már mentettük
-        await projectsApi.update(projectId, newFields);
-        console.log('Új mezők is sikeresen mentve');
+        await projectsApi.update(projectId, cleanUpdateData);
+        console.log('Összes mező sikeresen mentve');
       } catch (error: any) {
-        // Ha hibát dob, akkor csak az area_sqm-et mentettük, de az már sikerült
-        const errorMessage = error?.message || '';
-        const errorData = error?.response?.data;
-        const hasInvalidKeyError = errorMessage.includes('Invalid key') || 
-                                   errorMessage.includes('invalid key') ||
-                                   (errorData?.error?.message && errorData.error.message.toLowerCase().includes('invalid key'));
-        
-        if (hasInvalidKeyError || error.response?.status === 400) {
-          console.warn('Az új mezők még nincsenek a Strapi szerveren. Csak az area_sqm lett mentve.');
-          console.warn('Hiba részletek:', errorData);
-          // Az area_sqm már mentve lett, szóval nincs probléma - nem dobjuk tovább a hibát
-          // A mutation sikeres, mert az első update sikerült
-          return; // Sikeres, mert az első update sikerült
-        } else {
-          // Ha más hiba van, dobjuk tovább
-          throw error;
-        }
+        console.error('Hiba az adatok mentésekor:', error);
+        throw error;
       }
     },
     onSuccess: () => {
