@@ -14,9 +14,15 @@ export function formatDate(date: string | Date | undefined | null): string {
   if (!date) return '';
   
   try {
+    // Ha már yyyy-mm-dd formátumban van, térj vissza vele
+    if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return date;
+    }
+    
     const dateObj = typeof date === 'string' ? new Date(date) : date;
     if (isNaN(dateObj.getTime())) return '';
     
+    // Használj UTC dátumot, hogy ne legyen timezone probléma
     const year = dateObj.getFullYear();
     const month = String(dateObj.getMonth() + 1).padStart(2, '0');
     const day = String(dateObj.getDate()).padStart(2, '0');

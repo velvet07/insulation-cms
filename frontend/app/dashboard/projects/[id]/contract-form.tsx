@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -97,6 +98,25 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
   });
 
   const propertyAddressSame = form.watch('property_address_same');
+
+  // Frissítsd a form értékeit amikor a projekt adatok változnak
+  useEffect(() => {
+    form.reset({
+      client_street: project.client_street || '',
+      client_city: project.client_city || '',
+      client_zip: project.client_zip || '',
+      client_birth_place: project.client_birth_place || '',
+      client_birth_date: formatDate(project.client_birth_date),
+      client_mother_name: project.client_mother_name || '',
+      client_tax_id: project.client_tax_id || '',
+      property_address_same: project.property_address_same ?? false,
+      property_street: project.property_street || '',
+      property_city: project.property_city || '',
+      property_zip: project.property_zip || '',
+      area_sqm: project.area_sqm || 0,
+      floor_material: project.floor_material || 'wood',
+    });
+  }, [project, form]);
 
   return (
     <Form {...form}>
