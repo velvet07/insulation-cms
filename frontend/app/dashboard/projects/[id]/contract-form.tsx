@@ -37,7 +37,7 @@ const contractDataSchema = z.object({
   property_address_same: z.boolean(),
   property_street: z.string().optional(),
   property_city: z.string().optional(),
-  property_zip: z.string().length(4, 'Az irányítószám 4 karakter hosszú kell legyen').regex(/^\d+$/, 'Csak számokat tartalmazhat').optional().or(z.literal('')),
+  property_zip: z.string().optional(),
   area_sqm: z.number().min(0.01, 'A padlás alapterülete kötelező'),
   floor_material: z.enum(['wood', 'prefab_rc', 'monolithic_rc', 'rc_slab', 'hollow_block', 'other'], {
     message: 'A padlásfödém anyaga kötelező',
@@ -69,6 +69,19 @@ const contractDataSchema = z.object({
         path: ['property_zip'],
       });
     } else if (data.property_zip.length !== 4 || !/^\d+$/.test(data.property_zip)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Az irányítószám 4 számjegy kell legyen',
+        path: ['property_zip'],
+      });
+    }
+  }
+
+  // Ha property_address_same === true, akkor a property_zip mezőt nem kell validálni
+  // mert automatikusan kitöltődik a client_zip értékével
+  if (data.property_address_same && data.property_zip) {
+    // Ha property_address_same === true és van property_zip érték, akkor validáljuk
+    if (data.property_zip.length !== 4 || !/^\d+$/.test(data.property_zip)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Az irányítószám 4 számjegy kell legyen',
@@ -120,6 +133,24 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
 
   const propertyAddressSame = form.watch('property_address_same');
   const floorMaterial = form.watch('floor_material');
+  const clientZip = form.watch('client_zip');
+
+  // Watch for changes in property_address_same to conditionally enable/disable fields
+  useEffect(() => {
+    if (propertyAddressSame) {
+      // Ha property_address_same === true, akkor másoljuk a client adatokat
+      form.setValue('property_street', form.getValues('client_street') || '', { shouldValidate: false });
+      form.setValue('property_city', form.getValues('client_city') || '', { shouldValidate: false });
+      form.setValue('property_zip', form.getValues('client_zip') || '', { shouldValidate: false });
+    }
+  }, [propertyAddressSame, form]);
+
+  // Watch for changes in client_zip to update property_zip if property_address_same === true
+  useEffect(() => {
+    if (propertyAddressSame && clientZip) {
+      form.setValue('property_zip', clientZip, { shouldValidate: false });
+    }
+  }, [clientZip, propertyAddressSame, form]);
 
   // Frissítsd a form értékeit amikor a projekt adatok változnak
   useEffect(() => {
