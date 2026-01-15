@@ -278,7 +278,11 @@ export default function ProjectDetailPage() {
                 <div className="flex items-start gap-3">
                   <MapPin className="h-5 w-5 text-gray-400 mt-0.5" />
                   <div>
-                    <p className="text-gray-900 dark:text-gray-100">{project.client_address}</p>
+                    <p className="text-gray-900 dark:text-gray-100">
+                      {project.client_street && project.client_city && project.client_zip
+                        ? `${project.client_zip} ${project.client_city}, ${project.client_street}`
+                        : project.client_address || '-'}
+                    </p>
                   </div>
                 </div>
                 {project.client_phone && (
