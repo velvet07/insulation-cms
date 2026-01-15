@@ -175,7 +175,11 @@ export default function ProjectsPage() {
                       </button>
                     </TableCell>
                     <TableCell className="font-medium">{project.client_name}</TableCell>
-                    <TableCell>{project.client_address}</TableCell>
+                    <TableCell>
+                      {project.client_street && project.client_city && project.client_zip
+                        ? `${project.client_zip} ${project.client_city}, ${project.client_street}`
+                        : project.client_address || '-'}
+                    </TableCell>
                     <TableCell>{project.area_sqm ? `${project.area_sqm} m²` : '-'}</TableCell>
                     <TableCell>{project.insulation_option || '-'}</TableCell>
                     <TableCell>

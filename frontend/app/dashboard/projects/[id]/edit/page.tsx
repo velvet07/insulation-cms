@@ -33,7 +33,9 @@ import { ArrowLeft } from 'lucide-react';
 
 const projectSchema = z.object({
   client_name: z.string().min(1, 'Az ügyfél neve kötelező'),
-  client_address: z.string().min(1, 'Az ügyfél címe kötelező'),
+  client_street: z.string().min(1, 'Az utca, házszám kötelező'),
+  client_city: z.string().min(1, 'A település kötelező'),
+  client_zip: z.string().min(1, 'Az irányítószám kötelező'),
   client_phone: z.string().optional(),
   client_email: z.string().email('Érvényes email cím szükséges').optional().or(z.literal('')),
   status: z.enum(['pending', 'in_progress', 'ready_for_review', 'approved', 'completed']),
@@ -59,7 +61,9 @@ export default function EditProjectPage() {
     values: project
       ? {
           client_name: project.client_name || '',
-          client_address: project.client_address || '',
+          client_street: project.client_street || '',
+          client_city: project.client_city || '',
+          client_zip: project.client_zip || '',
           client_phone: project.client_phone || '',
           client_email: project.client_email || '',
           title: project.title || '',
@@ -73,8 +77,11 @@ export default function EditProjectPage() {
 
   const mutation = useMutation({
     mutationFn: (data: ProjectFormValues) => {
+      // Összeállítjuk a client_address mezőt a kompatibilitás miatt (ha még használjuk)
+      const client_address = `${data.client_street}, ${data.client_city}, ${data.client_zip}`;
       return projectsApi.update(projectId, {
         ...data,
+        client_address, // Kompatibilitás miatt
         client_email: data.client_email || undefined,
         client_phone: data.client_phone || undefined,
       });
@@ -165,22 +172,47 @@ export default function EditProjectPage() {
                     )}
                   />
 
-                  <FormField
-                    control={form.control}
-                    name="client_address"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Ügyfél címe *</FormLabel>
-                        <FormControl>
-                          <Textarea
-                            placeholder="1234 Fő utca, Budapest, 1234"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="client_zip"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Irányítószám *</FormLabel>
+                          <FormControl>
+                            <Input placeholder="1234" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="client_city"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Település *</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Budapest" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="client_street"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Utca, házszám *</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Fő utca 1." {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField

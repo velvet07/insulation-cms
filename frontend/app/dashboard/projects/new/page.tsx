@@ -32,7 +32,9 @@ import { ArrowLeft } from 'lucide-react';
 
 const projectSchema = z.object({
   client_name: z.string().min(1, 'Az ügyfél neve kötelező'),
-  client_address: z.string().min(1, 'Az ügyfél címe kötelező'),
+  client_street: z.string().min(1, 'Az utca, házszám kötelező'),
+  client_city: z.string().min(1, 'A település kötelező'),
+  client_zip: z.string().min(1, 'Az irányítószám kötelező'),
   client_phone: z.string().optional(),
   client_email: z.string().email('Érvényes email cím szükséges').optional().or(z.literal('')),
 });
@@ -48,7 +50,9 @@ export default function NewProjectPage() {
     resolver: zodResolver(projectSchema),
     defaultValues: {
       client_name: '',
-      client_address: '',
+      client_street: '',
+      client_city: '',
+      client_zip: '',
       client_phone: '',
       client_email: '',
     },
@@ -73,11 +77,7 @@ export default function NewProjectPage() {
     },
   });
 
-  const generateProjectTitle = (clientName: string, address: string): string => {
-    // Kinyerjük a települést a címből (utolsó vessző utáni rész, vagy ha nincs vessző, akkor az egész)
-    const addressParts = address.split(',').map(part => part.trim());
-    const city = addressParts.length > 1 ? addressParts[addressParts.length - 1] : addressParts[0];
-    
+  const generateProjectTitle = (clientName: string, city: string): string => {
     // Generáljuk az azonosítót: yyyymmddhhmmss
     const now = new Date();
     const year = now.getFullYear();
@@ -94,9 +94,12 @@ export default function NewProjectPage() {
   const onSubmit = async (values: ProjectFormValues) => {
     setIsSubmitting(true);
     try {
-      const title = generateProjectTitle(values.client_name, values.client_address);
+      const title = generateProjectTitle(values.client_name, values.client_city);
+      // Összeállítjuk a client_address mezőt a kompatibilitás miatt (ha még használjuk)
+      const client_address = `${values.client_street}, ${values.client_city}, ${values.client_zip}`;
       await mutation.mutateAsync({
         ...values,
+        client_address, // Kompatibilitás miatt
         title,
         area_sqm: 0, // Alapértelmezett érték, később frissíthető a szerződés adatokban
         status: 'pending',
@@ -145,22 +148,47 @@ export default function NewProjectPage() {
                     )}
                   />
 
-                  <FormField
-                    control={form.control}
-                    name="client_address"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Ügyfél címe *</FormLabel>
-                        <FormControl>
-                          <Textarea
-                            placeholder="1234 Fő utca, Budapest, 1234"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="client_zip"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Irányítószám *</FormLabel>
+                          <FormControl>
+                            <Input placeholder="1234" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="client_city"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Település *</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Budapest" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="client_street"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Utca, házszám *</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Fő utca 1." {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
