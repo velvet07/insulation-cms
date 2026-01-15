@@ -32,7 +32,7 @@ const contractDataSchema = z.object({
   client_birth_date: z.string().min(1, 'A születési idő kötelező'),
   // Egyéb adatok
   client_mother_name: z.string().min(1, 'Az anyja neve kötelező'),
-  client_tax_id: z.string().min(1, 'Az adóazonosító kötelező').regex(/^\d+$/, 'Csak számokat tartalmazhat'),
+  client_tax_id: z.string().length(10, 'Az adóazonosító 10 karakter hosszú kell legyen').regex(/^\d+$/, 'Csak számokat tartalmazhat'),
   // Ingatlan adatok
   property_address_same: z.boolean(),
   property_street: z.string().optional(),
@@ -316,12 +316,13 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
                   <FormLabel>Adóazonosító *</FormLabel>
                   <FormControl>
                     <Input 
-                      placeholder="Adóazonosító"
+                      placeholder="Adóazonosító (10 számjegy)"
+                      maxLength={10}
                       pattern="[0-9]*"
                       {...field}
                       onChange={(e) => {
-                        // Csak számokat engedélyez
-                        const value = e.target.value.replace(/[^0-9]/g, '');
+                        // Csak számokat engedélyez és max 10 karakter
+                        const value = e.target.value.replace(/[^0-9]/g, '').slice(0, 10);
                         field.onChange(value);
                       }}
                     />
