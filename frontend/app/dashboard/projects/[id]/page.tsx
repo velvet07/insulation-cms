@@ -24,7 +24,9 @@ import { projectsApi } from '@/lib/api/projects';
 import type { Project, ProjectAuditLogEntry } from '@/types';
 import { ContractForm, type ContractDataFormValues } from './contract-form';
 import { formatDate, formatPhoneNumber } from '@/lib/utils';
+import { createAuditLogEntry, addAuditLogEntry } from '@/lib/utils/audit-log';
 import { useAuthStore } from '@/lib/store/auth';
+import { DocumentsTab } from './documents-tab';
 import {
   ArrowLeft,
   Edit,
@@ -159,19 +161,15 @@ export default function ProjectDetailPage() {
                                       currentProject.client_birth_date || 
                                       currentProject.client_tax_id;
       
-      // Audit log bejegyzés hozzáadása
-      const auditLogEntry: ProjectAuditLogEntry = {
-        action: hasExistingContractData ? 'contract_data_modified' : 'contract_data_filled',
-        timestamp: new Date().toISOString(),
-        user: user ? {
-          email: user.email,
-          username: user.username,
-        } : undefined,
-      };
+      // Audit log bejegyzés hozzáadása - Szerződés adatok modul
+      const auditLogEntry = createAuditLogEntry(
+        hasExistingContractData ? 'contract_data_modified' : 'contract_data_filled',
+        user,
+        'Szerződés adatok modul'
+      );
       
       // Hozzáadjuk az audit log bejegyzést a meglévő audit log-hoz
-      const existingAuditLog = currentProject.audit_log || [];
-      updateData.audit_log = [...existingAuditLog, auditLogEntry];
+      updateData.audit_log = addAuditLogEntry(currentProject.audit_log, auditLogEntry);
 
       // Mezők, amik még nincsenek a Strapi szerveren (ezeket nem küldjük el)
       const fieldsNotOnServer = ['floor_material_extra', 'audit_log'];
@@ -531,15 +529,29 @@ export default function ProjectDetailPage() {
                         .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
                         .map((entry, index) => {
                           const actionLabels: Record<string, string> = {
-                            'contract_data_filled': 'Szerződés adatok kitöltve',
-                            'contract_data_modified': 'Szerződés adatok módosítva',
-                            'document_generated': 'Dokumentum generálva',
-                            'document_modified': 'Dokumentum módosítva',
-                            'photo_uploaded': 'Fénykép feltöltve',
-                            'photo_deleted': 'Fénykép törölve',
-                            'status_changed': 'Státusz módosítva',
+                            // Projekt modul
                             'project_created': 'Projekt létrehozva',
                             'project_modified': 'Projekt módosítva',
+                            'project_deleted': 'Projekt törölve',
+                            // Szerződés adatok modul
+                            'contract_data_filled': 'Szerződés adatok kitöltve',
+                            'contract_data_modified': 'Szerződés adatok módosítva',
+                            // Dokumentumok modul
+                            'document_generated': 'Dokumentum generálva',
+                            'document_modified': 'Dokumentum módosítva',
+                            'document_deleted': 'Dokumentum törölve',
+                            'document_signed': 'Dokumentum aláírva',
+                            // Fényképek modul
+                            'photo_uploaded': 'Fénykép feltöltve',
+                            'photo_deleted': 'Fénykép törölve',
+                            // Státusz modul
+                            'status_changed': 'Státusz módosítva',
+                            // Anyagok modul
+                            'material_added': 'Anyag hozzáadva',
+                            'material_removed': 'Anyag eltávolítva',
+                            // Naptár modul
+                            'scheduled_date_set': 'Ütemezett dátum beállítva',
+                            'scheduled_date_modified': 'Ütemezett dátum módosítva',
                           };
                           
                           const actionLabel = actionLabels[entry.action] || entry.action;
@@ -553,9 +565,14 @@ export default function ProjectDetailPage() {
                           });
                           
                           return (
-                            <div key={index} className="flex items-start gap-2 text-xs">
+                            <div key={index} className="flex items-start gap-2 text-xs border-b border-gray-200 dark:border-gray-700 pb-2 last:border-b-0">
                               <div className="flex-1">
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {entry.module && (
+                                    <span className="px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium">
+                                      {entry.module}
+                                    </span>
+                                  )}
                                   <span className="font-medium text-gray-700 dark:text-gray-300">{actionLabel}</span>
                                   {entry.user && (
                                     <span className="text-gray-500 dark:text-gray-400">
@@ -599,13 +616,13 @@ export default function ProjectDetailPage() {
           </div>
         )}
 
-        {activeTab === 'documents' && (
+        {activeTab === 'documents' && project && (
           <Card>
             <CardHeader>
               <CardTitle>Dokumentumok</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-gray-500">A dokumentumok listája hamarosan itt jelenik meg.</p>
+              <DocumentsTab project={project} />
             </CardContent>
           </Card>
         )}

@@ -75,15 +75,33 @@ export default function EditProjectPage() {
       : undefined,
   });
 
+  const { user } = useAuthStore();
+  
   const mutation = useMutation({
-    mutationFn: (data: ProjectFormValues) => {
+    mutationFn: async (data: ProjectFormValues) => {
+      // Lekérjük a jelenlegi projektet az audit log-hoz
+      const currentProject = await projectsApi.getOne(projectId);
+      
       // Összeállítjuk a client_address mezőt a kompatibilitás miatt (ha még használjuk)
       const client_address = `${data.client_street}, ${data.client_city}, ${data.client_zip}`;
+      
+      // Audit log bejegyzés - Projekt modul
+      const auditLogEntry = createAuditLogEntry(
+        'project_modified',
+        user,
+        'Projekt alapadatok módosítva'
+      );
+      auditLogEntry.module = 'Projekt';
+      
+      // Hozzáadjuk az audit log bejegyzést
+      const updatedAuditLog = addAuditLogEntry(currentProject.audit_log, auditLogEntry);
+      
       return projectsApi.update(projectId, {
         ...data,
         client_address, // Kompatibilitás miatt
         client_email: data.client_email || undefined,
         client_phone: data.client_phone || undefined,
+        audit_log: updatedAuditLog,
       });
     },
     onSuccess: () => {

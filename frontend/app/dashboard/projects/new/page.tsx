@@ -29,7 +29,7 @@ import {
 } from '@/components/ui/form';
 import { projectsApi } from '@/lib/api/projects';
 import { useAuthStore } from '@/lib/store/auth';
-import type { ProjectAuditLogEntry } from '@/types';
+import { createAuditLogEntry } from '@/lib/utils/audit-log';
 import { formatPhoneNumber, cleanPhoneNumber } from '@/lib/utils';
 import { ArrowLeft } from 'lucide-react';
 
@@ -64,30 +64,22 @@ export default function NewProjectPage() {
 
   const mutation = useMutation({
     mutationFn: (data: ProjectFormValues & { title: string }) => {
-      // Audit log bejegyzés a projekt létrehozásához
-      const auditLogEntry: ProjectAuditLogEntry = {
-        action: 'project_created',
-        timestamp: new Date().toISOString(),
-        user: user ? {
-          email: user.email,
-          username: user.username,
-        } : undefined,
-      };
+      // Audit log bejegyzés a projekt létrehozásához - Projekt modul
+      const auditLogEntry = createAuditLogEntry(
+        'project_created',
+        user,
+        `Projekt létrehozva: ${data.title}`
+      );
+      auditLogEntry.module = 'Projekt';
       
-      // Mezők, amik még nincsenek a Strapi szerveren (ezeket nem küldjük el)
-      const fieldsNotOnServer = ['audit_log'];
-      
-      // Készítjük el a projekt adatokat, kihagyva a szerveren még nem létező mezőket
+      // Készítjük el a projekt adatokat
       const projectData: any = {
         ...data,
         status: 'pending',
         client_email: data.client_email || undefined,
         client_phone: data.client_phone || undefined,
+        audit_log: [auditLogEntry], // Hozzáadjuk az audit log-ot
       };
-      
-      // Csak akkor adjuk hozzá az audit_log-ot, ha már létezik a szerveren
-      // Egyelőre kihagyjuk, mert még nincs a sémában
-      // projectData.audit_log = [auditLogEntry];
       
       return projectsApi.create(projectData);
     },

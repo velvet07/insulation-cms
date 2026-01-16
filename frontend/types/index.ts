@@ -75,36 +75,114 @@ export interface Project extends StrapiEntity {
 
 // Project Audit Log Types
 export interface ProjectAuditLogEntry {
-  action: 'contract_data_filled' | 'contract_data_modified' | 'document_generated' | 'document_modified' | 'photo_uploaded' | 'photo_deleted' | 'status_changed' | 'project_created' | 'project_modified';
+  action: 
+    // Projekt modul
+    | 'project_created' 
+    | 'project_modified' 
+    | 'project_deleted'
+    // Szerződés adatok modul
+    | 'contract_data_filled' 
+    | 'contract_data_modified'
+    // Dokumentumok modul
+    | 'document_generated' 
+    | 'document_modified'
+    | 'document_deleted'
+    | 'document_signed'
+    // Fényképek modul
+    | 'photo_uploaded' 
+    | 'photo_deleted'
+    // Státusz modul
+    | 'status_changed'
+    // Anyagok modul (jövőbeli)
+    | 'material_added'
+    | 'material_removed'
+    // Naptár modul (jövőbeli)
+    | 'scheduled_date_set'
+    | 'scheduled_date_modified';
   timestamp: string;
   user?: {
     email?: string;
     username?: string;
   };
-  details?: string; // További részletek
+  details?: string; // További részletek (pl. modul neve, régi/új értékek)
+  module?: string; // Modul neve (pl. 'Szerződés adatok', 'Dokumentumok', 'Fényképek', stb.)
 }
 
 // Document Types
+export type DocumentType = 
+  | 'felmerolap'
+  | 'vallalkozasi_szerzodes'
+  | 'megallapodas'
+  | 'szerzodes_energiahatékonysag'
+  | 'adatkezelesi_hozzajarulas'
+  | 'teljesitesi_igazolo'
+  | 'munkaterul_atadas'
+  | 'other';
+
 export interface Document extends StrapiEntity {
-  type: 'contract' | 'worksheet' | 'invoice' | 'completion_certificate' | 'other';
+  type: DocumentType;
   file_url?: string;
   file_name?: string;
   file_size?: number;
   signed: boolean;
-  signature_data?: Record<string, unknown>;
+  signature_data?: string | Record<string, unknown>; // Base64 encoded image vagy JSON
   signed_at?: string;
   project?: Project;
   uploaded_by?: User;
+  template?: Template;
+  file?: {
+    url?: string;
+    name?: string;
+    size?: number;
+  };
 }
 
+export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
+  felmerolap: 'Felmérőlap',
+  vallalkozasi_szerzodes: 'Vállalkozási szerződés',
+  megallapodas: 'Megállapodás',
+  szerzodes_energiahatékonysag: 'Szerződés energiahatékonyság-javító intézkedési munkálatokra',
+  adatkezelesi_hozzajarulas: 'Adatkezelési hozzájárulás nyilatkozat',
+  teljesitesi_igazolo: 'Teljesítésit igazoló jegyzőkönyv (TIG)',
+  munkaterul_atadas: 'Munkaterül átadás-átvételi jegyzőkönyv',
+  other: 'Egyéb',
+};
+
 // Template Types
+export type TemplateType = 
+  | 'felmerolap'
+  | 'vallalkozasi_szerzodes'
+  | 'megallapodas'
+  | 'szerzodes_energiahatékonysag'
+  | 'adatkezelesi_hozzajarulas'
+  | 'teljesitesi_igazolo'
+  | 'munkaterul_atadas'
+  | 'other';
+
 export interface Template extends StrapiEntity {
   name: string;
-  type: 'contract' | 'worksheet' | 'invoice';
-  template_file?: string;
-  tokens?: string[];
+  type: TemplateType;
+  template_file?: string | {
+    id?: number;
+    documentId?: string;
+    name?: string;
+    url?: string;
+    size?: number;
+  };
+  tokens?: string[]; // Elérhető tokenek listája
   tenant?: Tenant;
 }
+
+export const TEMPLATE_TYPE_LABELS: Record<TemplateType, string> = {
+  felmerolap: 'Felmérőlap',
+  vallalkozasi_szerzodes: 'Vállalkozási szerződés',
+  megallapodas: 'Megállapodás',
+  szerzodes_energiahatékonysag: 'Szerződés energiahatékonyság-javító intézkedési munkálatokra',
+  adatkezelesi_hozzajarulas: 'Adatkezelési hozzájárulás nyilatkozat',
+  teljesitesi_igazolo: 'Teljesítésit igazoló jegyzőkönyv (TIG)',
+  munkaterul_atadas: 'Munkaterül átadás-átvételi jegyzőkönyv',
+  other: 'Egyéb',
+};
 
 // Billing Record Types
 export interface BillingRecord extends StrapiEntity {
