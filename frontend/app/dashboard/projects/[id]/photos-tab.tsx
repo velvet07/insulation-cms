@@ -48,7 +48,7 @@ export function PhotosTab({ project }: PhotosTabProps) {
   const { user } = useAuthStore();
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
-  const [uploadCategoryId, setUploadCategoryId] = useState<string | null>(null);
+  const [uploadCategoryId, setUploadCategoryId] = useState<string>('');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<PhotoCategory | null>(null);
@@ -320,7 +320,7 @@ export function PhotosTab({ project }: PhotosTabProps) {
   
   const handleOpenUploadDialog = () => {
     // Ha van kiválasztott kategória, automatikusan beállítjuk
-    setUploadCategoryId(selectedCategoryId);
+    setUploadCategoryId(selectedCategoryId || '');
     setSelectedFiles([]);
     setIsUploadDialogOpen(true);
   };
@@ -539,7 +539,7 @@ export function PhotosTab({ project }: PhotosTabProps) {
                   <div>
                     <Label htmlFor="upload-category-select">Kategória *</Label>
                     <Select
-                      value={uploadCategoryId || undefined}
+                      value={uploadCategoryId}
                       onValueChange={setUploadCategoryId}
                     >
                       <SelectTrigger id="upload-category-select">

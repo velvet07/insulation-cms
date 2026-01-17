@@ -10,8 +10,8 @@ export const photosApi = {
   getAll: async (filters?: PhotoFilters) => {
     const params = new URLSearchParams();
     
-    // Strapi v5: egyszerűsített populate szintaxis
-    params.append('populate', 'project,category,file');
+    // Strapi v5: populate=* az összes reláció betöltéséhez
+    params.append('populate', '*');
     params.append('sort[0]', 'order:asc');
     params.append('sort[1]', 'createdAt:desc');
     
@@ -83,23 +83,22 @@ export const photosApi = {
         uploadedFiles.push(...uploadData);
       }
       
-      // Create Photo entries for each uploaded file using custom endpoint
+      // Create Photo entries for each uploaded file
       const createdPhotos: Photo[] = [];
       
       for (const uploadedFile of uploadedFiles) {
         const photoData = {
           name: uploadedFile.name,
           file: uploadedFile.id,
-          category: categoryId.toString(),
-          project: projectId.toString(),
+          category: categoryId,
+          project: projectId,
           uploaded_by: uploadedBy,
           order: 0,
         };
         
-        console.log('Creating photo with custom endpoint:', JSON.stringify(photoData, null, 2));
+        console.log('Creating photo:', JSON.stringify(photoData, null, 2));
         
-        // Custom endpoint használata a relation mezők miatt
-        const response = await strapiApi.post<StrapiResponse<Photo>>('/photos/create-with-relations', { data: photoData });
+        const response = await strapiApi.post<StrapiResponse<Photo>>('/photos', { data: photoData });
         createdPhotos.push(unwrapStrapiResponse(response));
       }
       
