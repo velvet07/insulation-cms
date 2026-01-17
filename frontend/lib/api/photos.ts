@@ -19,25 +19,13 @@ export const photosApi = {
       const response = await strapiApi.get<StrapiResponse<Photo[]>>(`/photos?${params.toString()}`);
       let photos = unwrapStrapiArrayResponse(response);
       
-      // Debug: nézzük meg az első photo-t, hogy van-e benne project relation
-      if (photos.length > 0) {
-        console.log('First photo from API:', photos[0]);
-        console.log('First photo project relation:', photos[0].project);
-      }
-      
       // Frontend szűrés a relation mezőkre (Strapi v5 REST API korlátozás)
       if (filters?.project) {
         const projectId = filters.project.toString();
-        console.log('Filtering by project ID:', projectId, 'Total photos before filter:', photos.length);
         photos = photos.filter((photo: any) => {
           const photoProjectId = photo.project?.documentId || photo.project?.id?.toString();
-          const matches = photoProjectId === projectId;
-          if (!matches && photos.length <= 5) {
-            console.log(`Photo ${photo.id || photo.documentId} project:`, photo.project, 'ID:', photoProjectId, 'matches:', matches);
-          }
-          return matches;
+          return photoProjectId === projectId;
         });
-        console.log('Filtered photos count:', photos.length);
       }
       if (filters?.category) {
         const categoryId = filters.category.toString();
