@@ -3,7 +3,7 @@ import { factories } from '@strapi/strapi';
 export default factories.createCoreController('api::photo.photo', ({ strapi }) => ({
   /**
    * Custom endpoint a Photo létrehozásához relation mezőkkel
-   * A Strapi v5 Document Service API-t használja connect szintaxissal
+   * Entity Service API-t használjuk, mert jobban kezeli a relation mezőket
    */
   async createWithRelations(ctx) {
     try {
@@ -23,31 +23,41 @@ export default factories.createCoreController('api::photo.photo', ({ strapi }) =
         return ctx.badRequest('A project mező kötelező');
       }
 
-      // Strapi v5 Document Service API - relation mezők connect szintaxissal
+      // Először megkeressük a category és project rekordokat documentId alapján
+      const categoryDoc = await strapi.documents('api::photo-category.photo-category').findOne({
+        documentId: category.toString(),
+      });
+      
+      if (!categoryDoc) {
+        return ctx.badRequest(`Kategória nem található: ${category}`);
+      }
+
+      const projectDoc = await strapi.documents('api::project.project').findOne({
+        documentId: project.toString(),
+      });
+      
+      if (!projectDoc) {
+        return ctx.badRequest(`Projekt nem található: ${project}`);
+      }
+
+      // Entity Service API - numerikus ID-kat használ a relation mezőknél
       const photoData: any = {
         name: name || 'Unnamed photo',
         file: typeof file === 'number' ? file : parseInt(file, 10),
+        category: categoryDoc.id, // Numerikus ID
+        project: projectDoc.id, // Numerikus ID
         order: typeof order === 'number' ? order : parseInt(order, 10) || 0,
-        // Relation mezők connect szintaxissal
-        category: {
-          connect: [{ documentId: category.toString() }]
-        },
-        project: {
-          connect: [{ documentId: project.toString() }]
-        },
       };
 
-      // User kapcsolás (opcionális) - users-permissions plugin másképp működik
+      // User kapcsolás (opcionális)
       if (uploaded_by) {
-        photoData.uploaded_by = {
-          connect: [{ id: typeof uploaded_by === 'number' ? uploaded_by : parseInt(uploaded_by, 10) }]
-        };
+        photoData.uploaded_by = typeof uploaded_by === 'number' ? uploaded_by : parseInt(uploaded_by, 10);
       }
 
       strapi.log.info('Creating photo with data:', JSON.stringify(photoData));
 
-      // Létrehozzuk a Photo rekordot a Document Service API-val
-      const photo = await strapi.documents('api::photo.photo').create({
+      // Entity Service API használata - ez jobban kezeli a relation mezőket
+      const photo = await strapi.entityService.create('api::photo.photo', {
         data: photoData,
         populate: ['file', 'category', 'project'],
       });
