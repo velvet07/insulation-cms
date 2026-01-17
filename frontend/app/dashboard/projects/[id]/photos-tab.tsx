@@ -137,7 +137,7 @@ export function PhotosTab({ project }: PhotosTabProps) {
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
       setIsUploadDialogOpen(false);
       setSelectedFiles([]);
-      setUploadCategoryId(null);
+      setUploadCategoryId('');
     },
     onError: (error: any) => {
       console.error('Error uploading photos:', error);
@@ -514,7 +514,7 @@ export function PhotosTab({ project }: PhotosTabProps) {
             setIsUploadDialogOpen(open);
             if (!open) {
               setSelectedFiles([]);
-              setUploadCategoryId(null);
+              setUploadCategoryId('');
             }
           }}>
             <DialogTrigger asChild>
@@ -623,7 +623,7 @@ export function PhotosTab({ project }: PhotosTabProps) {
                   onClick={() => {
                     setIsUploadDialogOpen(false);
                     setSelectedFiles([]);
-                    setUploadCategoryId(null);
+                    setUploadCategoryId('');
                   }}
                 >
                   Mégse
