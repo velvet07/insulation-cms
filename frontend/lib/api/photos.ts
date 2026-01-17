@@ -10,8 +10,11 @@ export const photosApi = {
   getAll: async (filters?: PhotoFilters) => {
     const params = new URLSearchParams();
     
-    // Strapi v5: populate=* az összes reláció betöltéséhez
-    params.append('populate', '*');
+    // Strapi v5: explicit populate a relation mezőknek
+    params.append('populate[file]', '*');
+    params.append('populate[category]', '*');
+    params.append('populate[project]', '*');
+    params.append('populate[uploaded_by]', '*');
     params.append('sort[0]', 'order:asc');
     params.append('sort[1]', 'createdAt:desc');
     

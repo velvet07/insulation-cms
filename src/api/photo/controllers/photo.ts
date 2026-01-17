@@ -62,9 +62,16 @@ export default factories.createCoreController('api::photo.photo', ({ strapi }) =
         populate: ['file', 'category', 'project'],
       });
 
-      strapi.log.info('Photo created successfully:', JSON.stringify(photo));
+      strapi.log.info('Photo created successfully (raw):', JSON.stringify(photo));
 
-      return { data: photo };
+      // Újra lekérjük a photot populate-dal, hogy biztosan benne legyenek a relation mezők
+      const populatedPhoto = await strapi.entityService.findOne('api::photo.photo', photo.id, {
+        populate: ['file', 'category', 'project'],
+      });
+
+      strapi.log.info('Photo created successfully (populated):', JSON.stringify(populatedPhoto));
+
+      return { data: populatedPhoto || photo };
     } catch (error: any) {
       strapi.log.error('Error in createWithRelations:', error.message, error.stack);
       return ctx.badRequest(error.message || 'Hiba történt a fénykép létrehozása során');
