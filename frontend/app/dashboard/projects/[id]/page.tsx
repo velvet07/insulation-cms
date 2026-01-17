@@ -28,6 +28,9 @@ import { createAuditLogEntry, addAuditLogEntry } from '@/lib/utils/audit-log';
 import { useAuthStore } from '@/lib/store/auth';
 import { DocumentsTab } from './documents-tab';
 import { PhotosTab } from './photos-tab';
+import { photosApi } from '@/lib/api/photos';
+import { photoCategoriesApi } from '@/lib/api/photo-categories';
+import { documentsApi } from '@/lib/api/documents';
 import {
   ArrowLeft,
   Edit,
@@ -39,6 +42,10 @@ import {
   Ruler,
   Package,
   User,
+  CheckCircle2,
+  AlertCircle,
+  FileCheck,
+  Camera,
 } from 'lucide-react';
 
 const statusLabels: Record<Project['status'], string> = {
@@ -71,6 +78,23 @@ export default function ProjectDetailPage() {
     queryFn: () => projectsApi.getOne(projectId),
     enabled: !!projectId,
     retry: 1,
+  });
+
+  const { data: documents = [] } = useQuery({
+    queryKey: ['documents', projectId],
+    queryFn: () => documentsApi.getAll({ project: projectId }),
+    enabled: !!projectId,
+  });
+
+  const { data: photos = [] } = useQuery({
+    queryKey: ['photos', projectId],
+    queryFn: () => photosApi.getAll({ project: projectId }),
+    enabled: !!projectId,
+  });
+
+  const { data: categories = [] } = useQuery({
+    queryKey: ['photo-categories'],
+    queryFn: () => photoCategoriesApi.getAll(),
   });
 
   const deleteMutation = useMutation({
@@ -321,6 +345,33 @@ export default function ProjectDetailPage() {
     );
   }
 
+  // Számítások az állapot összesítőhöz
+  const contractFilled = !!(
+    project.client_birth_place &&
+    project.client_birth_date &&
+    project.client_tax_id &&
+    project.area_sqm &&
+    project.insulation_option
+  );
+
+  const totalDocs = documents.length;
+  const signedDocs = documents.filter(d => d.signed).length;
+  const docsReady = totalDocs > 0 && totalDocs === signedDocs;
+
+  const requiredCategories = categories.filter(c => c.required);
+  const categoriesWithPhotos = requiredCategories.filter(cat => {
+    const catId = (cat.documentId || cat.id).toString();
+    return photos.some(p => (p.category?.documentId || p.category?.id?.toString()) === catId);
+  });
+  
+  const photosReady = requiredCategories.length > 0 && 
+                     categoriesWithPhotos.length === requiredCategories.length;
+
+  const canBeSentForReview = project.status === 'in_progress' && 
+                            contractFilled && 
+                            docsReady && 
+                            photosReady;
+
   return (
     <ProtectedRoute>
       <DashboardLayout>
@@ -471,6 +522,79 @@ export default function ProjectDetailPage() {
         {/* Tab Content */}
         {activeTab === 'info' && (
           <div className="space-y-6">
+            {/* Projekt Állapot Összesítő */}
+            <Card className="border-2 border-primary/10">
+              <CardHeader className="bg-primary/5 pb-4">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <CheckCircle2 className="h-5 w-5 text-primary" />
+                  Projekt Állapot Összesítő
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Szerződés adatok */}
+                  <div className="flex flex-col items-center text-center p-4 rounded-lg bg-gray-50 dark:bg-gray-900">
+                    <div className={`p-3 rounded-full mb-3 ${contractFilled ? 'bg-green-100 text-green-600' : 'bg-yellow-100 text-yellow-600'}`}>
+                      {contractFilled ? <CheckCircle2 className="h-6 w-6" /> : <AlertCircle className="h-6 w-6" />}
+                    </div>
+                    <h4 className="font-semibold mb-1">Szerződés adatok</h4>
+                    <p className="text-xs text-gray-500 mb-2">Személyes adatok és terület</p>
+                    {contractFilled ? (
+                      <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded">Kitöltve</span>
+                    ) : (
+                      <span className="text-xs font-medium text-yellow-600 bg-yellow-50 px-2 py-1 rounded">Hiányos</span>
+                    )}
+                  </div>
+
+                  {/* Dokumentumok */}
+                  <div className="flex flex-col items-center text-center p-4 rounded-lg bg-gray-50 dark:bg-gray-900">
+                    <div className={`p-3 rounded-full mb-3 ${docsReady ? 'bg-green-100 text-green-600' : 'bg-yellow-100 text-yellow-600'}`}>
+                      {docsReady ? <FileCheck className="h-6 w-6" /> : <FileText className="h-6 w-6" />}
+                    </div>
+                    <h4 className="font-semibold mb-1">Dokumentumok</h4>
+                    <p className="text-xs text-gray-500 mb-2">{totalDocs} generálva, {signedDocs} aláírva</p>
+                    {docsReady ? (
+                      <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded">Kész</span>
+                    ) : (
+                      <span className="text-xs font-medium text-yellow-600 bg-yellow-50 px-2 py-1 rounded">Aláírásra vár</span>
+                    )}
+                  </div>
+
+                  {/* Fényképek */}
+                  <div className="flex flex-col items-center text-center p-4 rounded-lg bg-gray-50 dark:bg-gray-900">
+                    <div className={`p-3 rounded-full mb-3 ${photosReady ? 'bg-green-100 text-green-600' : 'bg-yellow-100 text-yellow-600'}`}>
+                      {photosReady ? <Camera className="h-6 w-6" /> : <Camera className="h-6 w-6" />}
+                    </div>
+                    <h4 className="font-semibold mb-1">Fényképek</h4>
+                    <p className="text-xs text-gray-500 mb-2">{categoriesWithPhotos.length}/{requiredCategories.length} kategória kész</p>
+                    {photosReady ? (
+                      <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded">Minden fotó megvan</span>
+                    ) : (
+                      <span className="text-xs font-medium text-yellow-600 bg-yellow-50 px-2 py-1 rounded">Fotók hiányoznak</span>
+                    )}
+                  </div>
+                </div>
+
+                {canBeSentForReview && (
+                  <div className="mt-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <CheckCircle2 className="h-5 w-5 text-green-600" />
+                      <p className="text-sm font-medium text-green-800 dark:text-green-300">
+                        Minden kötelező elem megvan. A projekt küldhető jóváhagyásra!
+                      </p>
+                    </div>
+                    <Button 
+                      size="sm" 
+                      className="bg-green-600 hover:bg-green-700 text-white"
+                      onClick={() => handleStatusChange('ready_for_review')}
+                      disabled={isUpdatingStatus}
+                    >
+                      Küldés jóváhagyásra
+                    </Button>
+                  </div>
+                )}
+              </Card>
+
             {/* Client Information */}
             <Card>
               <CardHeader>
