@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: 'insulation-frontend',
+      name: 'thermodesk-frontend',
       script: 'npm',
       args: 'start',
       cwd: process.cwd(),

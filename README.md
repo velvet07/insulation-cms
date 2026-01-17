@@ -1,4 +1,4 @@
-# Padlásfödém Szigetelés CRM
+# ThermoDesk
 
 Komplex CRM rendszer padlásfödém szigetelési projektek kezelésére.
 

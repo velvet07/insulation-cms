@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Padlásfödém CRM",
-  description: "Padlásfödém szigetelés CRM rendszer",
+  title: "ThermoDesk",
+  description: "ThermoDesk - Szigetelés CRM rendszer",
 };
 
 export default function RootLayout({

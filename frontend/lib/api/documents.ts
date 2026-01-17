@@ -197,4 +197,59 @@ export const documentsApi = {
       throw error;
     }
   },
+
+  // Fájl feltöltése (kép vagy PDF)
+  upload: async (projectId: number | string, file: File, type: Document['type'] = 'other') => {
+    try {
+      const formData = new FormData();
+      formData.append('files', file);
+
+      // Strapi file upload endpoint használata
+      const strapiUrl = process.env.NEXT_PUBLIC_STRAPI_URL || 'https://cms.emermedia.eu';
+      const apiToken = process.env.NEXT_PUBLIC_STRAPI_API_TOKEN;
+      
+      const uploadResponse = await fetch(`${strapiUrl}/api/upload`, {
+        method: 'POST',
+        headers: {
+          ...(apiToken ? { Authorization: `Bearer ${apiToken}` } : {}),
+        },
+        body: formData,
+      });
+
+      if (!uploadResponse.ok) {
+        const errorData = await uploadResponse.json().catch(() => ({}));
+        throw new Error(errorData.error?.message || 'Fájl feltöltése sikertelen');
+      }
+
+      const uploadResult = await uploadResponse.json();
+      const fileId = Array.isArray(uploadResult) ? uploadResult[0].id : uploadResult.id;
+
+      if (!fileId) {
+        throw new Error('A feltöltött fájl ID-ja nem található');
+      }
+
+      // Dokumentum létrehozása a feltöltött fájllal
+      const response = await strapiApi.post<StrapiResponse<Document>>('/documents', {
+        data: {
+          project: projectId,
+          type,
+          file: fileId,
+          file_name: file.name,
+        },
+      });
+      return unwrapStrapiResponse(response);
+    } catch (error: any) {
+      if (error.response) {
+        console.error('Strapi API Error:', error.response.data);
+        const errorMessage = error.response.data?.error?.message || 
+                           JSON.stringify(error.response.data) || 
+                           'Hiba történt a fájl feltöltése során';
+        throw new Error(errorMessage);
+      }
+      if (error.message) {
+        throw error;
+      }
+      throw new Error('Hiba történt a fájl feltöltése során');
+    }
+  },
 };

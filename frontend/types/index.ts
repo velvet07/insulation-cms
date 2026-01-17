@@ -88,6 +88,7 @@ export interface ProjectAuditLogEntry {
     | 'document_modified'
     | 'document_deleted'
     | 'document_signed'
+    | 'document_uploaded'
     // Fényképek modul
     | 'photo_uploaded' 
     | 'photo_deleted'
@@ -247,4 +248,54 @@ export interface MaterialBalance extends StrapiEntity {
   status: 'surplus' | 'balanced' | 'deficit';
   user?: User;
   material?: Material;
+}
+
+// Photo Category Types
+export interface PhotoCategory extends StrapiEntity {
+  name: string;
+  slug?: string;
+  order?: number;
+  required?: boolean;
+  tenant?: Tenant;
+}
+
+// Photo Types
+export interface Photo extends StrapiEntity {
+  name?: string;
+  file?: {
+    id?: number;
+    documentId?: string;
+    name?: string;
+    url?: string;
+    mime?: string;
+    size?: number;
+    width?: number;
+    height?: number;
+    formats?: {
+      thumbnail?: {
+        url?: string;
+        width?: number;
+        height?: number;
+      };
+      small?: {
+        url?: string;
+        width?: number;
+        height?: number;
+      };
+      medium?: {
+        url?: string;
+        width?: number;
+        height?: number;
+      };
+      large?: {
+        url?: string;
+        width?: number;
+        height?: number;
+      };
+    };
+  };
+  category?: PhotoCategory;
+  project?: Project;
+  uploaded_by?: User;
+  order?: number;
 }

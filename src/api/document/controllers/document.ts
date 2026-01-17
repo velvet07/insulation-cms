@@ -62,4 +62,5 @@ export default factories.createCoreController('api::document.document', ({ strap
       return ctx.badRequest(error.message || 'Hiba történt a dokumentum újragenerálása során');
     }
   },
+
 }));

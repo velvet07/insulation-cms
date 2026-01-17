@@ -29,6 +29,8 @@ import {
 } from '@/components/ui/form';
 import { projectsApi } from '@/lib/api/projects';
 import { formatDate, formatPhoneNumber, cleanPhoneNumber } from '@/lib/utils';
+import { useAuthStore } from '@/lib/store/auth';
+import { createAuditLogEntry, addAuditLogEntry } from '@/lib/utils/audit-log';
 import { ArrowLeft } from 'lucide-react';
 
 const projectSchema = z.object({

@@ -30,8 +30,9 @@ import {
 import { documentsApi } from '@/lib/api/documents';
 import { templatesApi } from '@/lib/api/templates';
 import { DOCUMENT_TYPE_LABELS, TEMPLATE_TYPE_LABELS, type Document, type Template, type Project } from '@/types';
-import { Plus, Download, Trash2, FileText, Loader2, PenTool } from 'lucide-react';
+import { Plus, Download, Trash2, FileText, Loader2, PenTool, X, Check, Upload } from 'lucide-react';
 import { SignaturePad } from '@/components/ui/signature-pad';
+import { PdfViewer } from '@/components/ui/pdf-viewer';
 import { useAuthStore } from '@/lib/store/auth';
 import { createAuditLogEntry, addAuditLogEntry } from '@/lib/utils/audit-log';
 import { projectsApi } from '@/lib/api/projects';
@@ -44,9 +45,11 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
   const [isGenerateDialogOpen, setIsGenerateDialogOpen] = useState(false);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
-  const [isSignatureDialogOpen, setIsSignatureDialogOpen] = useState(false);
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
   const [selectedDocumentForSignature, setSelectedDocumentForSignature] = useState<Document | null>(null);
+  const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+
 
   const projectId = project.documentId || project.id;
 
@@ -99,7 +102,7 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
       queryClient.invalidateQueries({ queryKey: ['documents', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
       setIsGenerateDialogOpen(false);
-      setSelectedTemplateId('');
+      setSelectedTemplateIds([]);
     },
     onError: (error: any) => {
       console.error('Error generating document:', error);
@@ -112,6 +115,44 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
       generateMutation.mutate(allTemplateIds);
     }
   };
+
+  const uploadMutation = useMutation({
+    mutationFn: async ({ file, type }: { file: File; type?: Document['type'] }) => {
+      const document = await documentsApi.upload(projectId, file, type || 'other');
+
+      // Audit log bejegyzés
+      const auditLogEntry = createAuditLogEntry(
+        'document_uploaded',
+        user,
+        `Dokumentum feltöltve: ${file.name}`
+      );
+      auditLogEntry.module = 'Dokumentumok';
+
+      const currentProject = await projectsApi.getOne(projectId);
+      const updatedAuditLog = addAuditLogEntry(currentProject.audit_log, auditLogEntry);
+
+      try {
+        await projectsApi.update(projectId, {
+          audit_log: updatedAuditLog,
+        });
+      } catch (error: any) {
+        if (!error?.message?.includes('Invalid key audit_log')) {
+          console.error('Error updating audit log:', error);
+        }
+      }
+
+      return document;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+      setIsUploadDialogOpen(false);
+      setUploadFile(null);
+    },
+    onError: (error: any) => {
+      console.error('Error uploading file:', error);
+    },
+  });
 
   const deleteMutation = useMutation({
     mutationFn: async (documentId: number | string) => {
@@ -159,11 +200,29 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
   });
 
   const handleGenerate = () => {
-    if (!selectedTemplateId) {
+    if (selectedTemplateIds.length === 0) {
       // Nincs alert, csak return
       return;
     }
-    generateMutation.mutate(selectedTemplateId);
+    generateMutation.mutate(selectedTemplateIds);
+  };
+
+  const handleTemplateToggle = (templateId: string) => {
+    setSelectedTemplateIds((prev) => {
+      if (prev.includes(templateId)) {
+        return prev.filter((id) => id !== templateId);
+      } else {
+        return [...prev, templateId];
+      }
+    });
+  };
+
+  const handleSelectAllTemplates = () => {
+    if (selectedTemplateIds.length === availableTemplates.length) {
+      setSelectedTemplateIds([]);
+    } else {
+      setSelectedTemplateIds(availableTemplates.map(t => (t.documentId || t.id).toString()));
+    }
   };
 
   const handleDelete = (document: Document) => {
@@ -175,7 +234,44 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
 
   const handleSign = (document: Document) => {
     setSelectedDocumentForSignature(document);
-    setIsSignatureDialogOpen(true);
+    
+    // Scroll to signature section
+    setTimeout(() => {
+      const signatureSection = window.document.getElementById('signature-section');
+      if (signatureSection) {
+        signatureSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
+  };
+
+  const getDocumentUrl = (document: Document): string | null => {
+    // Próbáljuk meg több módon is a fájl URL-t
+    let fileUrl = document.file?.url || document.file_url;
+    
+    // Ha a file objektum van, próbáljuk meg közvetlenül a url-t
+    if (document.file && typeof document.file === 'object' && 'url' in document.file) {
+      fileUrl = document.file.url;
+    }
+    
+    if (!fileUrl) {
+      console.warn('Document file URL not found:', document);
+      return null;
+    }
+    
+    const strapiUrl = process.env.NEXT_PUBLIC_STRAPI_URL || 'https://cms.emermedia.eu';
+    
+    // Ha már teljes URL, használjuk azt
+    if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
+      return fileUrl;
+    }
+    
+    // Ha relatív URL, hozzáadjuk a Strapi URL-t
+    // Eltávolítjuk a dupla slash-okat
+    const cleanUrl = fileUrl.startsWith('/') ? fileUrl : `/${fileUrl}`;
+    const fullUrl = `${strapiUrl}${cleanUrl}`;
+    
+    console.log('Generated PDF URL:', fullUrl, 'from fileUrl:', fileUrl);
+    return fullUrl;
   };
 
   const saveSignature = async (signatureData: string) => {
@@ -226,7 +322,6 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
       // Mindig invalidáljuk a query-ket, hogy frissüljön a UI
       queryClient.invalidateQueries({ queryKey: ['documents', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
-      setIsSignatureDialogOpen(false);
       setSelectedDocumentForSignature(null);
       // Sikeres aláírás - nincs alert
     } catch (error: any) {
@@ -277,6 +372,73 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
           </p>
         </div>
         <div className="flex gap-2">
+          <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Upload className="mr-2 h-4 w-4" />
+                Fájl feltöltése
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Fájl feltöltése</DialogTitle>
+                <DialogDescription>
+                  Töltsön fel képet vagy PDF fájlt (pl. tulajdoni lap, lakcímkártya).
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Fájl kiválasztása *</label>
+                  <input
+                    type="file"
+                    accept="image/*,.pdf"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setUploadFile(file);
+                      }
+                    }}
+                    className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                  />
+                </div>
+                {uploadFile && (
+                  <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded-md">
+                    <p className="text-sm font-medium">{uploadFile.name}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {(uploadFile.size / 1024 / 1024).toFixed(2)} MB
+                    </p>
+                  </div>
+                )}
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setIsUploadDialogOpen(false);
+                    setUploadFile(null);
+                  }}
+                >
+                  Mégse
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (!uploadFile) return;
+                    uploadMutation.mutate({ file: uploadFile, type: 'other' });
+                  }}
+                  disabled={!uploadFile || uploadMutation.isPending}
+                >
+                  {uploadMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Feltöltés...
+                    </>
+                  ) : (
+                    'Feltöltés'
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
           {templates.length > 0 && (
             <Button variant="outline" onClick={handleGenerateAll} disabled={generateMutation.isPending}>
               {generateMutation.isPending ? (
@@ -304,71 +466,71 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div>
-                <label className="text-sm font-medium mb-2 block">Sablon kiválasztása *</label>
-                <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Válasszon sablont" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {isLoadingTemplates ? (
-                      <div className="p-4 text-center text-sm text-gray-500">
-                        <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2" />
-                        Sablonok betöltése...
-                      </div>
-                    ) : availableTemplates.length === 0 ? (
-                      <div className="p-4 text-center text-sm text-gray-500">
-                        Nincsenek elérhető sablonok. Kérjük, hozzon létre sablonokat a{' '}
-                        <a href="/dashboard/documents/templates" className="text-blue-600 hover:underline">
-                          Sablonok
-                        </a>{' '}
-                        oldalon.
-                      </div>
-                    ) : (
-                      availableTemplates.map((template) => (
-                        <SelectItem
-                          key={template.documentId || template.id}
-                          value={(template.documentId || template.id).toString()}
-                        >
-                          {template.name} ({TEMPLATE_TYPE_LABELS[template.type as keyof typeof TEMPLATE_TYPE_LABELS] || template.type})
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-              {selectedTemplateId && (
-                <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-md">
-                  <p className="text-sm font-medium mb-2">Elérhető tokenek:</p>
-                  <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
-                    <p>• {'{client_name}'} - Ügyfél neve</p>
-                    <p>• {'{client_address}'} - Ügyfél címe</p>
-                    <p>• {'{client_phone}'} - Telefonszám</p>
-                    <p>• {'{client_email}'} - Email cím</p>
-                    <p>• {'{client_birth_place}'} - Születési hely</p>
-                    <p>• {'{client_birth_date}'} - Születési idő</p>
-                    <p>• {'{client_mother_name}'} - Anyja neve</p>
-                    <p>• {'{client_tax_id}'} - Adóazonosító</p>
-                    <p>• {'{property_address}'} - Ingatlan címe</p>
-                    <p>• {'{area_sqm}'} - Terület (m²)</p>
-                    <p>• {'{floor_material}'} - Födém anyaga</p>
-                    <p>• {'{date}'} - Aktuális dátum</p>
-                  </div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium">Sablon kiválasztása *</label>
+                  {availableTemplates.length > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleSelectAllTemplates}
+                      className="text-xs h-7"
+                    >
+                      {selectedTemplateIds.length === availableTemplates.length ? 'Összes kijelölés törlése' : 'Összes kijelölése'}
+                    </Button>
+                  )}
                 </div>
-              )}
+                {isLoadingTemplates ? (
+                  <div className="p-4 text-center text-sm text-gray-500 border rounded-md">
+                    <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2" />
+                    Sablonok betöltése...
+                  </div>
+                ) : availableTemplates.length === 0 ? (
+                  <div className="p-4 text-center text-sm text-gray-500 border rounded-md">
+                    Nincsenek elérhető sablonok. Kérjük, hozzon létre sablonokat a{' '}
+                    <a href="/dashboard/documents/templates" className="text-blue-600 hover:underline">
+                      Sablonok
+                    </a>{' '}
+                    oldalon.
+                  </div>
+                ) : (
+                  <div className="border rounded-md max-h-60 overflow-y-auto space-y-2 p-3">
+                    {availableTemplates.map((template) => {
+                      const templateId = (template.documentId || template.id).toString();
+                      const isSelected = selectedTemplateIds.includes(templateId);
+                      return (
+                        <label
+                          key={templateId}
+                          className="flex items-center space-x-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-900 rounded cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleTemplateToggle(templateId)}
+                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="text-sm flex-1">
+                            {template.name} ({TEMPLATE_TYPE_LABELS[template.type as keyof typeof TEMPLATE_TYPE_LABELS] || template.type})
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
             <DialogFooter>
               <Button
                 variant="outline"
                 onClick={() => {
                   setIsGenerateDialogOpen(false);
-                  setSelectedTemplateId('');
+                  setSelectedTemplateIds([]);
                 }}
               >
                 Mégse
               </Button>
               <Button
                 onClick={handleGenerate}
-                disabled={!selectedTemplateId || generateMutation.isPending}
+                disabled={selectedTemplateIds.length === 0 || generateMutation.isPending}
               >
                 {generateMutation.isPending ? (
                   <>
@@ -376,7 +538,7 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
                     Generálás...
                   </>
                 ) : (
-                  'Generálás'
+                  `Generálás${selectedTemplateIds.length > 0 ? ` (${selectedTemplateIds.length})` : ''}`
                 )}
               </Button>
             </DialogFooter>
@@ -478,36 +640,78 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
         </div>
       )}
 
-      {/* Aláírás Dialog */}
-      <Dialog open={isSignatureDialogOpen} onOpenChange={setIsSignatureDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Dokumentum aláírása</DialogTitle>
-            <DialogDescription>
-              Kérjük, írja alá a dokumentumot az alábbi mezőben. Tableten vagy érintőképernyős eszközön
-              ujjal vagy stylus-szal is aláírhat.
-            </DialogDescription>
-          </DialogHeader>
-          {selectedDocumentForSignature && (
-            <SignaturePad
-              onSave={saveSignature}
-              onCancel={() => {
-                setIsSignatureDialogOpen(false);
-                setSelectedDocumentForSignature(null);
-              }}
-              initialSignature={
-                selectedDocumentForSignature.signature_data
-                  ? (typeof selectedDocumentForSignature.signature_data === 'string'
-                      ? selectedDocumentForSignature.signature_data
-                      : (selectedDocumentForSignature.signature_data as any)?.image)
-                  : null
-              }
-              width={600}
-              height={200}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Aláírás Section (nem Dialog) */}
+      {selectedDocumentForSignature && (
+        <div id="signature-section" className="border-t pt-6 mt-6 space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold">Dokumentum aláírása</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                Tekintse meg a dokumentumot, majd ha minden rendben, írja alá az alábbi mezőben.
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setSelectedDocumentForSignature(null)}
+              className="h-8 w-8"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+
+          {/* PDF Preview - teljes szélességű */}
+          <div className="border rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-900">
+            <div className="p-4 border-b bg-white dark:bg-gray-800">
+              <p className="text-sm font-medium">
+                {selectedDocumentForSignature.file_name || 'Dokumentum megtekintése'}
+              </p>
+            </div>
+              <div className="bg-gray-100 dark:bg-gray-900 p-4" style={{ minHeight: '600px' }}>
+                {(() => {
+                  const documentUrl = getDocumentUrl(selectedDocumentForSignature);
+                  if (!documentUrl) {
+                    return (
+                      <div className="flex items-center justify-center h-full text-gray-500 p-8" style={{ minHeight: '600px' }}>
+                        <p>A dokumentum fájl még nem elérhető.</p>
+                      </div>
+                    );
+                  }
+                  
+                  console.log('PDF URL:', documentUrl);
+                  
+                  // PDF megjelenítés react-pdf-vel (PDF.js)
+                  return (
+                    <PdfViewer url={documentUrl} className="min-h-[600px]" />
+                  );
+                })()}
+              </div>
+          </div>
+
+          {/* Aláírási mező - középre igazítva max-w-2xl */}
+          <div className="max-w-2xl mx-auto">
+            <div className="border rounded-lg p-6 bg-white dark:bg-gray-800">
+              <h4 className="text-md font-semibold mb-4">Aláírás</h4>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                Tableten vagy érintőképernyős eszközön ujjal vagy stylus-szal is aláírhat.
+              </p>
+              <SignaturePad
+                onSave={saveSignature}
+                onCancel={() => setSelectedDocumentForSignature(null)}
+                initialSignature={
+                  selectedDocumentForSignature.signature_data
+                    ? (typeof selectedDocumentForSignature.signature_data === 'string'
+                        ? selectedDocumentForSignature.signature_data
+                        : (selectedDocumentForSignature.signature_data as any)?.image)
+                    : null
+                }
+                width={600}
+                height={200}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

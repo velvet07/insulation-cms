@@ -37,6 +37,18 @@ export default factories.createCoreService('api::document.document', ({ strapi }
   },
 
   /**
+   * Projekt mappa nevének létrehozása
+   */
+  getProjectFolderName(project: any): string {
+    const projectTitle = project.title || 'unknown';
+    const sanitized = this.removeAccents(projectTitle)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+    return `project_${sanitized}`;
+  },
+
+  /**
    * Generál egy dokumentumot template-ből és projekt adatokból
    * @param signatureData - Opcionális aláírás base64 string (ha van, beillesztjük a PDF-be)
    */
@@ -207,19 +219,38 @@ export default factories.createCoreService('api::document.document', ({ strapi }
       const sanitizedBaseName = noAccentsFileName.replace(/[^a-zA-Z0-9._-]/g, '_');
       const pdfFileName = `${sanitizedBaseName}.pdf`;
       
+      // Projekt mappa nevének létrehozása
+      const projectFolderName = this.getProjectFolderName(project);
+      const uploadsDir = path.join(strapi.dirs.static.public, 'uploads', projectFolderName);
+      
+      // Projekt mappa létrehozása, ha nem létezik
+      try {
+        await fs.promises.mkdir(uploadsDir, { recursive: true });
+        strapi.log.info(`Project folder created/verified: ${uploadsDir}`);
+      } catch (err: any) {
+        strapi.log.warn(`Error creating project folder: ${err.message}`);
+      }
+
       // Ideiglenes fájl létrehozása a feltöltéshez
       const tempDir = tmpdir();
       const tempPdfPath = path.join(tempDir, pdfFileName);
       await writeFile(tempPdfPath, pdfBuffer);
       
+      // Cél fájl path a projekt mappában
+      const targetPdfPath = path.join(uploadsDir, pdfFileName);
+      
       let fileEntity: any;
       try {
+        // Fájl másolása a projekt mappába
+        await fs.promises.copyFile(tempPdfPath, targetPdfPath);
+        strapi.log.info(`File copied to project folder: ${targetPdfPath}`);
+        
         // @ts-ignore
         const uploadService = strapi.plugin('upload').service('upload');
         
         // Strapi v5 upload service - a path mező kötelező és string típusú kell legyen
-        if (typeof tempPdfPath !== 'string' || !tempPdfPath) {
-          throw new Error(`PDF fájl path nem érvényes: ${tempPdfPath}`);
+        if (typeof targetPdfPath !== 'string' || !targetPdfPath) {
+          throw new Error(`PDF fájl path nem érvényes: ${targetPdfPath}`);
         }
 
         const fileInfo = {
@@ -228,10 +259,13 @@ export default factories.createCoreService('api::document.document', ({ strapi }
           caption: `${template.name} generálva (PDF)`,
         };
         
+        // Relatív path az uploads mappához képest
+        const relativePath = path.join(projectFolderName, pdfFileName).replace(/\\/g, '/');
+        
         // Strapi v5 / formidable kompatibilitás: path és filepath is megadva
         const fileObject = {
-          path: tempPdfPath,
-          filepath: tempPdfPath,
+          path: targetPdfPath,
+          filepath: targetPdfPath,
           name: pdfFileName,
           originalFilename: pdfFileName,
           type: 'application/pdf',
@@ -239,12 +273,12 @@ export default factories.createCoreService('api::document.document', ({ strapi }
           size: pdfBuffer.length,
         };
         
-        strapi.log.info(`Uploading PDF file: ${pdfFileName}, path: ${tempPdfPath}`);
+        strapi.log.info(`Uploading PDF file: ${pdfFileName}, path: ${targetPdfPath}, relative: ${relativePath}`);
         
         // Strapi v5 upload service hívás
         // A data mezőben a fileInfo kulcs alatt várja az adatokat
         const uploadedFiles = await uploadService.upload({
-          data: { fileInfo },
+          data: { fileInfo, path: relativePath },
           files: fileObject,
         });
         
@@ -422,10 +456,29 @@ export default factories.createCoreService('api::document.document', ({ strapi }
       const sanitizedBaseName = noAccentsFileName.replace(/[^a-zA-Z0-9._-]/g, '_');
       const pdfFileName = `${sanitizedBaseName}.pdf`;
 
+      // Projekt mappa nevének létrehozása
+      const projectFolderName = this.getProjectFolderName(project);
+      const uploadsDir = path.join(strapi.dirs.static.public, 'uploads', projectFolderName);
+      
+      // Projekt mappa létrehozása, ha nem létezik
+      try {
+        await fs.promises.mkdir(uploadsDir, { recursive: true });
+        strapi.log.info(`Project folder created/verified: ${uploadsDir}`);
+      } catch (err: any) {
+        strapi.log.warn(`Error creating project folder: ${err.message}`);
+      }
+
       // Ideiglenes fájl
       const tempDir = tmpdir();
       const tempPdfPath = path.join(tempDir, pdfFileName);
       await writeFile(tempPdfPath, pdfBuffer);
+
+      // Cél fájl path a projekt mappában
+      const targetPdfPath = path.join(uploadsDir, pdfFileName);
+      
+      // Fájl másolása a projekt mappába
+      await fs.promises.copyFile(tempPdfPath, targetPdfPath);
+      strapi.log.info(`File copied to project folder: ${targetPdfPath}`);
 
       // Régi fájl törlése
       if (document.file && document.file.id) {
@@ -446,9 +499,12 @@ export default factories.createCoreService('api::document.document', ({ strapi }
         caption: `${template.name} generálva és aláírva (PDF)`,
       };
 
+      // Relatív path az uploads mappához képest
+      const relativePath = path.join(projectFolderName, pdfFileName).replace(/\\/g, '/');
+
       const fileObject = {
-        path: tempPdfPath,
-        filepath: tempPdfPath,
+        path: targetPdfPath,
+        filepath: targetPdfPath,
         name: pdfFileName,
         originalFilename: pdfFileName,
         type: 'application/pdf',
@@ -457,7 +513,7 @@ export default factories.createCoreService('api::document.document', ({ strapi }
       };
 
       const uploadedFiles = await uploadService.upload({
-        data: { fileInfo },
+        data: { fileInfo, path: relativePath },
         files: fileObject,
       });
 
@@ -585,7 +641,9 @@ export default factories.createCoreService('api::document.document', ({ strapi }
         }
       }
 
-      const convertCommand = `${sofficeCommand} --headless --convert-to pdf --outdir "${tempDir}" "${tempDocxPath}"`;
+      // LibreOffice konverzió opciók a jobb formázásért
+      // --infilter: Word dokumentumok jobb kezelése
+      const convertCommand = `${sofficeCommand} --headless --infilter="MS Word 2007 XML" --convert-to pdf --outdir "${tempDir}" "${tempDocxPath}"`;
       
       strapi.log.info(`Converting DOCX to PDF: ${convertCommand}`);
       

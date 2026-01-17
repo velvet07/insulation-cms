@@ -8,6 +8,15 @@ const nextConfig: NextConfig = {
   compress: true,
   poweredByHeader: false,
   
+  // Webpack config for PDF.js worker
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      canvas: false,
+    };
+    return config;
+  },
+  
   // Security headers
   async headers() {
     return [

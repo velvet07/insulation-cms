@@ -27,6 +27,7 @@ import { formatDate, formatPhoneNumber } from '@/lib/utils';
 import { createAuditLogEntry, addAuditLogEntry } from '@/lib/utils/audit-log';
 import { useAuthStore } from '@/lib/store/auth';
 import { DocumentsTab } from './documents-tab';
+import { PhotosTab } from './photos-tab';
 import {
   ArrowLeft,
   Edit,
@@ -627,13 +628,13 @@ export default function ProjectDetailPage() {
           </Card>
         )}
 
-        {activeTab === 'photos' && (
+        {activeTab === 'photos' && project && (
           <Card>
             <CardHeader>
               <CardTitle>Fényképek</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-gray-500">A fényképek galériája hamarosan itt jelenik meg.</p>
+              <PhotosTab project={project} />
             </CardContent>
           </Card>
         )}

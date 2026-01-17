@@ -1,0 +1,39 @@
+{
+  "kind": "collectionType",
+  "collectionName": "photo_categories",
+  "info": {
+    "singularName": "photo-category",
+    "pluralName": "photo-categories",
+    "displayName": "Photo Category",
+    "description": "Fénykép kategóriák"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "slug": {
+      "type": "uid",
+      "targetField": "name",
+      "required": true
+    },
+    "order": {
+      "type": "integer",
+      "default": 0
+    },
+    "required": {
+      "type": "boolean",
+      "default": false
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant"
+    }
+  }
+}

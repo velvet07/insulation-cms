@@ -27,16 +27,16 @@ export default function Home() {
       <main className="w-full max-w-4xl space-y-8">
         <div className="text-center space-y-4">
           <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100">
-            Padlásfödém CRM
+            ThermoDesk
           </h1>
           <p className="text-lg text-gray-600 dark:text-gray-400">
-            Padlásfödém szigetelés CRM rendszer
+            Szigetelés CRM rendszer
           </p>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle>Üdvözöljük a CRM rendszerben!</CardTitle>
+            <CardTitle>Üdvözöljük a ThermoDesk rendszerben!</CardTitle>
             <CardDescription>
               A folytatáshoz jelentkezzen be a fiókjába
             </CardDescription>

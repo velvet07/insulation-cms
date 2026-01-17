@@ -1,7 +1,20 @@
 export default [
   'strapi::logger',
   'strapi::errors',
-  'strapi::security',
+  {
+    name: 'strapi::security',
+    config: {
+      contentSecurityPolicy: {
+        useDefaults: true,
+        directives: {
+          'frame-ancestors': ["'self'", 'http://localhost:3000', 'http://localhost:3001', 'https://cms.emermedia.eu', /^https:\/\/.*\.emermedia\.eu$/],
+        },
+      },
+      frameguard: {
+        action: 'sameorigin',
+      },
+    },
+  },
   {
     name: 'strapi::cors',
     config: {
