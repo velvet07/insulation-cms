@@ -46,6 +46,7 @@ import {
   AlertCircle,
   FileCheck,
   Camera,
+  FileText,
 } from 'lucide-react';
 
 const statusLabels: Record<Project['status'], string> = {
