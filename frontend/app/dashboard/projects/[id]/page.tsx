@@ -64,6 +64,7 @@ export default function ProjectDetailPage() {
   const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
   const [activeTab, setActiveTab] = useState<'info' | 'contract' | 'documents' | 'photos'>('info');
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   const { data: project, isLoading, error } = useQuery({
     queryKey: ['project', projectId],
@@ -230,6 +231,51 @@ export default function ProjectDetailPage() {
     }
   };
 
+  const handleStatusChange = async (newStatus: Project['status']) => {
+    if (!project) return;
+    
+    setIsUpdatingStatus(true);
+    try {
+      const auditLogEntry = createAuditLogEntry(
+        'status_changed',
+        user,
+        'Státusz modul',
+        `Státusz módosítva: ${statusLabels[project.status]} -> ${statusLabels[newStatus]}`
+      );
+
+      const updateData: Partial<Project> = {
+        status: newStatus,
+        audit_log: addAuditLogEntry(project.audit_log, auditLogEntry),
+      };
+
+      // Ha jóváhagyva/befejezve, állítsuk be a dátumot
+      if (newStatus === 'approved') {
+        updateData.approved_at = new Date().toISOString();
+        updateData.approved_by = user?.id;
+      } else if (newStatus === 'completed') {
+        updateData.completed_at = new Date().toISOString();
+      }
+
+      // Szűrjük ki a szerveren még nem létező mezőket (audit_log-ot egyelőre csak akkor küldjük, ha tudjuk, hogy van)
+      const fieldsNotOnServer = ['audit_log'];
+      const cleanUpdateData = Object.fromEntries(
+        Object.entries(updateData).filter(([key]) => !fieldsNotOnServer.includes(key))
+      );
+
+      await projectsApi.update(projectId, cleanUpdateData);
+      
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      
+      alert(`Státusz sikeresen módosítva: ${statusLabels[newStatus]}`);
+    } catch (error: any) {
+      console.error('Error updating status:', error);
+      alert(error.message || 'Hiba történt a státusz frissítése során.');
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <ProtectedRoute>
@@ -311,12 +357,68 @@ export default function ProjectDetailPage() {
           </div>
 
           {/* Status Badge */}
-          <div className="mb-6">
+          <div className="mb-6 flex items-center justify-between">
             <span
               className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${statusColors[project.status]}`}
             >
               {statusLabels[project.status]}
             </span>
+
+            <div className="flex gap-2">
+              {project.status === 'pending' && (
+                <Button 
+                  size="sm" 
+                  onClick={() => handleStatusChange('in_progress')}
+                  disabled={isUpdatingStatus}
+                >
+                  Munka megkezdése
+                </Button>
+              )}
+              {project.status === 'in_progress' && (
+                <Button 
+                  size="sm" 
+                  variant="secondary"
+                  onClick={() => handleStatusChange('ready_for_review')}
+                  disabled={isUpdatingStatus}
+                >
+                  Átnézésre küldés
+                </Button>
+              )}
+              {project.status === 'ready_for_review' && (
+                <>
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    className="text-red-600 border-red-200 hover:bg-red-50"
+                    onClick={() => handleStatusChange('in_progress')}
+                    disabled={isUpdatingStatus}
+                  >
+                    Visszaküldés javításra
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    className="bg-green-600 hover:bg-green-700"
+                    onClick={() => handleStatusChange('approved')}
+                    disabled={isUpdatingStatus}
+                  >
+                    Jóváhagyás
+                  </Button>
+                </>
+              )}
+              {project.status === 'approved' && (
+                <Button 
+                  size="sm" 
+                  variant="default"
+                  onClick={() => handleStatusChange('completed')}
+                  disabled={isUpdatingStatus}
+                >
+                  Projekt lezárása
+                </Button>
+              )}
+              {project.status === 'completed' && (
+                <span className="text-sm text-gray-500 italic">A projekt lezárult.</span>
+              )}
+            </div>
           </div>
         </div>
 
