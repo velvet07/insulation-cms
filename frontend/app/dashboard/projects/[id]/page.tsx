@@ -593,7 +593,8 @@ export default function ProjectDetailPage() {
                     </Button>
                   </div>
                 )}
-              </Card>
+              </CardContent>
+            </Card>
 
             {/* Client Information */}
             <Card>
