@@ -10,11 +10,8 @@ export const photosApi = {
   getAll: async (filters?: PhotoFilters) => {
     const params = new URLSearchParams();
     
-    // Strapi v5: explicit populate a relation mezőknek
-    params.append('populate[file]', '*');
-    params.append('populate[category]', '*');
-    params.append('populate[project]', '*');
-    params.append('populate[uploaded_by]', '*');
+    // Strapi v5: populate=* az összes reláció betöltéséhez
+    params.append('populate', '*');
     params.append('sort[0]', 'order:asc');
     params.append('sort[1]', 'createdAt:desc');
     
@@ -22,21 +19,13 @@ export const photosApi = {
       const response = await strapiApi.get<StrapiResponse<Photo[]>>(`/photos?${params.toString()}`);
       let photos = unwrapStrapiArrayResponse(response);
       
-      console.log('Raw photos from API:', JSON.stringify(photos, null, 2));
-      console.log('Filter project ID:', filters?.project);
-      
       // Frontend szűrés a relation mezőkre (Strapi v5 REST API korlátozás)
       if (filters?.project) {
         const projectId = filters.project.toString();
-        console.log('Filtering by project ID:', projectId);
-        
         photos = photos.filter((photo: any) => {
           const photoProjectId = photo.project?.documentId || photo.project?.id?.toString();
-          console.log(`Photo ${photo.id || photo.documentId}: project relation =`, photo.project, 'extracted ID:', photoProjectId);
           return photoProjectId === projectId;
         });
-        
-        console.log('Filtered photos count:', photos.length);
       }
       if (filters?.category) {
         const categoryId = filters.category.toString();
@@ -106,8 +95,6 @@ export const photosApi = {
           uploaded_by: uploadedBy,
           order: 0,
         };
-        
-        console.log('Creating photo with relations:', JSON.stringify(photoData, null, 2));
         
         // Custom endpoint használata a relation mezők kezeléséhez
         const response = await strapiApi.post<StrapiResponse<Photo>>('/photos/create-with-relations', { data: photoData });
