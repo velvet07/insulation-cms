@@ -9,7 +9,7 @@ export default factories.createCoreController('api::photo.photo', ({ strapi }) =
     try {
       const { name, file, category, project, uploaded_by, order = 0 } = ctx.request.body.data || ctx.request.body;
       
-      strapi.log.info('createWithRelations called with:', { name, file, category, project, uploaded_by, order });
+      strapi.log.info('createWithRelations called with:', JSON.stringify({ name, file, category, project, uploaded_by, order }));
       
       if (!file) {
         return ctx.badRequest('A file mező kötelező');
@@ -23,57 +23,33 @@ export default factories.createCoreController('api::photo.photo', ({ strapi }) =
         return ctx.badRequest('A project mező kötelező');
       }
 
-      // Document Service API használata a Photo létrehozásához
+      // Strapi v5 Document Service API - a relation mezőket documentId-ként kell megadni
       const photoData: any = {
         name: name || 'Unnamed photo',
-        file: typeof file === 'number' ? file : parseInt(file, 10),
+        file: typeof file === 'number' ? file : parseInt(file, 10), // Media marad numerikus ID
+        category: category, // documentId string - Strapi v5 elfogadja
+        project: project, // documentId string - Strapi v5 elfogadja
         order: typeof order === 'number' ? order : parseInt(order, 10) || 0,
       };
 
-      // Relation mezők - documentId alapján keressük meg a rekordokat
-      // Category kapcsolás
-      if (category) {
-        const categoryEntry = await strapi.documents('api::photo-category.photo-category').findFirst({
-          filters: { documentId: { $eq: category.toString() } },
-        });
-        if (categoryEntry) {
-          photoData.category = categoryEntry.id;
-        } else {
-          // Próbáljuk meg numerikus ID-ként
-          photoData.category = parseInt(category, 10) || category;
-        }
-      }
-
-      // Project kapcsolás
-      if (project) {
-        const projectEntry = await strapi.documents('api::project.project').findFirst({
-          filters: { documentId: { $eq: project.toString() } },
-        });
-        if (projectEntry) {
-          photoData.project = projectEntry.id;
-        } else {
-          photoData.project = parseInt(project, 10) || project;
-        }
-      }
-
-      // User kapcsolás (opcionális)
+      // User kapcsolás (opcionális) - users-permissions user numerikus ID-t használ
       if (uploaded_by) {
         photoData.uploaded_by = typeof uploaded_by === 'number' ? uploaded_by : parseInt(uploaded_by, 10);
       }
 
-      strapi.log.info('Creating photo with resolved data:', photoData);
+      strapi.log.info('Creating photo with data:', JSON.stringify(photoData));
 
-      // Létrehozzuk a Photo rekordot az Entity Service API-val
-      const photo = await strapi.entityService.create('api::photo.photo', {
+      // Létrehozzuk a Photo rekordot a Document Service API-val
+      const photo = await strapi.documents('api::photo.photo').create({
         data: photoData,
         populate: ['file', 'category', 'project'],
       });
 
-      strapi.log.info('Photo created successfully:', photo);
+      strapi.log.info('Photo created successfully:', JSON.stringify(photo));
 
       return { data: photo };
     } catch (error: any) {
-      strapi.log.error('Error in createWithRelations:', error);
+      strapi.log.error('Error in createWithRelations:', error.message, error.stack);
       return ctx.badRequest(error.message || 'Hiba történt a fénykép létrehozása során');
     }
   },
