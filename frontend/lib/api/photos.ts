@@ -19,13 +19,21 @@ export const photosApi = {
       const response = await strapiApi.get<StrapiResponse<Photo[]>>(`/photos?${params.toString()}`);
       let photos = unwrapStrapiArrayResponse(response);
       
+      console.log('Raw photos from API:', JSON.stringify(photos, null, 2));
+      console.log('Filter project ID:', filters?.project);
+      
       // Frontend szűrés a relation mezőkre (Strapi v5 REST API korlátozás)
       if (filters?.project) {
         const projectId = filters.project.toString();
+        console.log('Filtering by project ID:', projectId);
+        
         photos = photos.filter((photo: any) => {
           const photoProjectId = photo.project?.documentId || photo.project?.id?.toString();
+          console.log(`Photo ${photo.id || photo.documentId}: project relation =`, photo.project, 'extracted ID:', photoProjectId);
           return photoProjectId === projectId;
         });
+        
+        console.log('Filtered photos count:', photos.length);
       }
       if (filters?.category) {
         const categoryId = filters.category.toString();
