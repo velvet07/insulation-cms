@@ -1,15 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 
-// CSS importálás - react-pdf v10-ben lehet, hogy már nem szükséges vagy más elérési úton van
-// Ha szükséges, a CSS-t manuálisan kell hozzáadni vagy a react-pdf csomaggal együtt kell használni
+// React-pdf stílusok importálása
+import 'react-pdf/dist/Page/TextLayer.css';
+import 'react-pdf/dist/Page/AnnotationLayer.css';
 
 // PDF.js worker beállítása - react-pdf által használt verzióval
 if (typeof window !== 'undefined') {
-  // Használjuk a react-pdf által használt pdfjs-dist verzióját (5.4.296)
-  // A verzió egyezés fontos: a react-pdf saját pdfjs-dist-et használ
+  // Használjuk a react-pdf által használt pdfjs-dist verzióját
   pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 }
 
@@ -23,7 +23,13 @@ export function PdfViewer({ url, className = '' }: PdfViewerProps) {
   const [pageNumber, setPageNumber] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [scale, setScale] = useState(1.5); // Nagyobb zoom alapértelmezett
+  const [scale, setScale] = useState(1.5);
+
+  // Memoizált options a felesleges újratöltés elkerülésére
+  const documentOptions = useMemo(() => ({
+    cMapUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/cmaps/`,
+    cMapPacked: true,
+  }), []);
 
   function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
     setNumPages(numPages);
@@ -110,10 +116,7 @@ export function PdfViewer({ url, className = '' }: PdfViewerProps) {
                   <p className="text-gray-500">PDF betöltése...</p>
                 </div>
               }
-              options={{
-                cMapUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/cmaps/`,
-                cMapPacked: true,
-              }}
+              options={documentOptions}
             >
               {!loading && (
                 <Page
