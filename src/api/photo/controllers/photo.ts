@@ -1,6 +1,38 @@
 import { factories } from '@strapi/strapi';
 
 export default factories.createCoreController('api::photo.photo', ({ strapi }) => ({
+  /**
+   * Override find metódus, hogy biztosan populate-olja a relation mezőket
+   */
+  async find(ctx) {
+    // Entity Service API használata populate-dal
+    // A query paramétereket parse-oljuk
+    const query = ctx.query || {};
+    
+    // Parse sort - lehet string vagy object
+    let sortArray: string[] = [];
+    if (query.sort) {
+      if (typeof query.sort === 'string') {
+        sortArray = [query.sort];
+      } else if (Array.isArray(query.sort)) {
+        sortArray = query.sort;
+      } else if (typeof query.sort === 'object') {
+        sortArray = Object.entries(query.sort).map(([key, value]) => `${key}:${value}`);
+      }
+    } else {
+      sortArray = ['order:asc', 'createdAt:desc'];
+    }
+
+    // Entity Service API findMany
+    const photos = await strapi.entityService.findMany('api::photo.photo', {
+      filters: query.filters || {},
+      sort: sortArray,
+      populate: ['file', 'category', 'project', 'uploaded_by'],
+      ...(query.pagination ? { pagination: query.pagination } : {}),
+    });
+
+    return { data: photos };
+  },
 
   /**
    * Custom endpoint a Photo létrehozásához relation mezőkkel
