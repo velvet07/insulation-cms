@@ -10,23 +10,21 @@ export default factories.createCoreController('api::photo.photo', ({ strapi }) =
     const query = ctx.query || {};
     
     // Parse sort - lehet string vagy object
-    let sortArray: string[] = [];
+    let sort: any = ['order:asc', 'createdAt:desc'];
     if (query.sort) {
       if (typeof query.sort === 'string') {
-        sortArray = [query.sort];
+        sort = [query.sort];
       } else if (Array.isArray(query.sort)) {
-        sortArray = query.sort;
+        sort = query.sort;
       } else if (typeof query.sort === 'object') {
-        sortArray = Object.entries(query.sort).map(([key, value]) => `${key}:${value}`);
+        sort = Object.entries(query.sort).map(([key, value]) => `${key}:${value}`);
       }
-    } else {
-      sortArray = ['order:asc', 'createdAt:desc'];
     }
 
     // Entity Service API findMany
     const photos = await strapi.entityService.findMany('api::photo.photo', {
       filters: query.filters || {},
-      sort: sortArray,
+      sort: sort as any,
       populate: ['file', 'category', 'project', 'uploaded_by'],
       ...(query.pagination ? { pagination: query.pagination } : {}),
     });
