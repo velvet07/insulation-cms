@@ -96,9 +96,10 @@ export const photosApi = {
           order: 0,
         };
         
-        console.log('Creating photo:', JSON.stringify(photoData, null, 2));
+        console.log('Creating photo with relations:', JSON.stringify(photoData, null, 2));
         
-        const response = await strapiApi.post<StrapiResponse<Photo>>('/photos', { data: photoData });
+        // Custom endpoint használata a relation mezők kezeléséhez
+        const response = await strapiApi.post<StrapiResponse<Photo>>('/photos/create-with-relations', { data: photoData });
         createdPhotos.push(unwrapStrapiResponse(response));
       }
       
