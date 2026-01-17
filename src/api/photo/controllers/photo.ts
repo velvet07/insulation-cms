@@ -1,6 +1,7 @@
 import { factories } from '@strapi/strapi';
 
 export default factories.createCoreController('api::photo.photo', ({ strapi }) => ({
+
   /**
    * Custom endpoint a Photo létrehozásához relation mezőkkel
    * Entity Service API-t használjuk, mert jobban kezeli a relation mezőket
