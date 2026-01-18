@@ -66,8 +66,10 @@ export function PhotosTab({ project }: PhotosTabProps) {
 
   const projectId = project.documentId || project.id;
   
-  // Check if user can manage categories (admin or fővállalkozó)
-  const canManageCategories = isAdminRole(user) || user?.role === 'foovallalkozo';
+  // Check if user can manage categories (admin or fővállalkozó) - memoize to avoid recalculating on every render
+  const canManageCategories = useMemo(() => {
+    return isAdminRole(user) || user?.role === 'foovallalkozo';
+  }, [user]);
 
   // Fetch categories first - don't enable photos query until we know if categories exist
   const { data: categories = [], isLoading: isLoadingCategories, isError: isCategoriesError } = useQuery({
