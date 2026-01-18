@@ -133,7 +133,25 @@ export default function MaterialsPage() {
 
   // Anyagigény számítás a kiválasztott időszakra
   const materialRequirements = useMemo(() => {
-    if (!projects.length || !dateRange) return null;
+    // Ha nincs dateRange (custom esetén dátumok hiányában), adjunk vissza üres adatokat
+    if (!dateRange) {
+      return {
+        period: requirementsPeriod,
+        projectCount: 0,
+        totalArea: 0,
+        insulation: {
+          total_rolls: 0,
+          total_pallets: 0,
+          remaining_rolls: 0,
+        },
+        vapor_barrier: {
+          rolls: 0,
+        },
+        breathable_membrane: {
+          rolls: 0,
+        },
+      };
+    }
 
     const { startDate, endDate } = dateRange;
     const today = new Date();
@@ -141,7 +159,7 @@ export default function MaterialsPage() {
 
     // Projektek szűrése időszakra és státuszra
     // Túllépett projekteket (scheduled_date < today és status !== 'completed') kihagyjuk
-    const relevantProjects = projects.filter((p: Project) => {
+    const relevantProjects = (projects || []).filter((p: Project) => {
       if (!p.scheduled_date) return false;
       const scheduledDate = new Date(p.scheduled_date);
       scheduledDate.setHours(0, 0, 0, 0);
@@ -502,7 +520,7 @@ export default function MaterialsPage() {
         </div>
 
         {/* Anyagigény számítás */}
-        {materialRequirements && (
+        {materialRequirements && dateRange && (
           <div className="mb-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-semibold flex items-center">
