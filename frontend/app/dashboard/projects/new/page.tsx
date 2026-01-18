@@ -152,6 +152,14 @@ export default function NewProjectPage() {
         console.warn('User company not found or not properly populated. User:', user);
         console.warn('User company type:', typeof user?.company);
         console.warn('User company value:', user?.company);
+        
+        // If user has no company, assign the project to this user
+        // This ensures the user can see their own projects even without a company
+        const userId = user?.documentId || user?.id;
+        if (userId) {
+          projectData.assigned_to = userId;
+          console.log('Setting assigned_to to user (no company):', userId);
+        }
       }
       
       console.log('Final project data before creation:', JSON.stringify(projectData, null, 2));
