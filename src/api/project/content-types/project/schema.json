@@ -35,6 +35,37 @@
     "client_email": {
       "type": "email"
     },
+    "client_birth_place": {
+      "type": "string"
+    },
+    "client_birth_date": {
+      "type": "date"
+    },
+    "client_mother_name": {
+      "type": "string"
+    },
+    "client_tax_id": {
+      "type": "string"
+    },
+    "property_address_same": {
+      "type": "boolean"
+    },
+    "property_street": {
+      "type": "string"
+    },
+    "property_city": {
+      "type": "string"
+    },
+    "property_zip": {
+      "type": "string"
+    },
+    "floor_material": {
+      "type": "enumeration",
+      "enum": ["wood", "prefab_rc", "monolithic_rc", "rc_slab", "hollow_block", "other"]
+    },
+    "floor_material_extra": {
+      "type": "string"
+    },
     "title": {
       "type": "string",
       "required": true
