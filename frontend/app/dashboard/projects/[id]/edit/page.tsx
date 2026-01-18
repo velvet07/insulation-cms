@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -121,25 +121,66 @@ export default function EditProjectPage() {
 
   const form = useForm<ProjectFormValues>({
     resolver: zodResolver(projectSchema),
-    values: project
-      ? {
-          client_name: project.client_name || '',
-          client_street: project.client_street || '',
-          client_city: project.client_city || '',
-          client_zip: project.client_zip || '',
-          client_phone: project.client_phone || '',
-          client_email: project.client_email || '',
-          title: project.title || '',
-          area_sqm: project.area_sqm || 0,
-          insulation_option: project.insulation_option || 'A',
-          scheduled_date: formatDate(project.scheduled_date),
-          status: project.status || 'pending',
-          subcontractor: project.subcontractor && typeof project.subcontractor === 'object' && 'documentId' in project.subcontractor
-            ? (project.subcontractor as Company).documentId || (project.subcontractor as Company).id?.toString() || ''
-            : '',
-        }
-      : undefined,
+    defaultValues: {
+      client_name: '',
+      client_street: '',
+      client_city: '',
+      client_zip: '',
+      client_phone: '',
+      client_email: '',
+      status: 'pending',
+      subcontractor: '',
+    },
   });
+
+  // Reset form when project data is loaded
+  useEffect(() => {
+    if (project) {
+      // Parse client_address if client_street, client_city, client_zip are not available
+      let client_street = project.client_street || '';
+      let client_city = project.client_city || '';
+      let client_zip = project.client_zip || '';
+
+      // If address fields are empty but client_address exists, try to parse it
+      if (!client_street && !client_city && !client_zip && project.client_address) {
+        // Simple parsing: "street, city, zip" format
+        const addressParts = project.client_address.split(',').map(part => part.trim());
+        if (addressParts.length >= 3) {
+          client_street = addressParts[0] || '';
+          client_city = addressParts[1] || '';
+          client_zip = addressParts[2] || '';
+        } else if (addressParts.length === 2) {
+          client_street = addressParts[0] || '';
+          client_city = addressParts[1] || '';
+        }
+      }
+
+      // Get subcontractor ID
+      const subcontractorId = project.subcontractor && typeof project.subcontractor === 'object' && 'documentId' in project.subcontractor
+        ? (project.subcontractor as Company).documentId || (project.subcontractor as Company).id?.toString() || ''
+        : '';
+
+      form.reset({
+        client_name: project.client_name || '',
+        client_street,
+        client_city,
+        client_zip,
+        client_phone: project.client_phone || '',
+        client_email: project.client_email || '',
+        status: project.status || 'pending',
+        subcontractor: subcontractorId,
+      });
+
+      console.log('[Edit Project] Form reset with project data:', {
+        client_name: project.client_name,
+        client_street,
+        client_city,
+        client_zip,
+        status: project.status,
+        subcontractor: subcontractorId,
+      });
+    }
+  }, [project, form]);
   
   const mutation = useMutation({
     mutationFn: async (data: ProjectFormValues) => {
