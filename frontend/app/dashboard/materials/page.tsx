@@ -24,19 +24,23 @@ import {
 } from '@/components/ui/select';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/lib/store/auth';
-import { materialsApi, type Material } from '@/lib/api/materials';
+import { materialsApi } from '@/lib/api/materials';
 import { materialBalancesApi, type MaterialBalance } from '@/lib/api/material-balances';
+import { materialTransactionsApi } from '@/lib/api/material-transactions';
 import { projectsApi } from '@/lib/api/projects';
 import { calculateMaterials, formatInsulationQuantity, formatFoilQuantity } from '@/lib/utils/material-calculation';
 import type { Project } from '@/types';
-import { Plus, AlertTriangle, CheckCircle2, TrendingDown, Package, Calendar } from 'lucide-react';
-import { formatDate } from '@/lib/utils';
+import { Plus, AlertTriangle, CheckCircle2, TrendingDown, Package, Calendar, CalendarDays } from 'lucide-react';
+
+type RequirementsPeriod = 'today' | 'tomorrow' | 'week' | 'two-weeks' | 'month' | 'custom';
 
 export default function MaterialsPage() {
   const user = useAuthStore((state) => state.user);
   const queryClient = useQueryClient();
   const [isPickupDialogOpen, setIsPickupDialogOpen] = useState(false);
-  const [requirementsPeriod, setRequirementsPeriod] = useState<'day' | 'week' | 'month'>('week');
+  const [requirementsPeriod, setRequirementsPeriod] = useState<RequirementsPeriod>('week');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
   const [pickupDate, setPickupDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedMaterial, setSelectedMaterial] = useState<string>('');
   const [pickupPallets, setPickupPallets] = useState('');
@@ -63,27 +67,46 @@ export default function MaterialsPage() {
     queryFn: () => projectsApi.getAll(),
   });
 
-  // Anyagigény számítás a kiválasztott időszakra
-  const materialRequirements = useMemo(() => {
-    if (!projects.length) return null;
-
+  // Dátum tartomány számítása
+  const dateRange = useMemo(() => {
     const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const today = new Date(now);
+    
     let startDate: Date;
     let endDate: Date;
 
     switch (requirementsPeriod) {
-      case 'day':
-        startDate = new Date(now);
-        startDate.setHours(0, 0, 0, 0);
-        endDate = new Date(now);
+      case 'today':
+        startDate = new Date(today);
+        endDate = new Date(today);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      case 'tomorrow':
+        startDate = new Date(today);
+        startDate.setDate(today.getDate() + 1);
+        endDate = new Date(startDate);
         endDate.setHours(23, 59, 59, 999);
         break;
       case 'week':
+        // Hétfő a hét első napja
+        const dayOfWeek = now.getDay(); // 0 = vasárnap, 1 = hétfő, ..., 6 = szombat
+        const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Hétfő eltolása
         startDate = new Date(now);
-        startDate.setDate(now.getDate() - now.getDay() + 1); // Hétfő
+        startDate.setDate(now.getDate() + mondayOffset);
         startDate.setHours(0, 0, 0, 0);
         endDate = new Date(startDate);
         endDate.setDate(startDate.getDate() + 6); // Vasárnap
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      case 'two-weeks':
+        const weekDayOfWeek = now.getDay();
+        const weekMondayOffset = weekDayOfWeek === 0 ? -6 : 1 - weekDayOfWeek;
+        startDate = new Date(now);
+        startDate.setDate(now.getDate() + weekMondayOffset);
+        startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(startDate);
+        endDate.setDate(startDate.getDate() + 13); // 2 hét = 14 nap - 1
         endDate.setHours(23, 59, 59, 999);
         break;
       case 'month':
@@ -91,13 +114,49 @@ export default function MaterialsPage() {
         endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
         endDate.setHours(23, 59, 59, 999);
         break;
+      case 'custom':
+        if (!customStartDate || !customEndDate) {
+          return null;
+        }
+        startDate = new Date(customStartDate);
+        startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(customEndDate);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      default:
+        startDate = new Date(now);
+        endDate = new Date(now);
     }
 
+    return { startDate, endDate };
+  }, [requirementsPeriod, customStartDate, customEndDate]);
+
+  // Anyagigény számítás a kiválasztott időszakra
+  const materialRequirements = useMemo(() => {
+    if (!projects.length || !dateRange) return null;
+
+    const { startDate, endDate } = dateRange;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     // Projektek szűrése időszakra és státuszra
+    // Túllépett projekteket (scheduled_date < today és status !== 'completed') kihagyjuk
     const relevantProjects = projects.filter((p: Project) => {
       if (!p.scheduled_date) return false;
       const scheduledDate = new Date(p.scheduled_date);
-      return scheduledDate >= startDate && scheduledDate <= endDate && p.status !== 'completed';
+      scheduledDate.setHours(0, 0, 0, 0);
+
+      // Ha túllépett a dátum és nincs completed státuszban, akkor kihagyjuk (elkészültként kezeljük)
+      if (scheduledDate < today && p.status !== 'completed') {
+        return false;
+      }
+
+      // Ha completed státuszban van, kihagyjuk
+      if (p.status === 'completed') {
+        return false;
+      }
+
+      return scheduledDate >= startDate && scheduledDate <= endDate;
     });
 
     // Összesített anyagigény számítás
@@ -117,7 +176,7 @@ export default function MaterialsPage() {
       totalBreathableMembraneRolls += req.breathable_membrane.rolls;
     });
 
-    const totalInsulationPallets = Math.ceil(totalInsulationRolls / 24);
+    const totalInsulationPallets = Math.floor(totalInsulationRolls / 24);
     const remainingInsulationRolls = totalInsulationRolls % 24;
 
     return {
@@ -136,17 +195,23 @@ export default function MaterialsPage() {
         rolls: totalBreathableMembraneRolls,
       },
     };
-  }, [projects, requirementsPeriod]);
+  }, [projects, dateRange, requirementsPeriod]);
 
-  // Anyagfelvétel form submit (jelenleg még nincs API endpoint, csak placeholder)
+  // Anyagfelvétel form submit
   const pickupMutation = useMutation({
     mutationFn: async (data: any) => {
-      // TODO: Implement material transaction API call
-      console.log('Material pickup:', data);
-      return Promise.resolve();
+      return materialTransactionsApi.create({
+        type: 'pickup',
+        pickup_date: data.pickup_date,
+        material: data.material,
+        quantity_pallets: data.quantity_pallets || 0,
+        quantity_rolls: data.quantity_rolls || 0,
+        user: userId,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['material-balances'] });
+      queryClient.invalidateQueries({ queryKey: ['material-transactions'] });
       setIsPickupDialogOpen(false);
       setSelectedMaterial('');
       setPickupPallets('');
@@ -193,6 +258,25 @@ export default function MaterialsPage() {
       return pallets < 0 || rolls < 0;
     });
   }, [balances]);
+
+  const getPeriodLabel = (period: RequirementsPeriod) => {
+    switch (period) {
+      case 'today':
+        return 'Mai';
+      case 'tomorrow':
+        return 'Holnapi';
+      case 'week':
+        return 'Heti';
+      case 'two-weeks':
+        return 'Kétheti';
+      case 'month':
+        return 'Havi';
+      case 'custom':
+        return 'Egyedi';
+      default:
+        return '';
+    }
+  };
 
   return (
     <ProtectedRoute>
@@ -425,23 +509,48 @@ export default function MaterialsPage() {
                 <Calendar className="mr-2 h-5 w-5" />
                 Anyagigény
               </h3>
-              <Select value={requirementsPeriod} onValueChange={(v: 'day' | 'week' | 'month') => setRequirementsPeriod(v)}>
-                <SelectTrigger className="w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="day">Ma</SelectItem>
-                  <SelectItem value="week">Ez a hét</SelectItem>
-                  <SelectItem value="month">Ez a hónap</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex gap-2 items-center">
+                <Select value={requirementsPeriod} onValueChange={(v: RequirementsPeriod) => setRequirementsPeriod(v)}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="today">Ma</SelectItem>
+                    <SelectItem value="tomorrow">Holnap</SelectItem>
+                    <SelectItem value="week">Ez a hét</SelectItem>
+                    <SelectItem value="two-weeks">Két hét</SelectItem>
+                    <SelectItem value="month">Ez a hónap</SelectItem>
+                    <SelectItem value="custom">Egyedi dátumok</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+            {requirementsPeriod === 'custom' && (
+              <div className="mb-4 flex gap-2 items-end">
+                <div className="flex-1">
+                  <Label htmlFor="custom-start-date">Kezdő dátum</Label>
+                  <Input
+                    id="custom-start-date"
+                    type="date"
+                    value={customStartDate}
+                    onChange={(e) => setCustomStartDate(e.target.value)}
+                  />
+                </div>
+                <div className="flex-1">
+                  <Label htmlFor="custom-end-date">Végdátum</Label>
+                  <Input
+                    id="custom-end-date"
+                    type="date"
+                    value={customEndDate}
+                    onChange={(e) => setCustomEndDate(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
             <Card>
               <CardHeader>
                 <CardTitle>
-                  {requirementsPeriod === 'day' && 'Mai'}
-                  {requirementsPeriod === 'week' && 'Heti'}
-                  {requirementsPeriod === 'month' && 'Havi'} anyagigény
+                  {getPeriodLabel(requirementsPeriod)} anyagigény
                 </CardTitle>
               </CardHeader>
               <CardContent>
