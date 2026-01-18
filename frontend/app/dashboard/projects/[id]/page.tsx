@@ -483,31 +483,24 @@ export default function ProjectDetailPage() {
   );
 
   // Mindig logoljuk a debug információkat, hogy lássuk mi a helyzet
-  console.log('[contractFilled] Ellenőrzés:', {
-    contractFilled,
-    hasClientBirthPlace,
-    hasClientBirthDate,
-    hasClientTaxId,
-    hasAreaSqm,
-    hasInsulationOption,
-    hasFloorMaterial,
-    hasPropertyAddress,
-    propertyAddressSame,
-    values: {
-      client_birth_place: project.client_birth_place,
-      client_birth_date: project.client_birth_date,
-      client_tax_id: project.client_tax_id,
-      area_sqm: project.area_sqm,
-      insulation_option: project.insulation_option,
-      floor_material: project.floor_material,
-      property_address_same: project.property_address_same,
-      client_street: project.client_street,
-      client_city: project.client_city,
-      client_zip: project.client_zip,
-      property_street: project.property_street,
-      property_city: project.property_city,
-      property_zip: project.property_zip,
-    },
+  console.log('[contractFilled] === ELLENŐRZÉS ===');
+  console.log('[contractFilled] contractFilled:', contractFilled);
+  console.log('[contractFilled] hasClientBirthPlace:', hasClientBirthPlace, project.client_birth_place);
+  console.log('[contractFilled] hasClientBirthDate:', hasClientBirthDate, project.client_birth_date);
+  console.log('[contractFilled] hasClientTaxId:', hasClientTaxId, project.client_tax_id);
+  console.log('[contractFilled] hasAreaSqm:', hasAreaSqm, project.area_sqm);
+  console.log('[contractFilled] hasInsulationOption:', hasInsulationOption, project.insulation_option);
+  console.log('[contractFilled] hasFloorMaterial:', hasFloorMaterial, project.floor_material);
+  console.log('[contractFilled] propertyAddressSame:', propertyAddressSame, project.property_address_same);
+  console.log('[contractFilled] hasClientAddress:', hasClientAddress, {
+    client_street: project.client_street,
+    client_city: project.client_city,
+    client_zip: project.client_zip,
+  });
+  console.log('[contractFilled] hasPropertyAddress:', hasPropertyAddress, {
+    property_street: project.property_street,
+    property_city: project.property_city,
+    property_zip: project.property_zip,
   });
 
   const totalDocs = documents.length;
