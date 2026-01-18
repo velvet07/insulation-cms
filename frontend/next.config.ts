@@ -8,6 +8,9 @@ const nextConfig: NextConfig = {
   compress: true,
   poweredByHeader: false,
   
+  // Turbopack config (Next.js 16+)
+  turbopack: {},
+  
   // Webpack config for PDF.js worker
   webpack: (config) => {
     config.resolve.alias = {

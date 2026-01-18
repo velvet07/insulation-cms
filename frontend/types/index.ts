@@ -19,6 +19,18 @@ export interface StrapiEntity {
   publishedAt?: string;
 }
 
+// Company Types
+export interface Company extends StrapiEntity {
+  name: string;
+  type: 'main_contractor' | 'subcontractor';
+  tax_number?: string;
+  address?: string;
+  parent_company?: Company;
+  subcontractors?: Company[];
+  users?: User[];
+  projects?: Project[];
+}
+
 // User Types
 export interface User extends StrapiEntity {
   email: string;
@@ -27,6 +39,7 @@ export interface User extends StrapiEntity {
   phone?: string;
   role: 'admin' | 'foovallalkozo' | 'alvallalkozo' | 'manager' | 'worker';
   tenant?: Tenant;
+  company?: Company;
 }
 
 // Tenant Types
@@ -50,6 +63,7 @@ export interface Project extends StrapiEntity {
   insulation_option?: 'A' | 'B';
   assigned_to?: User;
   tenant?: Tenant;
+  company?: Company;
   scheduled_date?: string;
   documents_generated_count?: number;
   billing_amount?: number;

@@ -47,6 +47,7 @@ import {
   FileCheck,
   Camera,
   FileText,
+  Building2,
 } from 'lucide-react';
 
 const statusLabels: Record<Project['status'], string> = {
@@ -720,6 +721,23 @@ export default function ProjectDetailPage() {
                         <p className="text-sm text-gray-500 dark:text-gray-400">Hozzárendelve</p>
                         <p className="font-medium">
                           {project.assigned_to.email || project.assigned_to.username}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  {project.company && (
+                    <div className="flex items-start gap-3">
+                      <Building2 className="h-5 w-5 text-gray-400 mt-0.5" />
+                      <div>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Cég</p>
+                        <p className="font-medium">
+                          {project.company.name}
+                          {project.company.type === 'main_contractor' && (
+                            <span className="ml-2 text-xs text-gray-500">(Fővállalkozó)</span>
+                          )}
+                          {project.company.type === 'subcontractor' && (
+                            <span className="ml-2 text-xs text-gray-500">(Alvállalkozó)</span>
+                          )}
                         </p>
                       </div>
                     </div>

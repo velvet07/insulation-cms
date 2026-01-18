@@ -134,6 +134,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
                 {user?.email || user?.username}
               </p>
+              {user?.company && (
+                <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mt-1">
+                  {user.company.name}
+                </p>
+              )}
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 {user?.role || 'Felhasználó'}
               </p>

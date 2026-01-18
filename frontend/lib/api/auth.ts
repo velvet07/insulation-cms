@@ -60,6 +60,9 @@ export const authApi = {
       headers: {
         Authorization: `Bearer ${token}`,
       },
+      params: {
+        populate: 'company',
+      },
     });
     return response.data;
   },
