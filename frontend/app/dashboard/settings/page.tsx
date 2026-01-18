@@ -10,6 +10,7 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { useAuthStore } from '@/lib/store/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import {
   Form,
@@ -697,7 +698,7 @@ export default function SettingsPage() {
                           {category.required && (
                             <span className="text-xs text-gray-500">Nem szerkeszthető</span>
                           )}
-                        </div>
+        </div>
                       </TableCell>
                     </TableRow>
                   ))}
