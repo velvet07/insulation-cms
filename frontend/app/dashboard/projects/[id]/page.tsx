@@ -443,26 +443,51 @@ export default function ProjectDetailPage() {
 
   // Számítások az állapot összesítőhöz
   // Ellenőrizzük, hogy minden kötelező szerződés adat megvan-e és nem üres
+  const hasClientBirthPlace = project.client_birth_place && project.client_birth_place.trim() !== '';
+  const hasClientBirthDate = project.client_birth_date && project.client_birth_date.trim() !== '';
+  const hasClientTaxId = project.client_tax_id && project.client_tax_id.trim() !== '';
+  const hasAreaSqm = project.area_sqm && project.area_sqm > 0;
+  const hasInsulationOption = !!project.insulation_option;
+  const hasFloorMaterial = !!project.floor_material;
+
+  // Ingatlan cím ellenőrzése
+  // Ha property_address_same === true, akkor az ingatlan cím mezőket kitöltöttnek tekintjük
+  // (mert a client adatokból jönnek)
+  const hasPropertyAddress = project.property_address_same === true
+    ? (project.client_street && project.client_street.trim() !== '' &&
+       project.client_city && project.client_city.trim() !== '' &&
+       project.client_zip && project.client_zip.trim() !== '')
+    : (project.property_street && project.property_street.trim() !== '' &&
+       project.property_city && project.property_city.trim() !== '' &&
+       project.property_zip && project.property_zip.trim() !== '');
+
   const contractFilled = !!(
-    project.client_birth_place && 
-    project.client_birth_place.trim() !== '' &&
-    project.client_birth_date && 
-    project.client_birth_date.trim() !== '' &&
-    project.client_tax_id && 
-    project.client_tax_id.trim() !== '' &&
-    project.area_sqm && 
-    project.area_sqm > 0 &&
-    project.insulation_option
+    hasClientBirthPlace &&
+    hasClientBirthDate &&
+    hasClientTaxId &&
+    hasAreaSqm &&
+    hasInsulationOption &&
+    hasFloorMaterial &&
+    hasPropertyAddress
   );
 
   // Debug információ a konzolba
   if (!contractFilled) {
     console.log('[contractFilled] Hiányzó mezők ellenőrzése:', {
-      client_birth_place: project.client_birth_place || 'HIÁNYZIK',
-      client_birth_date: project.client_birth_date || 'HIÁNYZIK',
-      client_tax_id: project.client_tax_id || 'HIÁNYZIK',
-      area_sqm: project.area_sqm || 'HIÁNYZIK',
-      insulation_option: project.insulation_option || 'HIÁNYZIK',
+      client_birth_place: hasClientBirthPlace ? 'OK' : 'HIÁNYZIK',
+      client_birth_date: hasClientBirthDate ? 'OK' : 'HIÁNYZIK',
+      client_tax_id: hasClientTaxId ? 'OK' : 'HIÁNYZIK',
+      area_sqm: hasAreaSqm ? 'OK' : 'HIÁNYZIK',
+      insulation_option: hasInsulationOption ? 'OK' : 'HIÁNYZIK',
+      floor_material: hasFloorMaterial ? 'OK' : 'HIÁNYZIK',
+      property_address: hasPropertyAddress ? 'OK' : 'HIÁNYZIK',
+      property_address_same: project.property_address_same,
+      client_street: project.client_street || 'HIÁNYZIK',
+      client_city: project.client_city || 'HIÁNYZIK',
+      client_zip: project.client_zip || 'HIÁNYZIK',
+      property_street: project.property_street || 'HIÁNYZIK',
+      property_city: project.property_city || 'HIÁNYZIK',
+      property_zip: project.property_zip || 'HIÁNYZIK',
     });
   }
 
