@@ -72,7 +72,18 @@ export default function NewProjectPage() {
       );
       auditLogEntry.module = 'Projekt';
       
-      // Készítjük el a projekt adatokat
+      // Get user's company safely
+      const getUserCompany = () => {
+        if (!user?.company) return null;
+        if (typeof user.company === 'object' && 'type' in user.company) {
+          return user.company as { type: 'main_contractor' | 'subcontractor'; documentId?: string; id?: number; parent_company?: { documentId?: string; id?: number } };
+        }
+        return null;
+      };
+
+      const userCompany = getUserCompany();
+      
+      // Set company and subcontractor based on user's company
       const projectData: any = {
         ...data,
         status: 'pending',
@@ -80,6 +91,34 @@ export default function NewProjectPage() {
         client_phone: data.client_phone || undefined,
         audit_log: [auditLogEntry], // Hozzáadjuk az audit log-ot
       };
+
+      // Automatikusan beállítjuk a company mezőt a user cégére alapozva
+      if (userCompany) {
+        if (userCompany.type === 'main_contractor') {
+          // Ha main contractor a user, akkor a projekt is main contractorhoz tartozik
+          const companyId = userCompany.documentId || userCompany.id;
+          if (companyId) {
+            projectData.company = companyId;
+          }
+        } else if (userCompany.type === 'subcontractor') {
+          // Ha subcontractor a user, akkor:
+          // - project.company = parent_company (main contractor)
+          // - project.subcontractor = user.company (subcontractor)
+          const parentCompany = userCompany.parent_company;
+          const subcontractorId = userCompany.documentId || userCompany.id;
+          
+          if (parentCompany) {
+            const parentId = parentCompany.documentId || parentCompany.id;
+            if (parentId) {
+              projectData.company = parentId;
+            }
+          }
+          
+          if (subcontractorId) {
+            projectData.subcontractor = subcontractorId;
+          }
+        }
+      }
       
       return projectsApi.create(projectData);
     },

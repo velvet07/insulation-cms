@@ -59,10 +59,34 @@ export default function ProjectsPage() {
 
   // If user is not admin, filter by tenant or company
   if (!isAdminRole(user)) {
-    if (user?.tenant?.id || user?.tenant?.documentId) {
+    // First try to filter by company (higher priority)
+    if (user?.company) {
+      const getUserCompanyId = () => {
+        if (typeof user.company === 'object' && user.company !== null) {
+          // If user is subcontractor, show projects from their parent company (main contractor)
+          // and projects assigned to their subcontractor company
+          if ('type' in user.company && user.company.type === 'subcontractor') {
+            // For subcontractor: show projects where company = parent_company OR subcontractor = user.company
+            // This is complex, so for now we'll filter by parent company
+            const parentCompany = (user.company as any).parent_company;
+            if (parentCompany) {
+              return parentCompany.documentId || parentCompany.id;
+            }
+          } else {
+            // For main contractor: show projects where company = user.company
+            return (user.company as any).documentId || (user.company as any).id;
+          }
+        }
+        return null;
+      };
+
+      const companyId = getUserCompanyId();
+      if (companyId) {
+        filters.company = companyId;
+      }
+    } else if (user?.tenant?.id || user?.tenant?.documentId) {
       filters.tenant = parseInt(user.tenant.documentId || user.tenant.id.toString());
     }
-    // TODO: Add company filter when company is implemented on projects
   }
 
   const { data: projects = [], isLoading, error } = useQuery({

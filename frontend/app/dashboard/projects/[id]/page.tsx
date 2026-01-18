@@ -129,7 +129,9 @@ export default function ProjectDetailPage() {
 
   const userCompany = getUserCompany();
   const isMainContractor = userCompany?.type === 'main_contractor';
-  const canEditSubcontractor = isMainContractor && project && 
+  const isAdmin = isAdminRole(user);
+  // Admin vagy main contractor szerkesztheti a subcontractor-t
+  const canEditSubcontractor = (isAdmin || isMainContractor) && project && 
     project.company && 
     typeof project.company === 'object' && 
     'type' in project.company && 

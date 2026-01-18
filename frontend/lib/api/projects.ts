@@ -5,6 +5,7 @@ export interface ProjectFilters {
   status?: Project['status'];
   assigned_to?: number;
   tenant?: number;
+  company?: number | string;
   search?: string;
 }
 
@@ -20,6 +21,17 @@ export const projectsApi = {
     }
     if (filters?.tenant) {
       params.append('filters[tenant][id][$eq]', filters.tenant.toString());
+    }
+    if (filters?.company) {
+      // Strapi v5 uses documentId, try both id and documentId
+      const companyId = filters.company.toString();
+      if (companyId.includes('-')) {
+        // It's a documentId
+        params.append('filters[company][documentId][$eq]', companyId);
+      } else {
+        // It's a numeric id
+        params.append('filters[company][id][$eq]', companyId);
+      }
     }
     if (filters?.search) {
       params.append('filters[$or][0][client_name][$contains]', filters.search);
