@@ -169,7 +169,7 @@ export function PhotosTab({ project }: PhotosTabProps) {
     }
     acc[categoryId].photos.push(photo);
     return acc;
-  }, {} as Record<string, { category?: PhotoCategory; photos: Photo[] }>);
+    }, {} as Record<string, { category?: { name?: string; id?: number; documentId?: string }; photos: Photo[] }>);
 
   // Upload mutation
   const uploadMutation = useMutation({
