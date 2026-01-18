@@ -456,7 +456,7 @@ export default function ProjectDetailPage() {
   const hasClientBirthDate = isFieldFilled(project.client_birth_date);
   const hasClientTaxId = isFieldFilled(project.client_tax_id);
   const hasAreaSqm = isFieldFilled(project.area_sqm);
-  const hasInsulationOption = !!project.insulation_option;
+  // insulation_option opcionális mező, nem kötelező a contractFilled-hez
   const hasFloorMaterial = !!project.floor_material;
 
   // Ingatlan cím ellenőrzése
@@ -477,31 +477,32 @@ export default function ProjectDetailPage() {
     hasClientBirthDate &&
     hasClientTaxId &&
     hasAreaSqm &&
-    hasInsulationOption &&
     hasFloorMaterial &&
     hasPropertyAddress
   );
 
-  // Mindig logoljuk a debug információkat, hogy lássuk mi a helyzet
-  console.log('[contractFilled] === ELLENŐRZÉS ===');
-  console.log('[contractFilled] contractFilled:', contractFilled);
-  console.log('[contractFilled] hasClientBirthPlace:', hasClientBirthPlace, project.client_birth_place);
-  console.log('[contractFilled] hasClientBirthDate:', hasClientBirthDate, project.client_birth_date);
-  console.log('[contractFilled] hasClientTaxId:', hasClientTaxId, project.client_tax_id);
-  console.log('[contractFilled] hasAreaSqm:', hasAreaSqm, project.area_sqm);
-  console.log('[contractFilled] hasInsulationOption:', hasInsulationOption, project.insulation_option);
-  console.log('[contractFilled] hasFloorMaterial:', hasFloorMaterial, project.floor_material);
-  console.log('[contractFilled] propertyAddressSame:', propertyAddressSame, project.property_address_same);
-  console.log('[contractFilled] hasClientAddress:', hasClientAddress, {
-    client_street: project.client_street,
-    client_city: project.client_city,
-    client_zip: project.client_zip,
-  });
-  console.log('[contractFilled] hasPropertyAddress:', hasPropertyAddress, {
-    property_street: project.property_street,
-    property_city: project.property_city,
-    property_zip: project.property_zip,
-  });
+  // Debug információ csak ha hiányos
+  if (!contractFilled) {
+    console.log('[contractFilled] === HIÁNYOS ===');
+    console.log('[contractFilled] contractFilled:', contractFilled);
+    console.log('[contractFilled] hasClientBirthPlace:', hasClientBirthPlace, project.client_birth_place);
+    console.log('[contractFilled] hasClientBirthDate:', hasClientBirthDate, project.client_birth_date);
+    console.log('[contractFilled] hasClientTaxId:', hasClientTaxId, project.client_tax_id);
+    console.log('[contractFilled] hasAreaSqm:', hasAreaSqm, project.area_sqm);
+    console.log('[contractFilled] hasFloorMaterial:', hasFloorMaterial, project.floor_material);
+    console.log('[contractFilled] propertyAddressSame:', propertyAddressSame, project.property_address_same);
+    console.log('[contractFilled] hasClientAddress:', hasClientAddress, {
+      client_street: project.client_street,
+      client_city: project.client_city,
+      client_zip: project.client_zip,
+    });
+    console.log('[contractFilled] hasPropertyAddress:', hasPropertyAddress, {
+      property_street: project.property_street,
+      property_city: project.property_city,
+      property_zip: project.property_zip,
+    });
+    console.log('[contractFilled] insulation_option (opcionális):', project.insulation_option);
+  }
 
   const totalDocs = documents.length;
   const signedDocs = documents.filter(d => d.signed).length;
