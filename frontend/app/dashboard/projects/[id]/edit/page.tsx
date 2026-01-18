@@ -214,13 +214,30 @@ export default function EditProjectPage() {
 
       // Update subcontractor separately if provided and not empty
       if ('subcontractor' in data) {
-        if (data.subcontractor && data.subcontractor !== 'none' && data.subcontractor !== '') {
+        if (data.subcontractor && data.subcontractor !== 'none' && data.subcontractor !== '' && data.subcontractor !== null) {
           // Strapi v5: use documentId if it's a documentId format, otherwise use numeric id
-          const subcontractorId = typeof data.subcontractor === 'string' && data.subcontractor.includes('-')
-            ? data.subcontractor
-            : parseInt(data.subcontractor.toString());
-          updateData.subcontractor = subcontractorId;
-          console.log('[Edit Project] Setting subcontractor:', subcontractorId);
+          const subcontractorStr = data.subcontractor.toString();
+          let subcontractorId: string | number;
+          
+          if (subcontractorStr.includes('-')) {
+            // It's a documentId format (contains hyphens)
+            subcontractorId = subcontractorStr;
+          } else {
+            // Try to parse as number
+            const parsedId = parseInt(subcontractorStr, 10);
+            if (isNaN(parsedId)) {
+              console.warn('[Edit Project] Invalid subcontractor ID:', data.subcontractor);
+              // Skip setting subcontractor if ID is invalid
+              delete updateData.subcontractor;
+            } else {
+              subcontractorId = parsedId;
+            }
+          }
+          
+          if (subcontractorId !== undefined) {
+            updateData.subcontractor = subcontractorId;
+            console.log('[Edit Project] Setting subcontractor:', subcontractorId);
+          }
         } else {
           // Explicitly set to null to remove subcontractor
           // Note: In Strapi v5, setting to null should work for relations
