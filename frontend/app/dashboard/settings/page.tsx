@@ -44,9 +44,13 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { companiesApi } from '@/lib/api/companies';
-import { Building2, Plus, Trash2, Edit } from 'lucide-react';
+import { photoCategoriesApi } from '@/lib/api/photo-categories';
+import { Building2, Plus, Trash2, Edit, FolderTree } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { isAdminRole } from '@/lib/utils/user-role';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Loader2 } from 'lucide-react';
+import type { PhotoCategory } from '@/types';
 
 const companySchema = z.object({
   name: z.string().min(1, 'A cég neve kötelező'),
@@ -77,6 +81,13 @@ export default function SettingsPage() {
   const { data: mainContractors = [] } = useQuery({
     queryKey: ['companies', 'main_contractors'],
     queryFn: () => companiesApi.getAll({ type: 'main_contractor' }),
+    enabled: isAdmin,
+  });
+
+  // Fetch photo categories
+  const { data: categories = [], isLoading: isLoadingCategories } = useQuery({
+    queryKey: ['photo-categories'],
+    queryFn: () => photoCategoriesApi.getAll(),
     enabled: isAdmin,
   });
 
@@ -151,6 +162,57 @@ export default function SettingsPage() {
     },
   });
 
+  // Photo category mutations
+  const createCategoryMutation = useMutation({
+    mutationFn: async ({ name, required }: { name: string; required: boolean }) => {
+      const category = await photoCategoriesApi.create({
+        name,
+        order: categories.length,
+        required,
+      });
+      return category;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['photo-categories'] });
+      setIsCategoryDialogOpen(false);
+      setEditingCategory(null);
+      setCategoryName('');
+      setCategoryRequired(false);
+    },
+    onError: (error: any) => {
+      alert(error.message || 'Hiba történt a kategória létrehozása során');
+    },
+  });
+
+  const updateCategoryMutation = useMutation({
+    mutationFn: async ({ id, name, required }: { id: number | string; name: string; required: boolean }) => {
+      const category = await photoCategoriesApi.update(id, { name, required });
+      return category;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['photo-categories'] });
+      setIsCategoryDialogOpen(false);
+      setEditingCategory(null);
+      setCategoryName('');
+      setCategoryRequired(false);
+    },
+    onError: (error: any) => {
+      alert(error.message || 'Hiba történt a kategória frissítése során');
+    },
+  });
+
+  const deleteCategoryMutation = useMutation({
+    mutationFn: async (id: number | string) => {
+      await photoCategoriesApi.delete(id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['photo-categories'] });
+    },
+    onError: (error: any) => {
+      alert(error.message || 'Hiba történt a kategória törlése során');
+    },
+  });
+
   const handleEdit = (companyId: string) => {
     const company = companies.find(c => (c.documentId || c.id.toString()) === companyId);
     if (company) {
@@ -183,6 +245,37 @@ export default function SettingsPage() {
       updateMutation.mutate({ id: editingCompany, data });
     } else {
       createMutation.mutate(data);
+    }
+  };
+
+  // Photo category handlers
+  const handleCategoryCreate = () => {
+    if (!categoryName.trim()) return;
+    createCategoryMutation.mutate({ name: categoryName.trim(), required: categoryRequired });
+  };
+
+  const handleCategoryEdit = (category: PhotoCategory) => {
+    setEditingCategory(category);
+    setCategoryName(category.name);
+    setCategoryRequired(category.required || false);
+    setIsCategoryDialogOpen(true);
+  };
+
+  const handleCategoryUpdate = () => {
+    if (!editingCategory || !categoryName.trim()) return;
+    const identifier = editingCategory.documentId || editingCategory.id;
+    updateCategoryMutation.mutate({ id: identifier, name: categoryName.trim(), required: categoryRequired });
+  };
+
+  const handleCategoryDelete = (category: PhotoCategory) => {
+    if (category.required === true) {
+      alert('A kötelező kategóriákat nem lehet törölni.');
+      return;
+    }
+    
+    if (confirm(`Biztosan törölni szeretné ezt a kategóriát: ${category.name}?`)) {
+      const identifier = category.documentId || category.id;
+      deleteCategoryMutation.mutate(identifier);
     }
   };
 
@@ -434,6 +527,170 @@ export default function SettingsPage() {
                           >
                             <Trash2 className="h-4 w-4 text-red-600" />
                           </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Fénykép kategóriák kezelése */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <FolderTree className="h-5 w-5" />
+                  Fénykép kategóriák kezelése
+                </CardTitle>
+                <CardDescription>
+                  Hozz létre és kezelj fénykép kategóriákat
+                </CardDescription>
+              </div>
+              <Dialog open={isCategoryDialogOpen} onOpenChange={(open) => {
+                setIsCategoryDialogOpen(open);
+                if (!open) {
+                  setEditingCategory(null);
+                  setCategoryName('');
+                  setCategoryRequired(false);
+                }
+              }}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Új kategória
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>
+                      {editingCategory ? 'Kategória szerkesztése' : 'Új kategória'}
+                    </DialogTitle>
+                    <DialogDescription>
+                      {editingCategory 
+                        ? 'Módosítsa a kategória beállításait.' 
+                        : 'Adjon nevet az új kategóriának és állítsa be, hogy kötelező-e.'}
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div>
+                      <Label htmlFor="category-name">Kategória neve *</Label>
+                      <Input
+                        id="category-name"
+                        value={categoryName}
+                        onChange={(e) => setCategoryName(e.target.value)}
+                        placeholder="pl. Külső képek"
+                      />
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="category-required"
+                        checked={categoryRequired}
+                        onCheckedChange={(checked) => setCategoryRequired(checked === true)}
+                        disabled={editingCategory?.required === true}
+                      />
+                      <Label
+                        htmlFor="category-required"
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      >
+                        Kötelező kategória
+                      </Label>
+                    </div>
+                    {editingCategory?.required === true && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        A default kategóriák kötelezőek és nem módosíthatók.
+                      </p>
+                    )}
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setIsCategoryDialogOpen(false);
+                        setEditingCategory(null);
+                        setCategoryName('');
+                        setCategoryRequired(false);
+                      }}
+                    >
+                      Mégse
+                    </Button>
+                    <Button
+                      onClick={editingCategory ? handleCategoryUpdate : handleCategoryCreate}
+                      disabled={!categoryName.trim() || createCategoryMutation.isPending || updateCategoryMutation.isPending}
+                    >
+                      {createCategoryMutation.isPending || updateCategoryMutation.isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Mentés...
+                        </>
+                      ) : (
+                        editingCategory ? 'Mentés' : 'Létrehozás'
+                      )}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {isLoadingCategories ? (
+              <p className="text-gray-500 text-center py-8">Betöltés...</p>
+            ) : categories.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">Még nincs kategória létrehozva.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Név</TableHead>
+                    <TableHead>Kötelező</TableHead>
+                    <TableHead>Rendezsés</TableHead>
+                    <TableHead className="text-right">Műveletek</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {categories.map((category) => (
+                    <TableRow key={category.documentId || category.id}>
+                      <TableCell className="font-medium">
+                        {category.name}
+                      </TableCell>
+                      <TableCell>
+                        {category.required ? (
+                          <span className="px-2 py-1 rounded text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
+                            Kötelező
+                          </span>
+                        ) : (
+                          <span className="text-gray-500 text-sm">Opcionális</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {category.order ?? 0}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          {!category.required && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleCategoryEdit(category)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleCategoryDelete(category)}
+                              >
+                                <Trash2 className="h-4 w-4 text-red-600" />
+                              </Button>
+                            </>
+                          )}
+                          {category.required && (
+                            <span className="text-xs text-gray-500">Nem szerkeszthető</span>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

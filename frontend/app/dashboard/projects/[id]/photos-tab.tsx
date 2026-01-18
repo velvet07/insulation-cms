@@ -3,7 +3,6 @@
 import { useState, useCallback, useRef, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import { isAdminRole } from '@/lib/utils/user-role';
 import {
   Select,
   SelectContent,
@@ -33,8 +32,8 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { photosApi } from '@/lib/api/photos';
 import { photoCategoriesApi } from '@/lib/api/photo-categories';
-import type { Photo, PhotoCategory, Project } from '@/types';
-import { Plus, Trash2, Upload, Loader2, X, Image as ImageIcon, Edit, Grid3x3, List, ChevronLeft, ChevronRight } from 'lucide-react';
+import type { Photo, Project } from '@/types';
+import { Trash2, Upload, Loader2, X, Image as ImageIcon, Edit, Grid3x3, List, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth';
 import { createAuditLogEntry, addAuditLogEntry } from '@/lib/utils/audit-log';
 import { projectsApi } from '@/lib/api/projects';
@@ -51,10 +50,6 @@ export function PhotosTab({ project }: PhotosTabProps) {
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [uploadCategoryId, setUploadCategoryId] = useState<string>('');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<PhotoCategory | null>(null);
-  const [categoryName, setCategoryName] = useState('');
-  const [categoryRequired, setCategoryRequired] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'gallery'>('list');
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<Set<string>>(new Set());
@@ -65,11 +60,6 @@ export function PhotosTab({ project }: PhotosTabProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const projectId = project.documentId || project.id;
-  
-  // Check if user can manage categories (admin or fővállalkozó) - memoize to avoid recalculating on every render
-  const canManageCategories = useMemo(() => {
-    return isAdminRole(user) || user?.role === 'foovallalkozo';
-  }, [user]);
 
   // Fetch categories first - don't enable photos query until we know if categories exist
   const { data: categories = [], isLoading: isLoadingCategories, isError: isCategoriesError } = useQuery({
@@ -361,54 +351,6 @@ export function PhotosTab({ project }: PhotosTabProps) {
     },
   });
 
-  // Category mutations
-  const createCategoryMutation = useMutation({
-    mutationFn: async ({ name, required }: { name: string; required: boolean }) => {
-      const category = await photoCategoriesApi.create({
-        name,
-        order: categories.length,
-        required,
-      });
-      return category;
-    },
-    onSuccess: () => {
-      // Invalidate both category and photos queries to ensure new categories appear
-      queryClient.invalidateQueries({ queryKey: ['photo-categories'] });
-      queryClient.invalidateQueries({ queryKey: ['photos', projectId] });
-      setIsCategoryDialogOpen(false);
-      setEditingCategory(null);
-      setCategoryName('');
-      setCategoryRequired(false);
-    },
-  });
-
-  const updateCategoryMutation = useMutation({
-    mutationFn: async ({ id, name, required }: { id: number | string; name: string; required: boolean }) => {
-      const category = await photoCategoriesApi.update(id, { name, required });
-      return category;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['photo-categories'] });
-      queryClient.invalidateQueries({ queryKey: ['photos', projectId] });
-      setIsCategoryDialogOpen(false);
-      setEditingCategory(null);
-      setCategoryName('');
-      setCategoryRequired(false);
-    },
-  });
-
-  const deleteCategoryMutation = useMutation({
-    mutationFn: async (id: number | string) => {
-      await photoCategoriesApi.delete(id);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['photo-categories'] });
-      queryClient.invalidateQueries({ queryKey: ['photos', projectId] });
-      if (selectedCategoryId === id.toString()) {
-        setSelectedCategoryId(null);
-      }
-    },
-  });
 
   // Handle file selection
   const handleFileSelect = (files: FileList | null) => {
@@ -527,45 +469,6 @@ export function PhotosTab({ project }: PhotosTabProps) {
     }
   };
 
-  const handleCategoryCreate = () => {
-    if (!categoryName.trim()) return;
-    createCategoryMutation.mutate({ name: categoryName.trim(), required: categoryRequired });
-  };
-
-  const handleCategoryEdit = (category: PhotoCategory) => {
-    setEditingCategory(category);
-    setCategoryName(category.name);
-    setCategoryRequired(category.required || false);
-    setIsCategoryDialogOpen(true);
-  };
-
-  const handleCategoryUpdate = () => {
-    if (!editingCategory || !categoryName.trim()) return;
-    const identifier = editingCategory.documentId || editingCategory.id;
-    updateCategoryMutation.mutate({ id: identifier, name: categoryName.trim(), required: categoryRequired });
-  };
-
-  const handleCategoryDelete = (category: PhotoCategory) => {
-    if (category.required === true) {
-      alert('A kötelező kategóriákat nem lehet törölni.');
-      return;
-    }
-    
-    const categoryPhotos = photos.filter(p => 
-      (p.category?.id?.toString() || p.category?.documentId) === (category.id?.toString() || category.documentId)
-    );
-    
-    if (categoryPhotos.length > 0) {
-      alert(`Nem lehet törölni ezt a kategóriát, mert tartalmaz ${categoryPhotos.length} fényképet.`);
-      return;
-    }
-    
-    if (confirm(`Biztosan törölni szeretné ezt a kategóriát: ${category.name}?`)) {
-      const identifier = category.documentId || category.id;
-      deleteCategoryMutation.mutate(identifier);
-    }
-  };
-
   // Lightbox handlers
   const openLightbox = (photo: Photo) => {
     setLightboxPhoto(photo);
@@ -623,96 +526,6 @@ export function PhotosTab({ project }: PhotosTabProps) {
           </p>
         </div>
         <div className="flex gap-2">
-          {canManageCategories && (
-            <Dialog open={isCategoryDialogOpen} onOpenChange={(open) => {
-              setIsCategoryDialogOpen(open);
-              if (!open) {
-                setEditingCategory(null);
-                setCategoryName('');
-                setCategoryRequired(false);
-              }
-            }}>
-              <DialogTrigger asChild>
-                <Button variant="outline" onClick={() => {
-                  setEditingCategory(null);
-                  setCategoryName('');
-                  setCategoryRequired(false);
-                }}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Kategória hozzáadása
-                </Button>
-              </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>
-                  {editingCategory ? 'Kategória szerkesztése' : 'Új kategória'}
-                </DialogTitle>
-                <DialogDescription>
-                  {editingCategory 
-                    ? 'Módosítsa a kategória beállításait.' 
-                    : 'Adjon nevet az új kategóriának és állítsa be, hogy kötelező-e.'}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div>
-                  <Label htmlFor="category-name">Kategória neve *</Label>
-                  <Input
-                    id="category-name"
-                    value={categoryName}
-                    onChange={(e) => setCategoryName(e.target.value)}
-                    placeholder="pl. Külső képek"
-                  />
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="category-required"
-                    checked={categoryRequired}
-                    onCheckedChange={(checked) => setCategoryRequired(checked === true)}
-                    disabled={editingCategory?.required === true}
-                  />
-                  <Label
-                    htmlFor="category-required"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    Kötelező kategória
-                  </Label>
-                </div>
-                {editingCategory?.required === true && (
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    A default kategóriák kötelezőek és nem módosíthatók.
-                  </p>
-                )}
-              </div>
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setIsCategoryDialogOpen(false);
-                    setEditingCategory(null);
-                    setCategoryName('');
-                    setCategoryRequired(false);
-                  }}
-                >
-                  Mégse
-                </Button>
-                <Button
-                  onClick={editingCategory ? handleCategoryUpdate : handleCategoryCreate}
-                  disabled={!categoryName.trim() || createCategoryMutation.isPending || updateCategoryMutation.isPending}
-                >
-                  {createCategoryMutation.isPending || updateCategoryMutation.isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Mentés...
-                    </>
-                  ) : (
-                    editingCategory ? 'Mentés' : 'Létrehozás'
-                  )}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-          )}
-          
           <Dialog open={isUploadDialogOpen} onOpenChange={(open) => {
             setIsUploadDialogOpen(open);
             if (!open) {
@@ -863,40 +676,17 @@ export function PhotosTab({ project }: PhotosTabProps) {
                 Összes
               </Button>
               {categories.map((category) => (
-                <div key={(category.documentId || category.id).toString()} className="flex items-center gap-1">
-              <Button
-                variant={selectedCategoryId === (category.documentId || category.id).toString() ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setSelectedCategoryId((category.documentId || category.id).toString())}
-              >
-                {category.name}
-                {category.required && (
-                  <span className="ml-1 text-xs opacity-75" title="Kötelező kategória">*</span>
-                )}
-              </Button>
-              {canManageCategories && !category.required && (
-                <div className="flex gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => handleCategoryEdit(category)}
-                    title="Szerkesztés"
-                  >
-                    <Edit className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-red-500"
-                    onClick={() => handleCategoryDelete(category)}
-                    title="Törlés"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </div>
-              )}
-                </div>
+                <Button
+                  key={(category.documentId || category.id).toString()}
+                  variant={selectedCategoryId === (category.documentId || category.id).toString() ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setSelectedCategoryId((category.documentId || category.id).toString())}
+                >
+                  {category.name}
+                  {category.required && (
+                    <span className="ml-1 text-xs opacity-75" title="Kötelező kategória">*</span>
+                  )}
+                </Button>
               ))}
             </div>
           )}
