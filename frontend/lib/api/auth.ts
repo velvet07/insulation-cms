@@ -36,33 +36,28 @@ export const authApi = {
         loginResponse = response.data as LoginResponse;
       }
 
-      // After login, try to fetch full user data with role and company populated
-      // But don't fail if it doesn't work - use the user from login response
-      try {
-        const fullUser = await authApi.getMe(loginResponse.jwt);
-        // Only update if we got better data (role populated)
-        if (fullUser && (typeof fullUser.role === 'object' || fullUser.company)) {
-          loginResponse.user = fullUser;
-        }
-      } catch (meError: any) {
-        // Silently ignore - we'll use the user from login response
-        // The role might still be available in the login response
-        console.warn('Could not fetch full user data, using login response');
+      // Extract and transform role from login response
+      // The login response already contains the role, we just need to transform it
+      if (loginResponse.user && typeof loginResponse.user.role === 'object' && loginResponse.user.role !== null) {
+        const roleType = (loginResponse.user.role as any).type;
+        const roleName = (loginResponse.user.role as any).name?.toLowerCase() || '';
         
-        // Try to extract role from login response if it's there
-        if (loginResponse.user && typeof loginResponse.user.role === 'object' && loginResponse.user.role !== null) {
-          const roleType = (loginResponse.user.role as any).type;
-          const roleName = (loginResponse.user.role as any).name?.toLowerCase() || '';
-          
-          if (roleName.includes('admin') || roleType === 'admin') {
-            (loginResponse.user as any).role = 'admin';
-          } else if (roleName.includes('foovallalkozo') || roleName.includes('fővállalkozó')) {
-            (loginResponse.user as any).role = 'foovallalkozo';
-          } else if (roleName.includes('alvallalkozo') || roleName.includes('alvállalkozó')) {
-            (loginResponse.user as any).role = 'alvallalkozo';
-          }
+        // Transform role object to string
+        if (roleName.includes('admin') || roleType === 'admin') {
+          (loginResponse.user as any).role = 'admin';
+        } else if (roleName.includes('foovallalkozo') || roleName.includes('fővállalkozó')) {
+          (loginResponse.user as any).role = 'foovallalkozo';
+        } else if (roleName.includes('alvallalkozo') || roleName.includes('alvállalkozó')) {
+          (loginResponse.user as any).role = 'alvallalkozo';
+        } else if (roleName.includes('manager')) {
+          (loginResponse.user as any).role = 'manager';
+        } else if (roleName.includes('worker')) {
+          (loginResponse.user as any).role = 'worker';
         }
       }
+      
+      // Try to fetch company data separately if needed (optional, don't fail if it doesn't work)
+      // But skip getMe for now since it doesn't support populate
 
       return loginResponse;
     } catch (error: any) {
@@ -87,43 +82,18 @@ export const authApi = {
   },
 
   getMe: async (token: string): Promise<User> => {
-    // Strapi v5 /users/me might not support populate, so try without it first
-    let response;
-    try {
-      // First try with populate using object format (Strapi v5 style)
-      response = await authApiClient.get<User>('/users/me', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        params: {
-          populate: {
-            company: true,
-            role: true,
-          },
-        },
-      });
-    } catch (error: any) {
-      // If that fails, try without populate
-      if (error.response?.status === 400 || error.response?.status === 422) {
-        try {
-          response = await authApiClient.get<User>('/users/me', {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          });
-        } catch (innerError) {
-          throw error; // Throw original error if this also fails
-        }
-      } else {
-        throw error;
-      }
-    }
+    // Strapi v5 /users/me doesn't support populate parameter
+    // Just fetch the user without populate
+    const response = await authApiClient.get<User>('/users/me', {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
     
     // Transform role to our format if needed
     const user = response.data;
     
-    // If role is not populated, it might be just an ID
-    // In that case, we can't determine the role name, so check the role from login response
+    // If role is an object, extract the role name/type
     if (user && typeof user.role === 'object' && user.role !== null) {
       // Map Strapi role type to our role string
       const roleType = (user.role as any).type;
