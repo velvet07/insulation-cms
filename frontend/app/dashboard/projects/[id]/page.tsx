@@ -148,7 +148,7 @@ export default function ProjectDetailPage() {
   const updateSubcontractorMutation = useMutation({
     mutationFn: async (subcontractorId: string | null) => {
       // In Strapi v5, relations are updated by sending the documentId or id
-      const updateData: Partial<Project> = {
+      const updateData: any = {
         subcontractor: subcontractorId 
           ? (subcontractorId.includes('-') ? subcontractorId : parseInt(subcontractorId)) 
           : null,
@@ -353,7 +353,6 @@ export default function ProjectDetailPage() {
       const auditLogEntry = createAuditLogEntry(
         'status_changed',
         user,
-        'Státusz modul',
         `Státusz módosítva: ${statusLabels[project.status]} -> ${statusLabels[newStatus]}`
       );
 
@@ -365,7 +364,8 @@ export default function ProjectDetailPage() {
       // Ha jóváhagyva/befejezve, állítsuk be a dátumot
       if (newStatus === 'approved') {
         updateData.approved_at = new Date().toISOString();
-        updateData.approved_by = user?.id;
+        // Strapi relation mezőket ID-val frissítjük
+        updateData.approved_by = user?.id || user?.documentId;
       } else if (newStatus === 'completed') {
         updateData.completed_at = new Date().toISOString();
       }
