@@ -168,13 +168,27 @@ export default function EditProjectPage() {
         audit_log: updatedAuditLog,
       };
 
-      // Update subcontractor if changed
+      // Remove subcontractor from data spread, handle separately
+      delete updateData.subcontractor;
+
+      // Update subcontractor separately if provided and not empty
       if ('subcontractor' in data) {
-        updateData.subcontractor = data.subcontractor 
-          ? (data.subcontractor.includes('-') ? data.subcontractor : parseInt(data.subcontractor))
-          : null;
+        if (data.subcontractor && data.subcontractor !== 'none' && data.subcontractor !== '') {
+          // Strapi v5: use documentId if it's a documentId format, otherwise use numeric id
+          const subcontractorId = typeof data.subcontractor === 'string' && data.subcontractor.includes('-')
+            ? data.subcontractor
+            : parseInt(data.subcontractor.toString());
+          updateData.subcontractor = subcontractorId;
+          console.log('[Edit Project] Setting subcontractor:', subcontractorId);
+        } else {
+          // Explicitly set to null to remove subcontractor
+          // Note: In Strapi v5, setting to null should work for relations
+          updateData.subcontractor = null;
+          console.log('[Edit Project] Removing subcontractor (setting to null)');
+        }
       }
       
+      console.log('[Edit Project] Update data before API call:', JSON.stringify(updateData, null, 2));
       return projectsApi.update(projectId, updateData);
     },
     onSuccess: () => {
