@@ -211,16 +211,20 @@ export default function ProjectDetailPage() {
       // Strapi belső mezők, amiket nem szabad elküldeni az update során
       const strapiInternalFields = ['id', 'documentId', 'createdAt', 'updatedAt', 'publishedAt'];
       
-      // Szűrjük ki a Strapi belső mezőket a jelenlegi projektből
+      // Relation mezők, amiket külön kezelünk (csak ID-t küldünk, ha szükséges)
+      const relationFields = ['company', 'subcontractor', 'assigned_to', 'approved_by', 'tenant', 'documents', 'photos'];
+      
+      // Szűrjük ki a Strapi belső mezőket ÉS a relation mezőket a jelenlegi projektből
+      // (relation mezőket külön kezeljük, ha szükséges)
       const cleanCurrentProject = Object.fromEntries(
         Object.entries(currentProject).filter(([key]) => 
-          !strapiInternalFields.includes(key)
+          !strapiInternalFields.includes(key) && !relationFields.includes(key)
         )
       ) as Partial<Project>;
       
       // Készítsük el az update adatokat: meglévő mezők + új form értékek
       const updateData: Partial<Project> = {
-        // Megtartjuk az összes meglévő mezőt (belső mezők nélkül)
+        // Megtartjuk az összes meglévő mezőt (belső mezők és relation mezők nélkül)
         ...cleanCurrentProject,
         // Frissítjük az összes form mezőt az új értékekkel
         area_sqm: data.area_sqm,

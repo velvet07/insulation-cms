@@ -104,11 +104,30 @@ export const projectsApi = {
     try {
       // Szűrjük ki az undefined értékeket ÉS a rendszer mezőket (amiket nem lehet frissíteni)
       const systemFields = ['id', 'documentId', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy'];
-      const cleanData = Object.fromEntries(
-        Object.entries(data).filter(([key, value]) => 
-          value !== undefined && !systemFields.includes(key)
-        )
-      );
+      
+      // Mély szűrés: kiszűrjük a rendszer mezőket, de ellenőrizzük az objektumok belsejét is
+      const cleanData: any = {};
+      for (const [key, value] of Object.entries(data)) {
+        // Ne küldjük el undefined értékeket
+        if (value === undefined) continue;
+        
+        // Ne küldjük el a rendszer mezőket
+        if (systemFields.includes(key)) continue;
+        
+        // Ha az érték objektum, de nem relation mező (amit Strapi kezel), akkor ellenőrizzük
+        // de csak akkor, ha nem egy egyszerű érték (string, number, boolean, null)
+        if (value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
+          // Ha az objektum tartalmazza a documentId mezőt, akkor valószínűleg relation objektum
+          // vagy nested objektum, amit nem szabad elküldeni így
+          // A relation mezőket csak ID formában küldjük el, nem objektumként
+          if ('documentId' in value || 'id' in value || 'createdAt' in value) {
+            // Ez egy relation objektum vagy Strapi entitás - ne küldjük el így
+            continue;
+          }
+        }
+        
+        cleanData[key] = value;
+      }
       
       console.log('Updating project with ID:', id);
       console.log('Update data:', cleanData);
