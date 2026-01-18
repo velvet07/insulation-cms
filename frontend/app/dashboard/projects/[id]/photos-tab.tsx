@@ -806,27 +806,25 @@ export function PhotosTab({ project }: PhotosTabProps) {
                   <span className="ml-1 text-xs opacity-75" title="Kötelező kategória">*</span>
                 )}
               </Button>
-              {canManageCategories && (
+              {canManageCategories && !category.required && (
                 <div className="flex gap-1">
                   <Button
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8"
                     onClick={() => handleCategoryEdit(category)}
-                    disabled={category.required === true}
-                    title={category.required === true ? 'A kötelező kategóriák nem szerkeszthetők' : 'Szerkesztés'}
+                    title="Szerkesztés"
                   >
-                    <Edit className={`h-3 w-3 ${category.required ? 'opacity-50' : ''}`} />
+                    <Edit className="h-3 w-3" />
                   </Button>
                   <Button
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8 text-red-500"
                     onClick={() => handleCategoryDelete(category)}
-                    disabled={category.required === true}
-                    title={category.required === true ? 'A kötelező kategóriák nem törölhetők' : 'Törlés'}
+                    title="Törlés"
                   >
-                    <Trash2 className={`h-3 w-3 ${category.required ? 'opacity-50' : ''}`} />
+                    <Trash2 className="h-3 w-3" />
                   </Button>
                 </div>
               )}
