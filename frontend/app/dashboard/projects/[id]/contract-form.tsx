@@ -23,10 +23,10 @@ import { formatDate } from '@/lib/utils';
 import type { Project } from '@/types';
 
 const contractDataSchema = z.object({
-  // Szerződő lakcíme - nem kötelező mezők
-  client_street: z.string().optional(),
-  client_city: z.string().optional(),
-  client_zip: z.string().optional().refine((val) => !val || (val.length === 4 && /^\d+$/.test(val)), {
+  // Szerződő lakcíme - kötelező mezők
+  client_street: z.string().min(1, 'Az utca, házszám mező kötelező'),
+  client_city: z.string().min(1, 'A város mező kötelező'),
+  client_zip: z.string().min(4, 'Az irányítószám mező kötelező').max(4, 'Az irányítószám 4 számjegy kell legyen').refine((val) => /^\d+$/.test(val), {
     message: 'Az irányítószám 4 számjegy kell legyen',
   }),
   // Születési adatok - nem kötelező mezők
@@ -45,7 +45,6 @@ const contractDataSchema = z.object({
   area_sqm: z.number().optional(),
   floor_material: z.enum(['wood', 'prefab_rc', 'monolithic_rc', 'rc_slab', 'hollow_block', 'other']).optional(),
   floor_material_extra: z.string().optional(),
-  insulation_option: z.enum(['A', 'B']).optional(),
   scheduled_date: z.string().optional(),
 }).superRefine((data, ctx) => {
   // Ha property_zip van kitöltve, validáljuk a formátumát (de nem kötelező)
@@ -84,7 +83,6 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
       area_sqm: project.area_sqm || 0,
       floor_material: project.floor_material || 'wood',
       floor_material_extra: project.floor_material_extra || '',
-      insulation_option: project.insulation_option || undefined,
       scheduled_date: project.scheduled_date || undefined,
     },
   });
@@ -128,7 +126,6 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
       area_sqm: project.area_sqm || 0,
       floor_material: project.floor_material || 'wood',
       floor_material_extra: project.floor_material_extra || '',
-      insulation_option: project.insulation_option || undefined,
       scheduled_date: project.scheduled_date || undefined,
     });
     // Explicit módon állítsd be a dátum mező értékét, hogy biztosan frissüljön
@@ -162,7 +159,7 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
               name="client_street"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Utca, házszám</FormLabel>
+                  <FormLabel>Utca, házszám *</FormLabel>
                   <FormControl>
                     <Input placeholder="utca, házszám" {...field} />
                   </FormControl>
@@ -175,7 +172,7 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
               name="client_city"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Város</FormLabel>
+                  <FormLabel>Város *</FormLabel>
                   <FormControl>
                     <Input placeholder="Város" {...field} />
                   </FormControl>
@@ -190,7 +187,7 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
               name="client_zip"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>IRSZ</FormLabel>
+                  <FormLabel>IRSZ *</FormLabel>
                   <FormControl>
                     <Input 
                       placeholder="1234" 

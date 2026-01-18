@@ -227,8 +227,7 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
     project.client_birth_place &&
     project.client_birth_date &&
     project.client_tax_id &&
-    project.area_sqm &&
-    project.insulation_option
+    project.area_sqm
   );
 
   // Engedélyezett template típusok, amikhez NINCS figyelmeztetés hiányos adatoknál

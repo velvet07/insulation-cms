@@ -263,7 +263,6 @@ export default function ProjectDetailPage() {
       }
 
       // Opcionális mezők
-      updateData.insulation_option = normalizeValue(data.insulation_option);
       updateData.scheduled_date = normalizeValue(data.scheduled_date); // Üres string -> undefined (Strapi date mező nem fogad el üres stringet)
 
       // Ellenőrizzük, hogy volt-e már szerződés adat (az első mentés vagy módosítás)
@@ -501,7 +500,6 @@ export default function ProjectDetailPage() {
       property_city: project.property_city,
       property_zip: project.property_zip,
     });
-    console.log('[contractFilled] insulation_option (opcionális):', project.insulation_option);
   }
 
   const totalDocs = documents.length;
@@ -800,19 +798,6 @@ export default function ProjectDetailPage() {
                       <div>
                         <p className="text-sm text-gray-500 dark:text-gray-400">Terület</p>
                         <p className="font-medium">{project.area_sqm} m²</p>
-                      </div>
-                    </div>
-                  )}
-                  {project.insulation_option && (
-                    <div className="flex items-start gap-3">
-                      <Package className="h-5 w-5 text-gray-400 mt-0.5" />
-                      <div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">Szigetelés</p>
-                        <p className="font-medium">
-                          {project.insulation_option === 'A' 
-                            ? 'Opció A: 10 cm + 15 cm = 25 cm'
-                            : 'Opció B: 12,5 cm + 12,5 cm = 25 cm'}
-                        </p>
                       </div>
                     </div>
                   )}
