@@ -132,27 +132,51 @@ export const photosApi = {
       const cleanData: any = {};
       
       // Handle relation fields specially for Strapi v5
-      Object.entries(data).forEach(([key, value]) => {
-        if (value === undefined) return;
+      // Strapi v5 requires numeric IDs for relations, not documentIds
+      for (const [key, value] of Object.entries(data)) {
+        if (value === undefined) continue;
         
-        // For relation fields (category, project), send as ID or documentId
+        // For relation fields (category, project), convert documentId to numeric ID
         if (key === 'category' || key === 'project') {
           if (value === null) {
             cleanData[key] = null;
-          } else if (typeof value === 'string' || typeof value === 'number') {
-            // If it's already a string/number ID, use it directly
+          } else if (typeof value === 'number') {
+            // If it's already a number, use it directly
             cleanData[key] = value;
+          } else if (typeof value === 'string') {
+            // If it's a string (documentId), we need to fetch the entity to get numeric ID
+            // For now, try to parse it as number first (in case it's already numeric ID as string)
+            const parsedNum = parseInt(value, 10);
+            if (!isNaN(parsedNum) && parsedNum.toString() === value) {
+              // It's a numeric ID as string, use it
+              cleanData[key] = parsedNum;
+            } else {
+              // It's a documentId - we need to fetch the entity to get numeric ID
+              // For now, fetch it using the API
+              try {
+                const entityType = key === 'category' ? 'photo-categories' : 'projects';
+                const entity = await strapiApi.get<StrapiResponse<any>>(`/${entityType}/${value}?populate=*`);
+                const entityData = unwrapStrapiResponse(entity);
+                if (entityData?.id) {
+                  cleanData[key] = typeof entityData.id === 'string' ? parseInt(entityData.id, 10) : entityData.id;
+                } else {
+                  throw new Error(`${entityType} nem található: ${value}`);
+                }
+              } catch (fetchError: any) {
+                throw new Error(`Nem sikerült lekérni a ${key === 'category' ? 'kategória' : 'projekt'} adatait: ${fetchError.message || value}`);
+              }
+            }
           } else if (typeof value === 'object' && value !== null) {
-            // If it's an object, extract documentId or id
-            const relationId = (value as any).documentId || (value as any).id;
-            if (relationId) {
-              cleanData[key] = relationId;
+            // If it's an object, extract numeric id (not documentId)
+            const relationId = (value as any).id;
+            if (relationId !== undefined && relationId !== null) {
+              cleanData[key] = typeof relationId === 'string' ? parseInt(relationId, 10) : relationId;
             }
           }
         } else {
           cleanData[key] = value;
         }
-      });
+      }
       
       const response = await strapiApi.put<StrapiResponse<Photo>>(`/photos/${id}`, { data: cleanData });
       return unwrapStrapiResponse(response);
