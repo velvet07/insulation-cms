@@ -52,7 +52,18 @@ export default function LoginPage() {
 
     try {
       const response = await authApi.login(values);
-      setAuth(response.jwt, response.user);
+      
+      // After login, fetch full user data with role and company
+      try {
+        const fullUser = await authApi.getMe(response.jwt);
+        console.log('Full user data after login:', fullUser);
+        setAuth(response.jwt, fullUser);
+      } catch (userError) {
+        console.warn('Failed to fetch full user data, using login response:', userError);
+        // Fallback to login response if getMe fails
+        setAuth(response.jwt, response.user);
+      }
+      
       router.push('/dashboard');
       router.refresh();
     } catch (err: any) {

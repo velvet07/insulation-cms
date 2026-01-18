@@ -97,8 +97,8 @@ export const authApi = {
 
   getMe: async (token: string): Promise<User> => {
     // Strapi v5 /users/me doesn't support populate parameter
-    // Just fetch the user without populate
-    const response = await authApiClient.get<User>('/users/me', {
+    // We need to fetch role and company separately
+    const response = await authApiClient.get<User>('/users/me?populate=*', {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -107,14 +107,21 @@ export const authApi = {
     // Transform role to our format if needed
     const user = response.data;
     
+    console.log('[getMe] Raw user response:', user);
+    console.log('[getMe] User role:', user?.role);
+    console.log('[getMe] User company:', user?.company);
+    
     // If role is an object, extract the role name/type
     if (user && typeof user.role === 'object' && user.role !== null) {
       // Map Strapi role type to our role string
       const roleType = (user.role as any).type;
       const roleName = (user.role as any).name?.toLowerCase() || '';
+      const roleId = (user.role as any).id;
       
-      // Check if role name contains 'admin' or type is 'admin'
-      if (roleName.includes('admin') || roleType === 'admin') {
+      console.log('[getMe] Role details:', { roleType, roleName, roleId });
+      
+      // Check if role name contains 'admin' or type is 'admin' or id is 1 (Strapi default admin)
+      if (roleName.includes('admin') || roleType === 'admin' || roleId === 1 || roleId === '1') {
         (user as any).role = 'admin';
       } else if (roleName.includes('foovallalkozo') || roleName.includes('fővállalkozó')) {
         (user as any).role = 'foovallalkozo';
@@ -124,8 +131,46 @@ export const authApi = {
         (user as any).role = 'manager';
       } else if (roleName.includes('worker')) {
         (user as any).role = 'worker';
+      } else {
+        // Keep role as object if we can't map it
+        console.warn('[getMe] Unknown role type, keeping as object:', user.role);
+      }
+    } else if (user && typeof user.role === 'string') {
+      // Role is already a string, keep it
+      console.log('[getMe] Role is already string:', user.role);
+    } else {
+      console.warn('[getMe] Role is undefined or null');
+    }
+    
+    // Fetch company data if it's just an ID
+    if (user && user.company) {
+      if (typeof user.company === 'string' || typeof user.company === 'number') {
+        try {
+          const companyId = user.company;
+          const { companiesApi } = await import('./companies');
+          const company = await companiesApi.getOne(companyId);
+          console.log('[getMe] Fetched company:', company);
+          (user as any).company = company;
+          
+          // If company has parent_company, fetch it too
+          if (company.parent_company) {
+            if (typeof company.parent_company === 'string' || typeof company.parent_company === 'number') {
+              try {
+                const parentCompany = await companiesApi.getOne(company.parent_company);
+                (user as any).company.parent_company = parentCompany;
+              } catch (error) {
+                console.warn('[getMe] Failed to fetch parent company:', error);
+              }
+            }
+          }
+        } catch (error) {
+          console.warn('[getMe] Failed to fetch company data:', error);
+          // Don't fail if company fetch fails
+        }
       }
     }
+    
+    console.log('[getMe] Final user object:', user);
     
     return user;
   },
