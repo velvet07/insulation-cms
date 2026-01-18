@@ -1052,7 +1052,15 @@ export function PhotosTab({ project }: PhotosTabProps) {
                             <Select
                               value={(photo.category?.documentId || photo.category?.id)?.toString() || ''}
                               onValueChange={(value) => {
-                                photoCategoryUpdateMutation.mutate({ photoId, categoryId: value });
+                                // Find the category by documentId or id, then use its numeric id
+                                const selectedCategory = categories.find(
+                                  c => (c.documentId || c.id)?.toString() === value
+                                );
+                                if (selectedCategory) {
+                                  // Use numeric id if available, otherwise try documentId
+                                  const categoryIdToUse = selectedCategory.id || selectedCategory.documentId;
+                                  photoCategoryUpdateMutation.mutate({ photoId, categoryId: categoryIdToUse });
+                                }
                               }}
                               disabled={photoCategoryUpdateMutation.isPending}
                             >
