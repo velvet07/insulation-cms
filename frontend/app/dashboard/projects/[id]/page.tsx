@@ -159,11 +159,13 @@ export default function ProjectDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       setIsSubcontractorDialogOpen(false);
-      alert('Kivitelező sikeresen frissítve!');
+      // Sikeres frissítés - nincs felugró ablak
+      console.log('Kivitelező sikeresen frissítve');
     },
     onError: (error: any) => {
       console.error('Error updating subcontractor:', error);
-      alert(error.message || 'Hiba történt a kivitelező frissítése során.');
+      console.error('Hiba üzenet:', error.message || 'Hiba történt a kivitelező frissítése során.');
+      // Hiba esetén csak console-ba írunk, nincs felugró ablak
     },
   });
 
@@ -184,7 +186,8 @@ export default function ProjectDetailPage() {
     onError: (error: any) => {
       console.error('Error deleting project:', error);
       const errorMessage = error?.message || 'Hiba történt a projekt törlése során.';
-      alert(errorMessage);
+      console.error('Hiba üzenet:', errorMessage);
+      // Hiba esetén csak console-ba írunk, nincs felugró ablak
       // Ne dobjon ki a bejelentkezési oldalra, maradjon a projekt részletek oldalon
     },
   });
@@ -319,12 +322,13 @@ export default function ProjectDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
-      alert('Szerződés adatok sikeresen mentve!');
+      // Sikeres mentés - nincs felugró ablak
     },
     onError: (error: any) => {
       console.error('Error updating contract data:', error);
       const errorMessage = error?.message || 'Hiba történt a szerződés adatok mentése során.';
-      alert(errorMessage);
+      console.error('Hiba üzenet:', errorMessage);
+      // Hiba esetén csak console-ba írunk, nincs felugró ablak
     },
   });
 
@@ -381,10 +385,12 @@ export default function ProjectDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       
-      alert(`Státusz sikeresen módosítva: ${statusLabels[newStatus]}`);
+      // Sikeres státusz módosítás - nincs felugró ablak
+      console.log(`Státusz sikeresen módosítva: ${statusLabels[newStatus]}`);
     } catch (error: any) {
       console.error('Error updating status:', error);
-      alert(error.message || 'Hiba történt a státusz frissítése során.');
+      console.error('Hiba üzenet:', error.message || 'Hiba történt a státusz frissítése során.');
+      // Hiba esetén csak console-ba írunk, nincs felugró ablak
     } finally {
       setIsUpdatingStatus(false);
     }
