@@ -108,4 +108,133 @@ export default factories.createCoreController('api::photo.photo', ({ strapi }) =
       return ctx.badRequest(error.message || 'Hiba történt a fénykép létrehozása során');
     }
   },
+
+  /**
+   * Custom endpoint a Photo frissítéséhez relation mezőkkel
+   * Entity Service API-t használjuk, mert jobban kezeli a relation mezőket
+   */
+  async updateWithRelations(ctx) {
+    try {
+      const { id } = ctx.params;
+      const { name, file, category, project, uploaded_by, order } = ctx.request.body.data || ctx.request.body;
+      
+      strapi.log.info('updateWithRelations called with:', JSON.stringify({ id, name, file, category, project, uploaded_by, order }));
+
+      // Először megkeressük a photot (documentId vagy id alapján)
+      let photoDoc;
+      try {
+        // Try documentId first (Strapi v5)
+        photoDoc = await strapi.documents('api::photo.photo').findOne({
+          documentId: id.toString(),
+        });
+      } catch (error) {
+        // If not found, try numeric id
+        photoDoc = await strapi.entityService.findOne('api::photo.photo', parseInt(id, 10));
+      }
+
+      if (!photoDoc) {
+        return ctx.notFound('Fénykép nem található');
+      }
+
+      const photoData: any = {};
+
+      // Name update
+      if (name !== undefined) {
+        photoData.name = name;
+      }
+
+      // File update (media relation)
+      if (file !== undefined) {
+        photoData.file = typeof file === 'number' ? file : parseInt(file, 10);
+      }
+
+      // Category update - convert documentId to numeric ID
+      if (category !== undefined) {
+        if (category === null) {
+          photoData.category = null;
+        } else {
+          // Try to find category by documentId or numeric id
+          let categoryDoc;
+          try {
+            // Try documentId first (Strapi v5)
+            categoryDoc = await strapi.documents('api::photo-category.photo-category').findOne({
+              documentId: category.toString(),
+            });
+          } catch (error) {
+            // If not found, try numeric id
+            const categoryId = typeof category === 'number' ? category : parseInt(category, 10);
+            if (!isNaN(categoryId)) {
+              categoryDoc = await strapi.entityService.findOne('api::photo-category.photo-category', categoryId);
+            }
+          }
+
+          if (!categoryDoc) {
+            return ctx.badRequest(`Kategória nem található: ${category}`);
+          }
+
+          photoData.category = categoryDoc.id; // Numerikus ID
+        }
+      }
+
+      // Project update - convert documentId to numeric ID
+      if (project !== undefined) {
+        if (project === null) {
+          photoData.project = null;
+        } else {
+          // Try to find project by documentId or numeric id
+          let projectDoc;
+          try {
+            // Try documentId first (Strapi v5)
+            projectDoc = await strapi.documents('api::project.project').findOne({
+              documentId: project.toString(),
+            });
+          } catch (error) {
+            // If not found, try numeric id
+            const projectId = typeof project === 'number' ? project : parseInt(project, 10);
+            if (!isNaN(projectId)) {
+              projectDoc = await strapi.entityService.findOne('api::project.project', projectId);
+            }
+          }
+
+          if (!projectDoc) {
+            return ctx.badRequest(`Projekt nem található: ${project}`);
+          }
+
+          photoData.project = projectDoc.id; // Numerikus ID
+        }
+      }
+
+      // User update
+      if (uploaded_by !== undefined) {
+        if (uploaded_by === null) {
+          photoData.uploaded_by = null;
+        } else {
+          photoData.uploaded_by = typeof uploaded_by === 'number' ? uploaded_by : parseInt(uploaded_by, 10);
+        }
+      }
+
+      // Order update
+      if (order !== undefined) {
+        photoData.order = typeof order === 'number' ? order : parseInt(order, 10) || 0;
+      }
+
+      strapi.log.info('Updating photo with data:', JSON.stringify(photoData));
+
+      // Use numeric id for update
+      const numericId = photoDoc.id;
+
+      // Entity Service API használata - ez jobban kezeli a relation mezőket
+      const updatedPhoto = await strapi.entityService.update('api::photo.photo', numericId, {
+        data: photoData,
+        populate: ['file', 'category', 'project'],
+      });
+
+      strapi.log.info('Photo updated successfully:', JSON.stringify(updatedPhoto));
+
+      return { data: updatedPhoto };
+    } catch (error: any) {
+      strapi.log.error('Error in updateWithRelations:', error.message, error.stack);
+      return ctx.badRequest(error.message || 'Hiba történt a fénykép frissítése során');
+    }
+  },
 }));

@@ -8,5 +8,13 @@ export default {
         auth: false,
       },
     },
+    {
+      method: 'PUT',
+      path: '/photos/:id/update-with-relations',
+      handler: 'photo.updateWithRelations',
+      config: {
+        auth: false,
+      },
+    },
   ],
 };
