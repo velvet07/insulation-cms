@@ -46,6 +46,7 @@ import {
 import { companiesApi } from '@/lib/api/companies';
 import { Building2, Plus, Trash2, Edit } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { isAdminRole } from '@/lib/utils/user-role';
 
 const companySchema = z.object({
   name: z.string().min(1, 'A cég neve kötelező'),
@@ -65,7 +66,7 @@ export default function SettingsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState<string | null>(null);
 
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = isAdminRole(user);
 
   const { data: companies = [], isLoading } = useQuery({
     queryKey: ['companies'],

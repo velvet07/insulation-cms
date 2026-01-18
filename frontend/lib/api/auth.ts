@@ -56,15 +56,55 @@ export const authApi = {
   },
 
   getMe: async (token: string): Promise<User> => {
-    const response = await authApiClient.get<User>('/users/me', {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      params: {
-        populate: 'company',
-      },
-    });
-    return response.data;
+    // Try different populate formats for Strapi v5
+    let response;
+    try {
+      response = await authApiClient.get<User>('/users/me', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        params: {
+          populate: ['company', 'role'],
+        },
+      });
+    } catch (error: any) {
+      // If array format doesn't work, try string format
+      if (error.response?.status === 400 || error.response?.status === 422) {
+        response = await authApiClient.get<User>('/users/me', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          params: {
+            populate: 'company,role',
+          },
+        });
+      } else {
+        throw error;
+      }
+    }
+    
+    // Transform role to our format if needed
+    const user = response.data;
+    if (user && typeof user.role === 'object' && user.role !== null && 'type' in user.role) {
+      // Map Strapi role type to our role string
+      const roleType = (user.role as any).type;
+      const roleName = (user.role as any).name?.toLowerCase() || '';
+      
+      // Check if role name contains 'admin' or type is 'admin'
+      if (roleName.includes('admin') || roleType === 'admin') {
+        (user as any).role = 'admin';
+      } else if (roleName.includes('foovallalkozo') || roleName.includes('fővállalkozó')) {
+        (user as any).role = 'foovallalkozo';
+      } else if (roleName.includes('alvallalkozo') || roleName.includes('alvállalkozó')) {
+        (user as any).role = 'alvallalkozo';
+      } else if (roleName.includes('manager')) {
+        (user as any).role = 'manager';
+      } else if (roleName.includes('worker')) {
+        (user as any).role = 'worker';
+      }
+    }
+    
+    return user;
   },
 
   forgotPassword: async (email: string): Promise<void> => {

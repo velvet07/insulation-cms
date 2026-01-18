@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
+import { isAdminRole } from '@/lib/utils/user-role';
 import {
   Select,
   SelectContent,
@@ -62,7 +63,7 @@ export function PhotosTab({ project }: PhotosTabProps) {
   const projectId = project.documentId || project.id;
   
   // Check if user can manage categories (admin or fővállalkozó)
-  const canManageCategories = user?.role === 'admin' || user?.role === 'foovallalkozo';
+  const canManageCategories = isAdminRole(user) || user?.role === 'foovallalkozo';
 
   // Fetch categories first - don't enable photos query until we know if categories exist
   const { data: categories = [], isLoading: isLoadingCategories, isError: isCategoriesError } = useQuery({

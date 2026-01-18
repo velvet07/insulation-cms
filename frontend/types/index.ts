@@ -31,13 +31,20 @@ export interface Company extends StrapiEntity {
   projects?: Project[];
 }
 
+// User Role Types
+export interface UserRole extends StrapiEntity {
+  name: string;
+  type: string;
+  description?: string;
+}
+
 // User Types
 export interface User extends StrapiEntity {
   email: string;
   username?: string;
   name?: string;
   phone?: string;
-  role: 'admin' | 'foovallalkozo' | 'alvallalkozo' | 'manager' | 'worker';
+  role?: UserRole | 'admin' | 'foovallalkozo' | 'alvallalkozo' | 'manager' | 'worker' | string;
   tenant?: Tenant;
   company?: Company;
 }

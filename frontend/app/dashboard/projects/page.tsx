@@ -24,6 +24,8 @@ import {
 } from '@/components/ui/table';
 import { projectsApi, type ProjectFilters } from '@/lib/api/projects';
 import type { Project } from '@/types';
+import { useAuthStore } from '@/lib/store/auth';
+import { isAdminRole } from '@/lib/utils/user-role';
 import { Plus, Search, Eye, Edit, Trash2 } from 'lucide-react';
 
 const statusLabels: Record<Project['status'], string> = {
@@ -45,13 +47,23 @@ const statusColors: Record<Project['status'], string> = {
 export default function ProjectsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const user = useAuthStore((state) => state.user);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<Project['status'] | 'all'>('all');
 
+  // Build filters - if user is not admin, filter by tenant or company
   const filters: ProjectFilters = {
     ...(statusFilter !== 'all' && { status: statusFilter }),
     ...(search && { search }),
   };
+
+  // If user is not admin, filter by tenant or company
+  if (!isAdminRole(user)) {
+    if (user?.tenant?.id || user?.tenant?.documentId) {
+      filters.tenant = parseInt(user.tenant.documentId || user.tenant.id.toString());
+    }
+    // TODO: Add company filter when company is implemented on projects
+  }
 
   const { data: projects = [], isLoading, error } = useQuery({
     queryKey: ['projects', filters],
