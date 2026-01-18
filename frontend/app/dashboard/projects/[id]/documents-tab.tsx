@@ -32,7 +32,13 @@ import { templatesApi } from '@/lib/api/templates';
 import { DOCUMENT_TYPE_LABELS, TEMPLATE_TYPE_LABELS, type Document, type Template, type Project } from '@/types';
 import { Plus, Download, Trash2, FileText, Loader2, PenTool, X, Check, Upload } from 'lucide-react';
 import { SignaturePad } from '@/components/ui/signature-pad';
-import { PdfViewer } from '@/components/ui/pdf-viewer';
+import dynamic from 'next/dynamic';
+
+// Dynamically import PdfViewer to avoid SSR issues with DOMMatrix
+const PdfViewer = dynamic(() => import('@/components/ui/pdf-viewer').then(mod => ({ default: mod.PdfViewer })), {
+  ssr: false,
+  loading: () => <div className="flex items-center justify-center h-96"><p className="text-gray-500">PDF betöltése...</p></div>
+});
 import { useAuthStore } from '@/lib/store/auth';
 import { createAuditLogEntry, addAuditLogEntry } from '@/lib/utils/audit-log';
 import { projectsApi } from '@/lib/api/projects';
