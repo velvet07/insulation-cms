@@ -71,6 +71,11 @@
       "target": "api::company.company",
       "inversedBy": "projects"
     },
+    "subcontractor": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::company.company"
+    },
     "assigned_to": {
       "type": "relation",
       "relation": "manyToOne",

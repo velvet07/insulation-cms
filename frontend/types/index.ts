@@ -71,6 +71,7 @@ export interface Project extends StrapiEntity {
   assigned_to?: User;
   tenant?: Tenant;
   company?: Company;
+  subcontractor?: Company;
   scheduled_date?: string;
   documents_generated_count?: number;
   billing_amount?: number;

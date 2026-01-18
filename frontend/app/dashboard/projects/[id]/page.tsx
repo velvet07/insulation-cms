@@ -21,7 +21,7 @@ import {
   FormDescription,
 } from '@/components/ui/form';
 import { projectsApi } from '@/lib/api/projects';
-import type { Project, ProjectAuditLogEntry } from '@/types';
+import type { Project, ProjectAuditLogEntry, Company } from '@/types';
 import { ContractForm, type ContractDataFormValues } from './contract-form';
 import { formatDate, formatPhoneNumber } from '@/lib/utils';
 import { createAuditLogEntry, addAuditLogEntry } from '@/lib/utils/audit-log';
@@ -31,6 +31,8 @@ import { PhotosTab } from './photos-tab';
 import { photosApi } from '@/lib/api/photos';
 import { photoCategoriesApi } from '@/lib/api/photo-categories';
 import { documentsApi } from '@/lib/api/documents';
+import { companiesApi } from '@/lib/api/companies';
+import { isAdminRole } from '@/lib/utils/user-role';
 import {
   ArrowLeft,
   Edit,
@@ -49,6 +51,22 @@ import {
   FileText,
   Building2,
 } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 
 const statusLabels: Record<Project['status'], string> = {
   pending: 'Függőben',
@@ -74,6 +92,7 @@ export default function ProjectDetailPage() {
   const user = useAuthStore((state) => state.user);
   const [activeTab, setActiveTab] = useState<'info' | 'contract' | 'documents' | 'photos'>('info');
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [isSubcontractorDialogOpen, setIsSubcontractorDialogOpen] = useState(false);
 
   const { data: project, isLoading, error } = useQuery({
     queryKey: ['project', projectId],
@@ -98,6 +117,58 @@ export default function ProjectDetailPage() {
     queryKey: ['photo-categories'],
     queryFn: () => photoCategoriesApi.getAll(),
   });
+
+  // Check if user is main contractor (from their company)
+  const getUserCompany = () => {
+    if (!user?.company) return null;
+    if (typeof user.company === 'object' && 'type' in user.company) {
+      return user.company as Company;
+    }
+    return null;
+  };
+
+  const userCompany = getUserCompany();
+  const isMainContractor = userCompany?.type === 'main_contractor';
+  const canEditSubcontractor = isMainContractor && project && 
+    project.company && 
+    typeof project.company === 'object' && 
+    'type' in project.company && 
+    project.company.type === 'main_contractor';
+  
+  // Fetch available subcontractors (only if user is main contractor and can edit)
+  const { data: subcontractors = [] } = useQuery({
+    queryKey: ['companies', 'subcontractors'],
+    queryFn: () => companiesApi.getAll({ type: 'subcontractor' }),
+    enabled: !!canEditSubcontractor,
+  });
+
+  // Subcontractor update mutation
+  const updateSubcontractorMutation = useMutation({
+    mutationFn: async (subcontractorId: string | null) => {
+      const updateData: Partial<Project> = {
+        subcontractor: subcontractorId || null,
+      };
+      return projectsApi.update(projectId, updateData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      setIsSubcontractorDialogOpen(false);
+      alert('Kivitelező sikeresen frissítve!');
+    },
+    onError: (error: any) => {
+      console.error('Error updating subcontractor:', error);
+      alert(error.message || 'Hiba történt a kivitelező frissítése során.');
+    },
+  });
+
+  const handleSubcontractorChange = async (subcontractorId: string) => {
+    if (subcontractorId === 'none') {
+      updateSubcontractorMutation.mutate(null);
+    } else {
+      updateSubcontractorMutation.mutate(subcontractorId);
+    }
+  };
 
   const deleteMutation = useMutation({
     mutationFn: () => projectsApi.delete(projectId),
@@ -725,23 +796,101 @@ export default function ProjectDetailPage() {
                       </div>
                     </div>
                   )}
-                  {project.company && (
+                  {/* Main Contractor (Fővállalkozó) */}
+                  {project.company && typeof project.company === 'object' && 'name' in project.company && (
                     <div className="flex items-start gap-3">
                       <Building2 className="h-5 w-5 text-gray-400 mt-0.5" />
                       <div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">Cég</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Fővállalkozó</p>
                         <p className="font-medium">
-                          {project.company.name}
-                          {project.company.type === 'main_contractor' && (
+                          {(project.company as Company).name}
+                          {(project.company as Company).type === 'main_contractor' && (
                             <span className="ml-2 text-xs text-gray-500">(Fővállalkozó)</span>
-                          )}
-                          {project.company.type === 'subcontractor' && (
-                            <span className="ml-2 text-xs text-gray-500">(Alvállalkozó)</span>
                           )}
                         </p>
                       </div>
                     </div>
                   )}
+                  {/* Subcontractor (Kivitelező) */}
+                  <div className="flex items-start gap-3">
+                    <Building2 className="h-5 w-5 text-gray-400 mt-0.5" />
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">Kivitelező</p>
+                          {project.subcontractor && typeof project.subcontractor === 'object' && 'name' in project.subcontractor ? (
+                            <p className="font-medium">
+                              {(project.subcontractor as Company).name}
+                              <span className="ml-2 text-xs text-gray-500">(Alvállalkozó)</span>
+                            </p>
+                          ) : (
+                            <p className="font-medium text-gray-400 italic">Nincs kivitelező beállítva</p>
+                          )}
+                        </div>
+                        {canEditSubcontractor && (
+                          <Dialog open={isSubcontractorDialogOpen} onOpenChange={setIsSubcontractorDialogOpen}>
+                            <DialogTrigger asChild>
+                              <Button variant="outline" size="sm">
+                                <Edit className="h-4 w-4 mr-1" />
+                                {project.subcontractor && typeof project.subcontractor === 'object' && 'name' in project.subcontractor ? 'Módosítás' : 'Beállítás'}
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>Kivitelező beállítása</DialogTitle>
+                                <DialogDescription>
+                                  Válasszon alvállalkozót a projekt kivitelezéséhez, vagy távolítsa el a jelenlegi kivitelezőt.
+                                </DialogDescription>
+                              </DialogHeader>
+                              <div className="py-4">
+                                <Select
+                                  value={
+                                    project.subcontractor && typeof project.subcontractor === 'object' && 'name' in project.subcontractor
+                                      ? ((project.subcontractor as Company).documentId || (project.subcontractor as Company).id?.toString() || 'none')
+                                      : 'none'
+                                  }
+                                  onValueChange={handleSubcontractorChange}
+                                  disabled={updateSubcontractorMutation.isPending}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Válasszon kivitelezőt..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none">Nincs kivitelező</SelectItem>
+                                    {subcontractors.map((subcontractor) => {
+                                      const subId = subcontractor.documentId || subcontractor.id?.toString() || '';
+                                      return (
+                                        <SelectItem 
+                                          key={subId} 
+                                          value={subId}
+                                        >
+                                          {subcontractor.name}
+                                        </SelectItem>
+                                      );
+                                    })}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              {subcontractors.length === 0 && (
+                                <p className="text-sm text-gray-500 mt-2">
+                                  Nincs elérhető alvállalkozó. Kérjük, először hozzon létre alvállalkozó céget a Beállítások menüben.
+                                </p>
+                              )}
+                              <DialogFooter>
+                                <Button
+                                  variant="outline"
+                                  onClick={() => setIsSubcontractorDialogOpen(false)}
+                                  disabled={updateSubcontractorMutation.isPending}
+                                >
+                                  Mégse
+                                </Button>
+                              </DialogFooter>
+                            </DialogContent>
+                          </Dialog>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
