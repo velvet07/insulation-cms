@@ -442,13 +442,29 @@ export default function ProjectDetailPage() {
   }
 
   // Számítások az állapot összesítőhöz
+  // Ellenőrizzük, hogy minden kötelező szerződés adat megvan-e és nem üres
   const contractFilled = !!(
-    project.client_birth_place &&
-    project.client_birth_date &&
-    project.client_tax_id &&
-    project.area_sqm &&
+    project.client_birth_place && 
+    project.client_birth_place.trim() !== '' &&
+    project.client_birth_date && 
+    project.client_birth_date.trim() !== '' &&
+    project.client_tax_id && 
+    project.client_tax_id.trim() !== '' &&
+    project.area_sqm && 
+    project.area_sqm > 0 &&
     project.insulation_option
   );
+
+  // Debug információ a konzolba
+  if (!contractFilled) {
+    console.log('[contractFilled] Hiányzó mezők ellenőrzése:', {
+      client_birth_place: project.client_birth_place || 'HIÁNYZIK',
+      client_birth_date: project.client_birth_date || 'HIÁNYZIK',
+      client_tax_id: project.client_tax_id || 'HIÁNYZIK',
+      area_sqm: project.area_sqm || 'HIÁNYZIK',
+      insulation_option: project.insulation_option || 'HIÁNYZIK',
+    });
+  }
 
   const totalDocs = documents.length;
   const signedDocs = documents.filter(d => d.signed).length;
