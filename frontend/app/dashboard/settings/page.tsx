@@ -173,11 +173,23 @@ export default function SettingsPage() {
   // Photo category mutations
   const createCategoryMutation = useMutation({
     mutationFn: async ({ name, required }: { name: string; required: boolean }) => {
-      const category = await photoCategoriesApi.create({
+      const categoryData: any = {
         name,
         order: categories.length,
         required,
-      });
+      };
+      
+      // Generate slug on frontend as fallback (though lifecycle hook should handle it)
+      if (!categoryData.slug) {
+        categoryData.slug = name
+          .toLowerCase()
+          .trim()
+          .replace(/[^\w\s-]/g, '')
+          .replace(/\s+/g, '-')
+          .replace(/-+/g, '-');
+      }
+      
+      const category = await photoCategoriesApi.create(categoryData);
       return category;
     },
     onSuccess: () => {
@@ -188,7 +200,11 @@ export default function SettingsPage() {
       setCategoryRequired(false);
     },
     onError: (error: any) => {
-      alert(error.message || 'Hiba történt a kategória létrehozása során');
+      console.error('Category creation error:', error);
+      const errorMessage = error.response?.data?.error?.message || 
+                          error.message || 
+                          'Hiba történt a kategória létrehozása során';
+      alert(errorMessage);
     },
   });
 
