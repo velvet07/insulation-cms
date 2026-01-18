@@ -19,8 +19,11 @@ export const projectsApi = {
     if (filters?.assigned_to) {
       // Strapi v5 uses documentId, try both id and documentId
       const assignedToId = filters.assigned_to.toString();
-      if (assignedToId.includes('-')) {
-        // It's a documentId
+      // Check if it's a documentId (Strapi v5 documentIds are typically long strings, may or may not contain hyphens)
+      // If it's longer than 10 characters or contains hyphens, treat as documentId
+      // Numeric IDs are typically short (1-9 digits)
+      if (assignedToId.length > 10 || assignedToId.includes('-') || isNaN(Number(assignedToId))) {
+        // It's a documentId (string)
         params.append('filters[assigned_to][documentId][$eq]', assignedToId);
       } else {
         // It's a numeric id
