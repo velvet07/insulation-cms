@@ -126,14 +126,47 @@ export function PhotosTab({ project }: PhotosTabProps) {
   }, [photosRaw, categories]);
 
   // Fetch all photos for lightbox navigation (always fetch to enable navigation across all photos)
-  const { data: allPhotos = [] } = useQuery({
+  const { data: allPhotosRaw = [] } = useQuery({
     queryKey: ['photos', projectId, 'all'],
     queryFn: () => photosApi.getAll({ project: projectId }),
     enabled: !!projectId && !isLoadingCategories,
     retry: false,
   });
 
-  // Group photos by category
+  // Sort allPhotos by category order too (for lightbox navigation)
+  const allPhotos = useMemo(() => {
+    if (!allPhotosRaw || allPhotosRaw.length === 0 || !categories || categories.length === 0) {
+      return allPhotosRaw;
+    }
+    
+    // Create a map of category order for quick lookup
+    const categoryOrderMap = new Map<string, number>();
+    categories.forEach((cat, index) => {
+      const catId = (cat.documentId || cat.id).toString();
+      categoryOrderMap.set(catId, cat.order ?? index);
+    });
+    
+    // Sort photos: first by category order, then by createdAt
+    return [...allPhotosRaw].sort((a, b) => {
+      const aCategoryId = (a.category?.documentId || a.category?.id)?.toString() || '';
+      const bCategoryId = (b.category?.documentId || b.category?.id)?.toString() || '';
+      
+      const aOrder = categoryOrderMap.get(aCategoryId) ?? 9999;
+      const bOrder = categoryOrderMap.get(bCategoryId) ?? 9999;
+      
+      // First sort by category order
+      if (aOrder !== bOrder) {
+        return aOrder - bOrder;
+      }
+      
+      // If same category, sort by createdAt (newest first)
+      const aDate = new Date(a.createdAt).getTime();
+      const bDate = new Date(b.createdAt).getTime();
+      return bDate - aDate;
+    });
+  }, [allPhotosRaw, categories]);
+
+  // Group photos by category (sorted photos)
   const photosByCategory = photos.reduce((acc, photo) => {
     const categoryId = photo.category?.id?.toString() || photo.category?.documentId || 'uncategorized';
     if (!acc[categoryId]) {
