@@ -68,4 +68,67 @@ export const materialsApi = {
       throw error;
     }
   },
+
+  create: async (data: Partial<Material>) => {
+    try {
+      const response = await strapiApi.post<StrapiResponse<Material>>('/materials', { data });
+      return unwrapStrapiResponse(response);
+    } catch (error: any) {
+      if (error.response) {
+        console.error('Strapi API Error:', error.response.data);
+        const errorMessage = error.response.data?.error?.message || 
+                           JSON.stringify(error.response.data) || 
+                           'Hiba történt az anyag létrehozása során';
+        throw new Error(errorMessage);
+      }
+      throw error;
+    }
+  },
+
+  update: async (id: number | string, data: Partial<Material>) => {
+    try {
+      const systemFields = ['id', 'documentId', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy'];
+      
+      const cleanData: any = {};
+      for (const [key, value] of Object.entries(data)) {
+        if (value === undefined) continue;
+        if (systemFields.includes(key)) continue;
+        
+        if (value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
+          if ('documentId' in value || 'id' in value || 'createdAt' in value) {
+            continue;
+          }
+        }
+        
+        cleanData[key] = value;
+      }
+      
+      const response = await strapiApi.put<StrapiResponse<Material>>(`/materials/${id}`, { data: cleanData });
+      return unwrapStrapiResponse(response);
+    } catch (error: any) {
+      if (error.response) {
+        console.error('Strapi API Error:', error.response.data);
+        const errorMessage = error.response.data?.error?.message || 
+                           JSON.stringify(error.response.data) || 
+                           'Hiba történt az anyag frissítése során';
+        throw new Error(errorMessage);
+      }
+      throw error;
+    }
+  },
+
+  delete: async (id: number | string) => {
+    try {
+      await strapiApi.delete(`/materials/${id}`);
+    } catch (error: any) {
+      if (error.response) {
+        console.error('Strapi API Error:', error.response.data);
+        const errorMessage = error.response.data?.error?.message || 
+                           JSON.stringify(error.response.data) || 
+                           'Hiba történt az anyag törlése során';
+        throw new Error(errorMessage);
+      }
+      throw error;
+    }
+  },
 };

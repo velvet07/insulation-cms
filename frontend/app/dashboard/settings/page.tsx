@@ -47,7 +47,8 @@ import {
 } from '@/components/ui/table';
 import { companiesApi } from '@/lib/api/companies';
 import { photoCategoriesApi } from '@/lib/api/photo-categories';
-import { Building2, Plus, Trash2, Edit, FolderTree } from 'lucide-react';
+import { materialsApi, type Material } from '@/lib/api/materials';
+import { Building2, Plus, Trash2, Edit, FolderTree, Package } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { isAdminRole } from '@/lib/utils/user-role';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -78,6 +79,15 @@ export default function SettingsPage() {
   const [categoryName, setCategoryName] = useState('');
   const [categoryRequired, setCategoryRequired] = useState(false);
 
+  // Material type management states
+  const [isMaterialDialogOpen, setIsMaterialDialogOpen] = useState(false);
+  const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
+  const [materialName, setMaterialName] = useState('');
+  const [materialCategory, setMaterialCategory] = useState<Material['category']>('insulation');
+  const [materialThickness, setMaterialThickness] = useState<Material['thickness_cm']>();
+  const [materialCoverage, setMaterialCoverage] = useState('');
+  const [materialRollsPerPallet, setMaterialRollsPerPallet] = useState('24');
+
   // Memoize admin check to avoid recalculating on every render
   const isAdmin = useMemo(() => isAdminRole(user), [user]);
 
@@ -97,6 +107,13 @@ export default function SettingsPage() {
   const { data: categories = [], isLoading: isLoadingCategories } = useQuery({
     queryKey: ['photo-categories'],
     queryFn: () => photoCategoriesApi.getAll(),
+    enabled: isAdmin,
+  });
+
+  // Fetch materials
+  const { data: materials = [], isLoading: isLoadingMaterials } = useQuery({
+    queryKey: ['materials'],
+    queryFn: () => materialsApi.getAll(),
     enabled: isAdmin,
   });
 
@@ -304,9 +321,127 @@ export default function SettingsPage() {
     }
   };
 
+  // Material mutations
+  const createMaterialMutation = useMutation({
+    mutationFn: async (data: Partial<Material>) => {
+      return materialsApi.create(data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['materials'] });
+      setIsMaterialDialogOpen(false);
+      setEditingMaterial(null);
+      setMaterialName('');
+      setMaterialCategory('insulation');
+      setMaterialThickness(undefined);
+      setMaterialCoverage('');
+      setMaterialRollsPerPallet('24');
+    },
+    onError: (error: any) => {
+      alert(error.message || 'Hiba történt az anyag létrehozása során');
+    },
+  });
+
+  const updateMaterialMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number | string; data: Partial<Material> }) => {
+      return materialsApi.update(id, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['materials'] });
+      setIsMaterialDialogOpen(false);
+      setEditingMaterial(null);
+      setMaterialName('');
+      setMaterialCategory('insulation');
+      setMaterialThickness(undefined);
+      setMaterialCoverage('');
+      setMaterialRollsPerPallet('24');
+    },
+    onError: (error: any) => {
+      alert(error.message || 'Hiba történt az anyag frissítése során');
+    },
+  });
+
+  const deleteMaterialMutation = useMutation({
+    mutationFn: async (id: number | string) => {
+      await materialsApi.delete(id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['materials'] });
+    },
+    onError: (error: any) => {
+      alert(error.message || 'Hiba történt az anyag törlése során');
+    },
+  });
+
+  // Material handlers
+  const handleMaterialCreate = () => {
+    if (!materialName.trim() || !materialCoverage) return;
+
+    const materialData: Partial<Material> = {
+      name: materialName.trim(),
+      category: materialCategory,
+      coverage_per_roll: parseFloat(materialCoverage),
+      rolls_per_pallet: parseInt(materialRollsPerPallet) || 24,
+    };
+
+    if (materialCategory === 'insulation' && materialThickness) {
+      materialData.thickness_cm = materialThickness;
+    }
+
+    createMaterialMutation.mutate(materialData);
+  };
+
+  const handleMaterialEdit = (material: Material) => {
+    setEditingMaterial(material);
+    setMaterialName(material.name);
+    setMaterialCategory(material.category);
+    setMaterialThickness(material.thickness_cm);
+    setMaterialCoverage(material.coverage_per_roll?.toString() || '');
+    setMaterialRollsPerPallet(material.rolls_per_pallet?.toString() || '24');
+    setIsMaterialDialogOpen(true);
+  };
+
+  const handleMaterialUpdate = () => {
+    if (!editingMaterial || !materialName.trim() || !materialCoverage) return;
+
+    const identifier = editingMaterial.documentId || editingMaterial.id;
+    const materialData: Partial<Material> = {
+      name: materialName.trim(),
+      category: materialCategory,
+      coverage_per_roll: parseFloat(materialCoverage),
+      rolls_per_pallet: parseInt(materialRollsPerPallet) || 24,
+    };
+
+    if (materialCategory === 'insulation') {
+      materialData.thickness_cm = materialThickness;
+    } else {
+      materialData.thickness_cm = undefined;
+    }
+
+    updateMaterialMutation.mutate({ id: identifier!, data: materialData });
+  };
+
+  const handleMaterialDelete = (material: Material) => {
+    if (confirm(`Biztosan törölni szeretné ezt az anyagot: ${material.name}?`)) {
+      const identifier = material.documentId || material.id;
+      deleteMaterialMutation.mutate(identifier!);
+    }
+  };
+
   const companyTypeLabels: Record<string, string> = {
     main_contractor: 'Fővállalkozó',
     subcontractor: 'Alvállalkozó',
+  };
+
+  const materialCategoryLabels: Record<Material['category'], string> = {
+    insulation: 'Szigetelőanyag',
+    vapor_barrier: 'Párazáró fólia',
+    breathable_membrane: 'Légáteresztő fólia',
+  };
+
+  const thicknessLabels: Record<NonNullable<Material['thickness_cm']>, string> = {
+    cm10: '10 cm',
+    cm12_5: '12.5 cm',
+    cm15: '15 cm',
   };
 
   if (!isAdmin) {
@@ -717,6 +852,205 @@ export default function SettingsPage() {
                             <span className="text-xs text-gray-500">Nem szerkeszthető</span>
                           )}
         </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Anyagtípusok kezelése */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Package className="h-5 w-5" />
+                  Anyagtípusok kezelése
+                </CardTitle>
+                <CardDescription>
+                  Hozz létre és kezelj anyagtípusokat (szigetelőanyag, párazáró fólia, légáteresztő fólia)
+                </CardDescription>
+              </div>
+              <Dialog open={isMaterialDialogOpen} onOpenChange={(open) => {
+                setIsMaterialDialogOpen(open);
+                if (!open) {
+                  setEditingMaterial(null);
+                  setMaterialName('');
+                  setMaterialCategory('insulation');
+                  setMaterialThickness(undefined);
+                  setMaterialCoverage('');
+                  setMaterialRollsPerPallet('24');
+                }
+              }}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Új anyag
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>
+                      {editingMaterial ? 'Anyag szerkesztése' : 'Új anyag'}
+                    </DialogTitle>
+                    <DialogDescription>
+                      {editingMaterial 
+                        ? 'Módosítsa az anyag beállításait.' 
+                        : 'Adja meg az anyag típusát és paramétereit.'}
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div>
+                      <Label htmlFor="material-name">Anyag neve *</Label>
+                      <Input
+                        id="material-name"
+                        value={materialName}
+                        onChange={(e) => setMaterialName(e.target.value)}
+                        placeholder="pl. Szigetelő 10cm"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="material-category">Kategória *</Label>
+                      <Select value={materialCategory} onValueChange={(v: Material['category']) => setMaterialCategory(v)}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="insulation">Szigetelőanyag</SelectItem>
+                          <SelectItem value="vapor_barrier">Párazáró fólia</SelectItem>
+                          <SelectItem value="breathable_membrane">Légáteresztő fólia</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {materialCategory === 'insulation' && (
+                      <div>
+                        <Label htmlFor="material-thickness">Vastagság</Label>
+                        <Select value={materialThickness || ''} onValueChange={(v: Material['thickness_cm']) => setMaterialThickness(v || undefined)}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Válasszon vastagságot" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="cm10">10 cm</SelectItem>
+                            <SelectItem value="cm12_5">12.5 cm</SelectItem>
+                            <SelectItem value="cm15">15 cm</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    <div>
+                      <Label htmlFor="material-coverage">m²/tekercs *</Label>
+                      <Input
+                        id="material-coverage"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={materialCoverage}
+                        onChange={(e) => setMaterialCoverage(e.target.value)}
+                        placeholder="pl. 9.24"
+                      />
+                    </div>
+                    {materialCategory === 'insulation' && (
+                      <div>
+                        <Label htmlFor="material-rolls-per-pallet">Tekercs/raklap</Label>
+                        <Input
+                          id="material-rolls-per-pallet"
+                          type="number"
+                          min="1"
+                          value={materialRollsPerPallet}
+                          onChange={(e) => setMaterialRollsPerPallet(e.target.value)}
+                          placeholder="24"
+                        />
+                      </div>
+                    )}
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setIsMaterialDialogOpen(false);
+                        setEditingMaterial(null);
+                        setMaterialName('');
+                        setMaterialCategory('insulation');
+                        setMaterialThickness(undefined);
+                        setMaterialCoverage('');
+                        setMaterialRollsPerPallet('24');
+                      }}
+                    >
+                      Mégse
+                    </Button>
+                    <Button
+                      onClick={editingMaterial ? handleMaterialUpdate : handleMaterialCreate}
+                      disabled={!materialName.trim() || !materialCoverage || createMaterialMutation.isPending || updateMaterialMutation.isPending}
+                    >
+                      {createMaterialMutation.isPending || updateMaterialMutation.isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Mentés...
+                        </>
+                      ) : (
+                        editingMaterial ? 'Mentés' : 'Létrehozás'
+                      )}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {isLoadingMaterials ? (
+              <p className="text-gray-500 text-center py-8">Betöltés...</p>
+            ) : materials.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">Még nincs anyag létrehozva.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Név</TableHead>
+                    <TableHead>Kategória</TableHead>
+                    <TableHead>Vastagság</TableHead>
+                    <TableHead>m²/tekercs</TableHead>
+                    <TableHead>Tekercs/raklap</TableHead>
+                    <TableHead className="text-right">Műveletek</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {materials.map((material) => (
+                    <TableRow key={material.id || material.documentId}>
+                      <TableCell className="font-medium">
+                        {material.name}
+                      </TableCell>
+                      <TableCell>
+                        {materialCategoryLabels[material.category]}
+                      </TableCell>
+                      <TableCell>
+                        {material.thickness_cm ? thicknessLabels[material.thickness_cm] : '-'}
+                      </TableCell>
+                      <TableCell>
+                        {material.coverage_per_roll?.toFixed(2) || '-'}
+                      </TableCell>
+                      <TableCell>
+                        {material.rolls_per_pallet || '-'}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleMaterialEdit(material)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleMaterialDelete(material)}
+                          >
+                            <Trash2 className="h-4 w-4 text-red-600" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
