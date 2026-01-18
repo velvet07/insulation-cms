@@ -34,7 +34,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { photosApi } from '@/lib/api/photos';
 import { photoCategoriesApi } from '@/lib/api/photo-categories';
 import type { Photo, PhotoCategory, Project } from '@/types';
-import { Plus, Trash2, Upload, Loader2, X, Image as ImageIcon, Edit, Grid3x3, List } from 'lucide-react';
+import { Plus, Trash2, Upload, Loader2, X, Image as ImageIcon, Edit, Grid3x3, List, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth';
 import { createAuditLogEntry, addAuditLogEntry } from '@/lib/utils/audit-log';
 import { projectsApi } from '@/lib/api/projects';
@@ -58,6 +58,10 @@ export function PhotosTab({ project }: PhotosTabProps) {
   const [dragActive, setDragActive] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'gallery'>('list');
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<Set<string>>(new Set());
+  const [lightboxPhoto, setLightboxPhoto] = useState<Photo | null>(null);
+  const [isCategoryChangeDialogOpen, setIsCategoryChangeDialogOpen] = useState(false);
+  const [categoryChangeTargetId, setCategoryChangeTargetId] = useState<string | null>(null);
+  const [newCategoryId, setNewCategoryId] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const projectId = project.documentId || project.id;
@@ -86,6 +90,14 @@ export function PhotosTab({ project }: PhotosTabProps) {
     },
     enabled: !!projectId && !isLoadingCategories, // Only fetch if categories are loaded
     retry: false, // Don't retry if 404 - content types might not be created yet
+  });
+
+  // Fetch all photos for lightbox navigation (always fetch to enable navigation across all photos)
+  const { data: allPhotos = [] } = useQuery({
+    queryKey: ['photos', projectId, 'all'],
+    queryFn: () => photosApi.getAll({ project: projectId }),
+    enabled: !!projectId && !isLoadingCategories,
+    retry: false,
   });
 
   // Group photos by category
@@ -177,6 +189,78 @@ export function PhotosTab({ project }: PhotosTabProps) {
     },
   });
 
+  // Bulk category update mutation
+  const bulkCategoryUpdateMutation = useMutation({
+    mutationFn: async ({ photoIds, categoryId }: { photoIds: string[]; categoryId: string | number }) => {
+      // Update all selected photos to the new category
+      await Promise.all(
+        photoIds.map(id => photosApi.update(id, { category: categoryId }))
+      );
+      
+      // Audit log
+      const auditLogEntry = createAuditLogEntry(
+        'photo_category_changed',
+        user,
+        `${photoIds.length} fénykép kategóriája módosítva: ${categories.find(c => (c.documentId || c.id).toString() === categoryId.toString())?.name || 'Ismeretlen'}`
+      );
+      auditLogEntry.module = 'Fényképek';
+      
+      try {
+        const currentProject = await projectsApi.getOne(projectId);
+        const updatedAuditLog = addAuditLogEntry(currentProject.audit_log, auditLogEntry);
+        await projectsApi.update(projectId, {
+          audit_log: updatedAuditLog,
+        });
+      } catch (error: any) {
+        if (!error?.message?.includes('Invalid key audit_log')) {
+          console.error('Error updating audit log:', error);
+        }
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['photos', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+      setSelectedPhotoIds(new Set());
+      setIsCategoryChangeDialogOpen(false);
+      setNewCategoryId('');
+    },
+  });
+
+  // Single photo category update mutation
+  const photoCategoryUpdateMutation = useMutation({
+    mutationFn: async ({ photoId, categoryId }: { photoId: string | number; categoryId: string | number }) => {
+      await photosApi.update(photoId, { category: categoryId });
+      
+      // Audit log
+      const photo = photos.find(p => (p.documentId || p.id).toString() === photoId.toString());
+      const auditLogEntry = createAuditLogEntry(
+        'photo_category_changed',
+        user,
+        `Fénykép kategóriája módosítva: ${categories.find(c => (c.documentId || c.id).toString() === categoryId.toString())?.name || 'Ismeretlen'}`
+      );
+      auditLogEntry.module = 'Fényképek';
+      
+      try {
+        const currentProject = await projectsApi.getOne(projectId);
+        const updatedAuditLog = addAuditLogEntry(currentProject.audit_log, auditLogEntry);
+        await projectsApi.update(projectId, {
+          audit_log: updatedAuditLog,
+        });
+      } catch (error: any) {
+        if (!error?.message?.includes('Invalid key audit_log')) {
+          console.error('Error updating audit log:', error);
+        }
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['photos', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+      setIsCategoryChangeDialogOpen(false);
+      setCategoryChangeTargetId(null);
+      setNewCategoryId('');
+    },
+  });
+
   // Bulk delete mutation
   const bulkDeleteMutation = useMutation({
     mutationFn: async (photoIds: string[]) => {
@@ -220,8 +304,11 @@ export function PhotosTab({ project }: PhotosTabProps) {
       return category;
     },
     onSuccess: () => {
+      // Invalidate both category and photos queries to ensure new categories appear
       queryClient.invalidateQueries({ queryKey: ['photo-categories'] });
+      queryClient.invalidateQueries({ queryKey: ['photos', projectId] });
       setIsCategoryDialogOpen(false);
+      setEditingCategory(null);
       setCategoryName('');
       setCategoryRequired(false);
     },
@@ -408,6 +495,53 @@ export function PhotosTab({ project }: PhotosTabProps) {
     if (confirm(`Biztosan törölni szeretné ezt a kategóriát: ${category.name}?`)) {
       const identifier = category.documentId || category.id;
       deleteCategoryMutation.mutate(identifier);
+    }
+  };
+
+  // Lightbox handlers
+  const openLightbox = (photo: Photo) => {
+    setLightboxPhoto(photo);
+  };
+
+  const closeLightbox = () => {
+    setLightboxPhoto(null);
+  };
+
+  const navigateLightbox = (direction: 'prev' | 'next') => {
+    if (!lightboxPhoto) return;
+    
+    // Use allPhotos for navigation if available, otherwise use current photos
+    const photosForNavigation = allPhotos.length > 0 ? allPhotos : photos;
+    const currentIndex = photosForNavigation.findIndex(p => 
+      (p.documentId || p.id).toString() === (lightboxPhoto.documentId || lightboxPhoto.id).toString()
+    );
+    
+    if (direction === 'prev' && currentIndex > 0) {
+      setLightboxPhoto(photosForNavigation[currentIndex - 1]);
+    } else if (direction === 'next' && currentIndex < photosForNavigation.length - 1) {
+      setLightboxPhoto(photosForNavigation[currentIndex + 1]);
+    }
+  };
+
+  // Category change handlers
+  const handleOpenCategoryChangeDialog = (photoId?: string) => {
+    if (photoId) {
+      setCategoryChangeTargetId(photoId);
+    } else {
+      setCategoryChangeTargetId(null); // Bulk update
+    }
+    setIsCategoryChangeDialogOpen(true);
+  };
+
+  const handleCategoryChange = () => {
+    if (!newCategoryId) return;
+    
+    if (categoryChangeTargetId) {
+      // Single photo update
+      photoCategoryUpdateMutation.mutate({ photoId: categoryChangeTargetId, categoryId: newCategoryId });
+    } else {
+      // Bulk update
+      bulkCategoryUpdateMutation.mutate({ photoIds: Array.from(selectedPhotoIds), categoryId: newCategoryId });
     }
   };
 
@@ -682,7 +816,7 @@ export function PhotosTab({ project }: PhotosTabProps) {
                     disabled={category.required === true}
                     title={category.required === true ? 'A kötelező kategóriák nem szerkeszthetők' : 'Szerkesztés'}
                   >
-                    <Edit className="h-3 w-3" />
+                    <Edit className={`h-3 w-3 ${category.required ? 'opacity-50' : ''}`} />
                   </Button>
                   <Button
                     variant="ghost"
@@ -692,7 +826,7 @@ export function PhotosTab({ project }: PhotosTabProps) {
                     disabled={category.required === true}
                     title={category.required === true ? 'A kötelező kategóriák nem törölhetők' : 'Törlés'}
                   >
-                    <Trash2 className="h-3 w-3" />
+                    <Trash2 className={`h-3 w-3 ${category.required ? 'opacity-50' : ''}`} />
                   </Button>
                 </div>
               )}
@@ -774,15 +908,26 @@ export function PhotosTab({ project }: PhotosTabProps) {
                 )}
               </div>
               {selectedPhotoIds.size > 0 && (
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={handleBulkDelete}
-                  disabled={bulkDeleteMutation.isPending}
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  {bulkDeleteMutation.isPending ? 'Törlés...' : `${selectedPhotoIds.size} kép törlése`}
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleOpenCategoryChangeDialog()}
+                    disabled={bulkCategoryUpdateMutation.isPending}
+                  >
+                    <Edit className="mr-2 h-4 w-4" />
+                    Kategória módosítása ({selectedPhotoIds.size})
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleBulkDelete}
+                    disabled={bulkDeleteMutation.isPending}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    {bulkDeleteMutation.isPending ? 'Törlés...' : `${selectedPhotoIds.size} kép törlése`}
+                  </Button>
+                </div>
               )}
             </div>
           )}
@@ -820,18 +965,16 @@ export function PhotosTab({ project }: PhotosTabProps) {
                           </TableCell>
                           <TableCell>
                             {imageUrl ? (
-                              <a
-                                href={fullImageUrl || imageUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="block w-16 h-16 rounded overflow-hidden border border-gray-200 dark:border-gray-700"
+                              <button
+                                onClick={() => openLightbox(photo)}
+                                className="block w-16 h-16 rounded overflow-hidden border border-gray-200 dark:border-gray-700 hover:opacity-80 transition-opacity cursor-pointer"
                               >
                                 <img
                                   src={imageUrl}
                                   alt={photo.name || 'Fénykép'}
                                   className="w-full h-full object-cover"
                                 />
-                              </a>
+                              </button>
                             ) : (
                               <div className="w-16 h-16 rounded bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
                                 <ImageIcon className="h-6 w-6 text-gray-400" />
@@ -842,7 +985,28 @@ export function PhotosTab({ project }: PhotosTabProps) {
                             {photo.name || `Fénykép ${photo.id}`}
                           </TableCell>
                           <TableCell>
-                            {photo.category?.name || '-'}
+                            <Select
+                              value={(photo.category?.documentId || photo.category?.id)?.toString() || ''}
+                              onValueChange={(value) => {
+                                photoCategoryUpdateMutation.mutate({ photoId, categoryId: value });
+                              }}
+                              disabled={photoCategoryUpdateMutation.isPending}
+                            >
+                              <SelectTrigger className="w-48">
+                                <SelectValue placeholder="Válasszon kategóriát" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {categories.map((category) => (
+                                  <SelectItem
+                                    key={(category.documentId || category.id).toString()}
+                                    value={(category.documentId || category.id).toString()}
+                                  >
+                                    {category.name}
+                                    {category.required && <span className="ml-1 text-xs opacity-75">*</span>}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </TableCell>
                           <TableCell>
                             {new Date(photo.createdAt).toLocaleDateString('hu-HU')}
@@ -853,7 +1017,7 @@ export function PhotosTab({ project }: PhotosTabProps) {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  onClick={() => window.open(fullImageUrl || imageUrl, '_blank')}
+                                  onClick={() => openLightbox(photo)}
                                 >
                                   <ImageIcon className="h-4 w-4" />
                                 </Button>
@@ -875,97 +1039,108 @@ export function PhotosTab({ project }: PhotosTabProps) {
               </div>
             </div>
           ) : (
-            Object.entries(photosByCategory).map(([categoryId, { category, photos: categoryPhotos }]) => (
-              <Card key={categoryId}>
-                <CardHeader>
-                  <CardTitle className="flex items-center justify-between">
-                    <span>{category?.name || 'Kategorizálatlan'}</span>
-                    <span className="text-sm font-normal text-gray-500">
-                      ({categoryPhotos.length} fénykép)
-                    </span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-12"></TableHead>
-                          <TableHead>Kép</TableHead>
-                          <TableHead>Név</TableHead>
-                          <TableHead>Feltöltve</TableHead>
-                          <TableHead className="text-right">Műveletek</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {categoryPhotos.map((photo) => {
-                          const imageUrl = getImageUrl(photo);
-                          const fullImageUrl = getFullImageUrl(photo);
-                          const photoId = (photo.documentId || photo.id).toString();
-                          
-                          return (
-                            <TableRow key={photoId}>
-                              <TableCell>
-                                <Checkbox
-                                  checked={selectedPhotoIds.has(photoId)}
-                                  onCheckedChange={() => handleTogglePhotoSelection(photoId)}
-                                />
-                              </TableCell>
-                              <TableCell>
-                                {imageUrl ? (
-                                  <a
-                                    href={fullImageUrl || imageUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="block w-16 h-16 rounded overflow-hidden border border-gray-200 dark:border-gray-700"
-                                  >
-                                    <img
-                                      src={imageUrl}
-                                      alt={photo.name || 'Fénykép'}
-                                      className="w-full h-full object-cover"
-                                    />
-                                  </a>
-                                ) : (
-                                  <div className="w-16 h-16 rounded bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-                                    <ImageIcon className="h-6 w-6 text-gray-400" />
-                                  </div>
-                                )}
-                              </TableCell>
-                              <TableCell className="font-medium">
-                                {photo.name || `Fénykép ${photo.id}`}
-                              </TableCell>
-                              <TableCell>
-                                {new Date(photo.createdAt).toLocaleDateString('hu-HU')}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <div className="flex justify-end gap-2">
-                                  {imageUrl && (
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => window.open(fullImageUrl || imageUrl, '_blank')}
-                                    >
-                                      <ImageIcon className="h-4 w-4" />
-                                    </Button>
-                                  )}
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => handleDelete(photo)}
-                                  >
-                                    <Trash2 className="h-4 w-4 text-red-500" />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </CardContent>
-              </Card>
-            ))
+            // "Összes" nézet: egy lista kategóriával
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12"></TableHead>
+                    <TableHead>Kép</TableHead>
+                    <TableHead>Név</TableHead>
+                    <TableHead>Kategória</TableHead>
+                    <TableHead>Feltöltve</TableHead>
+                    <TableHead className="text-right">Műveletek</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {photos.map((photo) => {
+                    const imageUrl = getImageUrl(photo);
+                    const fullImageUrl = getFullImageUrl(photo);
+                    const photoId = (photo.documentId || photo.id).toString();
+                    const currentCategoryId = (photo.category?.documentId || photo.category?.id)?.toString() || '';
+                    
+                    return (
+                      <TableRow key={photoId}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedPhotoIds.has(photoId)}
+                            onCheckedChange={() => handleTogglePhotoSelection(photoId)}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          {imageUrl ? (
+                            <button
+                              onClick={() => openLightbox(photo)}
+                              className="block w-16 h-16 rounded overflow-hidden border border-gray-200 dark:border-gray-700 hover:opacity-80 transition-opacity cursor-pointer"
+                            >
+                              <img
+                                src={imageUrl}
+                                alt={photo.name || 'Fénykép'}
+                                className="w-full h-full object-cover"
+                              />
+                            </button>
+                          ) : (
+                            <div className="w-16 h-16 rounded bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                              <ImageIcon className="h-6 w-6 text-gray-400" />
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {photo.name || `Fénykép ${photo.id}`}
+                        </TableCell>
+                        <TableCell>
+                          <Select
+                            value={currentCategoryId}
+                            onValueChange={(value) => {
+                              photoCategoryUpdateMutation.mutate({ photoId, categoryId: value });
+                            }}
+                            disabled={photoCategoryUpdateMutation.isPending}
+                          >
+                            <SelectTrigger className="w-48">
+                              <SelectValue placeholder="Válasszon kategóriát" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {categories.map((category) => (
+                                <SelectItem
+                                  key={(category.documentId || category.id).toString()}
+                                  value={(category.documentId || category.id).toString()}
+                                >
+                                  {category.name}
+                                  {category.required && <span className="ml-1 text-xs opacity-75">*</span>}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          {new Date(photo.createdAt).toLocaleDateString('hu-HU')}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            {imageUrl && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => openLightbox(photo)}
+                              >
+                                <ImageIcon className="h-4 w-4" />
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDelete(photo)}
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </div>
       ) : (
@@ -996,15 +1171,26 @@ export function PhotosTab({ project }: PhotosTabProps) {
                 )}
               </div>
               {selectedPhotoIds.size > 0 && (
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={handleBulkDelete}
-                  disabled={bulkDeleteMutation.isPending}
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  {bulkDeleteMutation.isPending ? 'Törlés...' : `${selectedPhotoIds.size} kép törlése`}
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleOpenCategoryChangeDialog()}
+                    disabled={bulkCategoryUpdateMutation.isPending}
+                  >
+                    <Edit className="mr-2 h-4 w-4" />
+                    Kategória módosítása ({selectedPhotoIds.size})
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleBulkDelete}
+                    disabled={bulkDeleteMutation.isPending}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    {bulkDeleteMutation.isPending ? 'Törlés...' : `${selectedPhotoIds.size} kép törlése`}
+                  </Button>
+                </div>
               )}
             </div>
           )}
@@ -1035,18 +1221,16 @@ export function PhotosTab({ project }: PhotosTabProps) {
                           className="bg-white dark:bg-gray-800 border-2"
                         />
                       </div>
-                      <a
-                        href={fullImageUrl || imageUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block aspect-square rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800"
+                      <button
+                        onClick={() => openLightbox(photo)}
+                        className="block aspect-square rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 hover:opacity-80 transition-opacity cursor-pointer"
                       >
                         <img
                           src={imageUrl}
                           alt={photo.name || 'Fénykép'}
                           className="w-full h-full object-cover"
                         />
-                      </a>
+                      </button>
                       <button
                         onClick={() => handleDelete(photo)}
                         className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -1091,18 +1275,16 @@ export function PhotosTab({ project }: PhotosTabProps) {
                               className="bg-white dark:bg-gray-800 border-2"
                             />
                           </div>
-                          <a
-                            href={fullImageUrl || imageUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="block aspect-square rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800"
+                          <button
+                            onClick={() => openLightbox(photo)}
+                            className="block aspect-square rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 hover:opacity-80 transition-opacity cursor-pointer"
                           >
                             <img
                               src={imageUrl}
                               alt={photo.name || 'Fénykép'}
                               className="w-full h-full object-cover"
                             />
-                          </a>
+                          </button>
                           <button
                             onClick={() => handleDelete(photo)}
                             className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -1118,6 +1300,125 @@ export function PhotosTab({ project }: PhotosTabProps) {
             ))
           )}
         </div>
+      )}
+
+      {/* Category Change Dialog */}
+      <Dialog open={isCategoryChangeDialogOpen} onOpenChange={setIsCategoryChangeDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {categoryChangeTargetId ? 'Kategória módosítása' : `${selectedPhotoIds.size} fénykép kategóriájának módosítása`}
+            </DialogTitle>
+            <DialogDescription>
+              Válassza ki az új kategóriát.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="new-category-select">Kategória *</Label>
+            <Select value={newCategoryId} onValueChange={setNewCategoryId}>
+              <SelectTrigger id="new-category-select">
+                <SelectValue placeholder="Válasszon kategóriát" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((category) => (
+                  <SelectItem
+                    key={(category.documentId || category.id).toString()}
+                    value={(category.documentId || category.id).toString()}
+                  >
+                    {category.name}
+                    {category.required && <span className="ml-1 text-xs opacity-75">*</span>}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsCategoryChangeDialogOpen(false);
+                setNewCategoryId('');
+                setCategoryChangeTargetId(null);
+              }}
+            >
+              Mégse
+            </Button>
+            <Button
+              onClick={handleCategoryChange}
+              disabled={!newCategoryId || photoCategoryUpdateMutation.isPending || bulkCategoryUpdateMutation.isPending}
+            >
+              {photoCategoryUpdateMutation.isPending || bulkCategoryUpdateMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Mentés...
+                </>
+              ) : (
+                'Mentés'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Lightbox Modal */}
+      {lightboxPhoto && (
+        <Dialog open={!!lightboxPhoto} onOpenChange={closeLightbox}>
+          <DialogContent className="max-w-7xl w-full p-0 bg-black/95 border-none">
+            <div className="relative w-full h-[90vh] flex items-center justify-center">
+              <button
+                onClick={closeLightbox}
+                className="absolute top-4 right-4 z-50 text-white hover:text-gray-300 p-2"
+              >
+                <X className="h-6 w-6" />
+              </button>
+              
+              {(() => {
+                const photosForNavigation = allPhotos.length > 0 ? allPhotos : photos;
+                const currentIndex = photosForNavigation.findIndex(p => 
+                  (p.documentId || p.id).toString() === (lightboxPhoto.documentId || lightboxPhoto.id).toString()
+                );
+                
+                return photosForNavigation.length > 1 ? (
+                  <>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigateLightbox('prev');
+                      }}
+                      disabled={currentIndex === 0}
+                      className="absolute left-4 z-50 text-white hover:text-gray-300 p-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ChevronLeft className="h-8 w-8" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigateLightbox('next');
+                      }}
+                      disabled={currentIndex === photosForNavigation.length - 1}
+                      className="absolute right-4 z-50 text-white hover:text-gray-300 p-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ChevronRight className="h-8 w-8" />
+                    </button>
+                    <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-white text-sm">
+                      {currentIndex + 1} / {photosForNavigation.length}
+                    </div>
+                  </>
+                ) : null;
+              })()}
+              
+              {getFullImageUrl(lightboxPhoto) ? (
+                <img
+                  src={getFullImageUrl(lightboxPhoto) || ''}
+                  alt={lightboxPhoto.name || 'Fénykép'}
+                  className="max-w-full max-h-full object-contain"
+                />
+              ) : (
+                <div className="text-white">Kép nem elérhető</div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
