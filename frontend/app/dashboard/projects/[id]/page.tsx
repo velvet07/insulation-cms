@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -25,6 +25,11 @@ import type { Project, ProjectAuditLogEntry, Company } from '@/types';
 import { ContractForm, type ContractDataFormValues } from './contract-form';
 import { formatDate, formatPhoneNumber } from '@/lib/utils';
 import { createAuditLogEntry, addAuditLogEntry } from '@/lib/utils/audit-log';
+import {
+  generateGoogleCalendarUrl,
+  downloadAppleCalendarFile,
+  generateCalendarEventFromProject,
+} from '@/lib/utils/calendar-export';
 import { useAuthStore } from '@/lib/store/auth';
 import { DocumentsTab } from './documents-tab';
 import { PhotosTab } from './photos-tab';
@@ -50,6 +55,10 @@ import {
   Camera,
   FileText,
   Building2,
+  Clock,
+  ExternalLink,
+  Download,
+  Save,
 } from 'lucide-react';
 import {
   Select,
@@ -93,6 +102,10 @@ export default function ProjectDetailPage() {
   const [activeTab, setActiveTab] = useState<'info' | 'contract' | 'documents' | 'photos'>('info');
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isSubcontractorDialogOpen, setIsSubcontractorDialogOpen] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState('');
+  const [scheduleStartTime, setScheduleStartTime] = useState('08:00');
+  const [scheduleEndTime, setScheduleEndTime] = useState('16:00');
+  const [isSavingSchedule, setIsSavingSchedule] = useState(false);
 
   const { data: project, isLoading, error } = useQuery({
     queryKey: ['project', projectId],
@@ -100,6 +113,38 @@ export default function ProjectDetailPage() {
     enabled: !!projectId,
     retry: 1,
   });
+
+  // Betöltjük a meglévő ütemezést
+  useEffect(() => {
+    if (project?.scheduled_date) {
+      // scheduled_date lehet date vagy datetime formátumban
+      const scheduledDate = new Date(project.scheduled_date);
+      if (!isNaN(scheduledDate.getTime())) {
+        // Dátum formázása YYYY-MM-DD formátumban
+        const year = scheduledDate.getFullYear();
+        const month = String(scheduledDate.getMonth() + 1).padStart(2, '0');
+        const day = String(scheduledDate.getDate()).padStart(2, '0');
+        setScheduleDate(`${year}-${month}-${day}`);
+        
+        // Alapértelmezett időtartam: 8:00-16:00
+        // Ha a dátum tartalmaz időt (nem csak dátum), akkor azt használjuk
+        const hours = scheduledDate.getHours();
+        const minutes = scheduledDate.getMinutes();
+        if (hours !== 0 || minutes !== 0) {
+          setScheduleStartTime(`${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`);
+          // Vég idő: +8 óra
+          const endDate = new Date(scheduledDate);
+          endDate.setHours(hours + 8);
+          setScheduleEndTime(`${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}`);
+        }
+      }
+    } else {
+      // Ha nincs scheduled_date, töröljük a mezőket
+      setScheduleDate('');
+      setScheduleStartTime('08:00');
+      setScheduleEndTime('16:00');
+    }
+  }, [project?.scheduled_date]);
 
   const { data: documents = [] } = useQuery({
     queryKey: ['documents', projectId],
@@ -369,6 +414,110 @@ export default function ProjectDetailPage() {
     } finally {
       setIsUpdatingStatus(false);
     }
+  };
+
+  // Ütemezés mentése
+  const saveScheduleMutation = useMutation({
+    mutationFn: async () => {
+      if (!scheduleDate) {
+        throw new Error('Dátum megadása kötelező');
+      }
+
+      // Dátum és idő kombinálása
+      const [startHour, startMinute] = scheduleStartTime.split(':').map(Number);
+      const scheduledDateTime = new Date(`${scheduleDate}T${scheduleStartTime}:00`);
+      
+      const auditLogEntry = createAuditLogEntry(
+        project?.scheduled_date ? 'scheduled_date_modified' : 'scheduled_date_set',
+        user,
+        `Ütemezett dátum: ${scheduleDate} ${scheduleStartTime}-${scheduleEndTime}`
+      );
+
+      const updateData: any = {
+        scheduled_date: scheduleDate, // Csak dátumot küldünk (date típus)
+        audit_log: addAuditLogEntry(project?.audit_log || [], auditLogEntry),
+      };
+
+      // Szűrjük ki a szerveren még nem létező mezőket
+      const fieldsNotOnServer = ['audit_log'];
+      const cleanUpdateData = Object.fromEntries(
+        Object.entries(updateData).filter(([key]) => !fieldsNotOnServer.includes(key))
+      );
+
+      await projectsApi.update(projectId, cleanUpdateData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      console.log('Ütemezés sikeresen mentve');
+    },
+    onError: (error: any) => {
+      console.error('Hiba az ütemezés mentésekor:', error);
+    },
+  });
+
+  const handleSaveSchedule = async () => {
+    setIsSavingSchedule(true);
+    try {
+      await saveScheduleMutation.mutateAsync();
+    } catch (error) {
+      // Hiba kezelés
+    } finally {
+      setIsSavingSchedule(false);
+    }
+  };
+
+  // Calendar export funkciók
+  const handleGoogleCalendarExport = () => {
+    if (!project) return;
+    
+    // Ha nincs scheduled_date, nincs mit exportálni
+    if (!project.scheduled_date && !scheduleDate) {
+      return;
+    }
+    
+    // Ha van scheduleDate a form-ban, azt használjuk, különben a project.scheduled_date-et
+    const dateToUse = scheduleDate || project.scheduled_date;
+    const tempProject = { ...project, scheduled_date: dateToUse };
+    
+    const calendarData = generateCalendarEventFromProject(tempProject);
+    
+    // Ha van idő beállítva a form-ban, azt használjuk
+    if (scheduleDate && scheduleStartTime && scheduleEndTime) {
+      const [startHour, startMinute] = scheduleStartTime.split(':').map(Number);
+      const [endHour, endMinute] = scheduleEndTime.split(':').map(Number);
+      const startDate = new Date(`${scheduleDate}T${scheduleStartTime}:00`);
+      const endDate = new Date(`${scheduleDate}T${scheduleEndTime}:00`);
+      calendarData.startDate = startDate;
+      calendarData.endDate = endDate;
+    }
+    
+    const googleUrl = generateGoogleCalendarUrl(calendarData);
+    window.open(googleUrl, '_blank');
+  };
+
+  const handleAppleCalendarExport = () => {
+    if (!project) return;
+    
+    if (!project.scheduled_date && !scheduleDate) {
+      return;
+    }
+    
+    const dateToUse = scheduleDate || project.scheduled_date;
+    const tempProject = { ...project, scheduled_date: dateToUse };
+    
+    const calendarData = generateCalendarEventFromProject(tempProject);
+    
+    // Ha van idő beállítva a form-ban, azt használjuk
+    if (scheduleDate && scheduleStartTime && scheduleEndTime) {
+      const startDate = new Date(`${scheduleDate}T${scheduleStartTime}:00`);
+      const endDate = new Date(`${scheduleDate}T${scheduleEndTime}:00`);
+      calendarData.startDate = startDate;
+      calendarData.endDate = endDate;
+    }
+    
+    const filename = `${project.title || 'event'}_${formatDate(dateToUse).replace(/-/g, '')}.ics`;
+    downloadAppleCalendarFile(calendarData, filename);
   };
 
   if (isLoading) {
@@ -758,17 +907,6 @@ export default function ProjectDetailPage() {
                       </div>
                     </div>
                   )}
-                  {project.scheduled_date && (
-                    <div className="flex items-start gap-3">
-                      <Calendar className="h-5 w-5 text-gray-400 mt-0.5" />
-                      <div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">Ütemezett dátum</p>
-                        <p className="font-medium">
-                          {formatDate(project.scheduled_date)}
-                        </p>
-                      </div>
-                    </div>
-                  )}
                   {project.floor_material && (
                     <div className="flex items-start gap-3">
                       <Package className="h-5 w-5 text-gray-400 mt-0.5" />
@@ -911,6 +1049,88 @@ export default function ProjectDetailPage() {
                     </div>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Ütemezés */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Ütemezés</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Dátum</label>
+                    <Input
+                      type="date"
+                      value={scheduleDate}
+                      onChange={(e) => setScheduleDate(e.target.value)}
+                      className="w-full"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Kezdés</label>
+                    <Input
+                      type="time"
+                      value={scheduleStartTime}
+                      onChange={(e) => setScheduleStartTime(e.target.value)}
+                      className="w-full"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Vég</label>
+                    <Input
+                      type="time"
+                      value={scheduleEndTime}
+                      onChange={(e) => setScheduleEndTime(e.target.value)}
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-3 pt-2 border-t">
+                  <Button
+                    onClick={handleSaveSchedule}
+                    disabled={isSavingSchedule || !scheduleDate}
+                    size="sm"
+                  >
+                    <Save className="mr-2 h-4 w-4" />
+                    Mentés
+                  </Button>
+                  
+                  {(project?.scheduled_date || scheduleDate) && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleGoogleCalendarExport}
+                        disabled={!scheduleDate && !project?.scheduled_date}
+                      >
+                        <ExternalLink className="mr-2 h-4 w-4" />
+                        Google Naptár
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleAppleCalendarExport}
+                        disabled={!scheduleDate && !project?.scheduled_date}
+                      >
+                        <Download className="mr-2 h-4 w-4" />
+                        Apple Naptár
+                      </Button>
+                    </>
+                  )}
+                </div>
+                
+                {project?.scheduled_date && (
+                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                    <Calendar className="h-4 w-4" />
+                    <span>
+                      Ütemezett: {formatDate(project.scheduled_date)}
+                      {scheduleStartTime && scheduleEndTime && ` ${scheduleStartTime} - ${scheduleEndTime}`}
+                    </span>
+                  </div>
+                )}
               </CardContent>
             </Card>
 

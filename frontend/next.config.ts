@@ -11,6 +11,9 @@ const nextConfig: NextConfig = {
   // Turbopack config (Next.js 16+)
   turbopack: {},
   
+  // Transpile packages that need modern JSX transform
+  transpilePackages: ['react-big-calendar', 'uncontrollable'],
+  
   // Webpack config for PDF.js worker
   webpack: (config) => {
     config.resolve.alias = {
