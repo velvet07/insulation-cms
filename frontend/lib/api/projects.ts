@@ -6,6 +6,7 @@ export interface ProjectFilters {
   assigned_to?: number | string; // Support both numeric id and documentId (Strapi v5)
   tenant?: number;
   company?: number | string;
+  subcontractor?: number | string; // Support both numeric id and documentId (Strapi v5)
   search?: string;
 }
 
@@ -42,6 +43,17 @@ export const projectsApi = {
       } else {
         // It's a numeric id
         params.append('filters[company][id][$eq]', companyId);
+      }
+    }
+    if (filters?.subcontractor) {
+      // Strapi v5 uses documentId, try both id and documentId
+      const subcontractorId = filters.subcontractor.toString();
+      if (subcontractorId.includes('-') || subcontractorId.length > 10 || isNaN(Number(subcontractorId))) {
+        // It's a documentId (string)
+        params.append('filters[subcontractor][documentId][$eq]', subcontractorId);
+      } else {
+        // It's a numeric id
+        params.append('filters[subcontractor][id][$eq]', subcontractorId);
       }
     }
     if (filters?.search) {

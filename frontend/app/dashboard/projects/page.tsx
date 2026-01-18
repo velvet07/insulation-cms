@@ -23,7 +23,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { projectsApi, type ProjectFilters } from '@/lib/api/projects';
-import type { Project } from '@/types';
+import { companiesApi } from '@/lib/api/companies';
+import type { Project, Company } from '@/types';
 import { useAuthStore } from '@/lib/store/auth';
 import { isAdminRole } from '@/lib/utils/user-role';
 import { Plus, Search, Eye, Edit, Trash2 } from 'lucide-react';
@@ -50,8 +51,17 @@ export default function ProjectsPage() {
   const user = useAuthStore((state) => state.user);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<Project['status'] | 'all'>('all');
+  const [ownerFilter, setOwnerFilter] = useState<string>('all');
+
+  // Fetch companies for owner filter (only if admin)
+  const { data: companies = [] } = useQuery({
+    queryKey: ['companies'],
+    queryFn: () => companiesApi.getAll(),
+    enabled: isAdminRole(user), // Only fetch if admin
+  });
 
   // Build filters - if user is not admin, filter by company or assigned_to
+  // Note: Owner filter is applied on frontend because "owner" can be either subcontractor or company
   const filters: ProjectFilters = {
     ...(statusFilter !== 'all' && { status: statusFilter }),
     ...(search && { search }),
@@ -95,10 +105,23 @@ export default function ProjectsPage() {
     }
   }
 
-  const { data: projects = [], isLoading, error } = useQuery({
+  const { data: allProjects = [], isLoading, error } = useQuery({
     queryKey: ['projects', filters],
     queryFn: () => projectsApi.getAll(filters),
   });
+
+  // Filter by owner on frontend if ownerFilter is set
+  // This is needed because "owner" can be either subcontractor (if exists) or company (if no subcontractor)
+  const projects = ownerFilter === 'all'
+    ? allProjects
+    : allProjects.filter((project) => {
+        // Owner is subcontractor if exists, otherwise company
+        const ownerId = project.subcontractor?.documentId || project.subcontractor?.id || 
+                       project.company?.documentId || project.company?.id;
+        const filterId = ownerFilter;
+        // Compare both documentId and id formats (convert to string for comparison)
+        return ownerId?.toString() === filterId;
+      });
 
   const handleView = (project: Project) => {
     // Use documentId if available (Strapi v5), otherwise use id
@@ -170,6 +193,24 @@ export default function ProjectsPage() {
                 <SelectItem value="completed">Befejezve</SelectItem>
               </SelectContent>
             </Select>
+            {isAdminRole(user) && (
+              <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+                <SelectTrigger className="w-[250px]">
+                  <SelectValue placeholder="Tulajdonos szűrő" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Összes tulajdonos</SelectItem>
+                  {companies.map((company) => {
+                    const companyId = company.documentId || company.id;
+                    return (
+                      <SelectItem key={companyId?.toString()} value={companyId?.toString() || ''}>
+                        {company.name}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            )}
           </div>
         </div>
 
