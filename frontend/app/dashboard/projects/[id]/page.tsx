@@ -222,47 +222,46 @@ export default function ProjectDetailPage() {
         )
       ) as Partial<Project>;
       
+      // Helper függvény: üres stringeket undefined-ra konvertál
+      const normalizeValue = (value: any): any => {
+        if (value === null || value === '') {
+          return undefined;
+        }
+        return value;
+      };
+
       // Készítsük el az update adatokat: meglévő mezők + új form értékek
       const updateData: Partial<Project> = {
         // Megtartjuk az összes meglévő mezőt (belső mezők és relation mezők nélkül)
         ...cleanCurrentProject,
-        // Frissítjük az összes form mezőt az új értékekkel
-        area_sqm: data.area_sqm,
-        client_birth_place: data.client_birth_place,
-        client_birth_date: data.client_birth_date,
-        client_mother_name: data.client_mother_name,
-        client_tax_id: data.client_tax_id,
-        property_address_same: data.property_address_same,
-        floor_material: data.floor_material,
-        floor_material_extra: data.floor_material_extra,
-        client_street: data.client_street,
-        client_city: data.client_city,
-        client_zip: data.client_zip,
+        // Frissítjük az összes form mezőt az új értékekkel (üres stringeket undefined-ra konvertáljuk)
+        area_sqm: normalizeValue(data.area_sqm) || undefined,
+        client_birth_place: normalizeValue(data.client_birth_place),
+        client_birth_date: normalizeValue(data.client_birth_date), // Üres string -> undefined (Strapi date mező nem fogad el üres stringet)
+        client_mother_name: normalizeValue(data.client_mother_name),
+        client_tax_id: normalizeValue(data.client_tax_id),
+        property_address_same: data.property_address_same ?? undefined,
+        floor_material: normalizeValue(data.floor_material),
+        floor_material_extra: normalizeValue(data.floor_material_extra),
+        client_street: normalizeValue(data.client_street),
+        client_city: normalizeValue(data.client_city),
+        client_zip: normalizeValue(data.client_zip),
       };
 
       // Ha property_address_same === true, akkor másoljuk a client adatokat
       if (data.property_address_same) {
-        updateData.property_street = data.client_street;
-        updateData.property_city = data.client_city;
-        updateData.property_zip = data.client_zip;
+        updateData.property_street = normalizeValue(data.client_street);
+        updateData.property_city = normalizeValue(data.client_city);
+        updateData.property_zip = normalizeValue(data.client_zip);
       } else {
-        updateData.property_street = data.property_street || undefined;
-        updateData.property_city = data.property_city || undefined;
-        updateData.property_zip = data.property_zip || undefined;
+        updateData.property_street = normalizeValue(data.property_street);
+        updateData.property_city = normalizeValue(data.property_city);
+        updateData.property_zip = normalizeValue(data.property_zip);
       }
 
       // Opcionális mezők
-      if (data.insulation_option) {
-        updateData.insulation_option = data.insulation_option;
-      } else {
-        // Ha nincs érték, töröljük (undefined)
-        updateData.insulation_option = undefined;
-      }
-      if (data.scheduled_date) {
-        updateData.scheduled_date = data.scheduled_date;
-      } else {
-        updateData.scheduled_date = undefined;
-      }
+      updateData.insulation_option = normalizeValue(data.insulation_option);
+      updateData.scheduled_date = normalizeValue(data.scheduled_date); // Üres string -> undefined (Strapi date mező nem fogad el üres stringet)
 
       // Ellenőrizzük, hogy volt-e már szerződés adat (az első mentés vagy módosítás)
       const hasExistingContractData = currentProject.client_birth_place || 
@@ -281,7 +280,8 @@ export default function ProjectDetailPage() {
 
       // Mezők, amik még nincsenek a Strapi szerveren (ezeket nem küldjük el)
       // ÉS rendszer mezők, amiket nem lehet frissíteni (Strapi automatikusan kezeli)
-      const fieldsNotOnServer = ['floor_material_extra', 'audit_log'];
+      // Note: floor_material_extra már hozzá lett adva a schema-hoz, de még a listában van - később eltávolíthatjuk
+      const fieldsNotOnServer = ['audit_log'];
       const systemFields = ['id', 'documentId', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy'];
       
       // Szűrjük ki az undefined értékeket ÉS a szerveren még nem létező mezőket ÉS a rendszer mezőket

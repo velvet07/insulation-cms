@@ -162,7 +162,7 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
               name="client_street"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Utca, házszám *</FormLabel>
+                  <FormLabel>Utca, házszám</FormLabel>
                   <FormControl>
                     <Input placeholder="utca, házszám" {...field} />
                   </FormControl>
@@ -175,7 +175,7 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
               name="client_city"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Város *</FormLabel>
+                  <FormLabel>Város</FormLabel>
                   <FormControl>
                     <Input placeholder="Város" {...field} />
                   </FormControl>
@@ -190,7 +190,7 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
               name="client_zip"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>IRSZ *</FormLabel>
+                  <FormLabel>IRSZ</FormLabel>
                   <FormControl>
                     <Input 
                       placeholder="1234" 
@@ -220,7 +220,7 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
               name="client_birth_place"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Születési hely *</FormLabel>
+                  <FormLabel>Születési hely</FormLabel>
                   <FormControl>
                     <Input {...field} />
                   </FormControl>
@@ -233,7 +233,7 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
               name="client_birth_date"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Születési idő *</FormLabel>
+                  <FormLabel>Születési idő</FormLabel>
                   <FormControl>
                     <Input 
                       type="text" 
@@ -302,7 +302,7 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
               name="client_mother_name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Anyja neve *</FormLabel>
+                  <FormLabel>Anyja neve</FormLabel>
                   <FormControl>
                     <Input {...field} />
                   </FormControl>
@@ -315,7 +315,7 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
               name="client_tax_id"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Adóazonosító *</FormLabel>
+                  <FormLabel>Adóazonosító</FormLabel>
                   <FormControl>
                     <Input 
                       placeholder="Adóazonosító (10 számjegy)"
@@ -373,7 +373,7 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
                 name="property_street"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Utca, házszám *</FormLabel>
+                    <FormLabel>Utca, házszám</FormLabel>
                     <FormControl>
                       <Input placeholder="utca, házszám" {...field} />
                     </FormControl>
@@ -386,7 +386,7 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
                 name="property_city"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Város *</FormLabel>
+                    <FormLabel>Város</FormLabel>
                     <FormControl>
                       <Input placeholder="Város" {...field} />
                     </FormControl>
@@ -403,7 +403,7 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
                 name="property_zip"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>IRSZ *</FormLabel>
+                    <FormLabel>IRSZ</FormLabel>
                     <FormControl>
                       <Input 
                         placeholder="1234" 
@@ -430,7 +430,7 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
               name="area_sqm"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Padlás alapterülete (m²) *</FormLabel>
+                  <FormLabel>Padlás alapterülete (m²)</FormLabel>
                   <FormControl>
                     <Input
                       type="number"
@@ -451,7 +451,7 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
               name="floor_material"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Padlásfödém anyaga *</FormLabel>
+                  <FormLabel>Padlásfödém anyaga</FormLabel>
                   <FormControl>
                     <RadioGroup
                       onValueChange={field.onChange}
@@ -495,7 +495,7 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
                   name="floor_material_extra"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Födém anyaga (egyéb) *</FormLabel>
+                      <FormLabel>Födém anyaga (egyéb)</FormLabel>
                       <FormControl>
                         <Input placeholder="Adja meg a födém anyagát" {...field} />
                       </FormControl>
