@@ -202,14 +202,8 @@ export default function ProjectDetailPage() {
 
   const updateContractMutation = useMutation({
     mutationFn: async (data: ContractDataFormValues) => {
-      console.log('=== MENTÉS KEZDETE ===');
-      console.log('Form adatok:', data);
-      console.log('Project ID:', projectId);
-      
       // Lekérjük a jelenlegi projektet, hogy megtartsuk a meglévő mezőket
-      console.log('Projekt lekérése...');
       const currentProject = await projectsApi.getOne(projectId);
-      console.log('Jelenlegi projekt:', currentProject);
       
       // Strapi belső mezők, amiket nem szabad elküldeni az update során
       const strapiInternalFields = ['id', 'documentId', 'createdAt', 'updatedAt', 'publishedAt'];
@@ -305,16 +299,10 @@ export default function ProjectDetailPage() {
       }
 
       // Elküldjük az összes mezőt egyetlen update-ben
-      console.log('Update adatok elküldése:', cleanUpdateData);
       try {
         const result = await projectsApi.update(projectId, cleanUpdateData);
-        console.log('=== MENTÉS SIKERES ===');
-        console.log('Eredmény:', result);
         return result;
       } catch (error: any) {
-        console.error('=== MENTÉS HIBA ===');
-        console.error('Hiba az adatok mentésekor:', error);
-        console.error('Hiba részletek:', error.response?.data);
         throw error;
       }
     },
@@ -324,27 +312,18 @@ export default function ProjectDetailPage() {
       // Sikeres mentés - nincs felugró ablak
     },
     onError: (error: any) => {
-      console.error('Error updating contract data:', error);
-      const errorMessage = error?.message || 'Hiba történt a szerződés adatok mentése során.';
-      console.error('Hiba üzenet:', errorMessage);
       // Hiba esetén csak console-ba írunk, nincs felugró ablak
     },
   });
 
   const onContractSubmit = async (values: ContractDataFormValues) => {
-    console.log('=== FORM SUBMIT KEZDETE ===');
-    console.log('Form értékek:', values);
     setIsSavingContract(true);
     try {
-      console.log('Mutation hívás...');
       await updateContractMutation.mutateAsync(values);
-      console.log('Mutation sikeres');
     } catch (error: any) {
-      console.error('Mutation hiba:', error);
       throw error;
     } finally {
       setIsSavingContract(false);
-      console.log('=== FORM SUBMIT VÉGE ===');
     }
   };
 
@@ -385,10 +364,7 @@ export default function ProjectDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       
       // Sikeres státusz módosítás - nincs felugró ablak
-      console.log(`Státusz sikeresen módosítva: ${statusLabels[newStatus]}`);
     } catch (error: any) {
-      console.error('Error updating status:', error);
-      console.error('Hiba üzenet:', error.message || 'Hiba történt a státusz frissítése során.');
       // Hiba esetén csak console-ba írunk, nincs felugró ablak
     } finally {
       setIsUpdatingStatus(false);
@@ -482,27 +458,6 @@ export default function ProjectDetailPage() {
     hasPropertyAddress // Ingatlan cím ellenőrzése (már tartalmazza a client cím ellenőrzését ha property_address_same === true)
   );
 
-  // Debug információ csak ha hiányos
-  if (!contractFilled) {
-    console.log('[contractFilled] === HIÁNYOS ===');
-    console.log('[contractFilled] contractFilled:', contractFilled);
-    console.log('[contractFilled] hasClientBirthPlace:', hasClientBirthPlace, project.client_birth_place);
-    console.log('[contractFilled] hasClientBirthDate:', hasClientBirthDate, project.client_birth_date);
-    console.log('[contractFilled] hasClientTaxId:', hasClientTaxId, project.client_tax_id);
-    console.log('[contractFilled] hasAreaSqm:', hasAreaSqm, project.area_sqm);
-    console.log('[contractFilled] hasFloorMaterial:', hasFloorMaterial, project.floor_material);
-    console.log('[contractFilled] propertyAddressSame:', propertyAddressSame, project.property_address_same);
-    console.log('[contractFilled] hasClientAddress:', hasClientAddress, {
-      client_street: project.client_street,
-      client_city: project.client_city,
-      client_zip: project.client_zip,
-    });
-    console.log('[contractFilled] hasPropertyAddress:', hasPropertyAddress, {
-      property_street: project.property_street,
-      property_city: project.property_city,
-      property_zip: project.property_zip,
-    });
-  }
 
   const totalDocs = documents.length;
   const signedDocs = documents.filter(d => d.signed).length;

@@ -141,35 +141,10 @@ export const projectsApi = {
         cleanData[key] = value;
       }
       
-      console.log('Updating project with ID:', id);
-      console.log('Update data:', cleanData);
-      
       const response = await strapiApi.put<StrapiResponse<Project>>(`/projects/${id}`, { data: cleanData });
       return unwrapStrapiResponse(response);
     } catch (error: any) {
-      console.error('Full error object:', error);
-      console.error('Error response:', error.response);
-      console.error('Error response status:', error.response?.status);
-      console.error('Error response headers:', error.response?.headers);
-      
       if (error.response) {
-        console.error('Strapi API Error - response.data:', error.response.data);
-        console.error('Strapi API Error - response.status:', error.response.status);
-        console.error('Strapi API Error - response.statusText:', error.response.statusText);
-        console.error('Request data sent:', data);
-        console.error('Request URL:', `/projects/${id}`);
-        
-        // Próbáljuk meg kinyerni a pontos hibaüzenetet
-        if (error.response.data?.error) {
-          console.error('Strapi API Error - error object:', error.response.data.error);
-          if (error.response.data.error.message) {
-            console.error('Strapi API Error - error message:', error.response.data.error.message);
-          }
-          if (error.response.data.error.details) {
-            console.error('Strapi API Error - error details:', error.response.data.error.details);
-          }
-        }
-        
         // Részletesebb hibaüzenet
         let errorMessage = 'Hiba történt a projekt frissítése során';
         

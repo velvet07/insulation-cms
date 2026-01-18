@@ -77,17 +77,6 @@ export default function EditProjectPage() {
   const isMainContractor = userCompany?.type === 'main_contractor';
   const isAdmin = isAdminRole(user);
   
-  // Debug logging
-  console.log('=== Edit Project - Permission Check ===');
-  console.log('User:', user?.email || user?.username);
-  console.log('User role:', user?.role);
-  console.log('isAdmin:', isAdmin);
-  console.log('User company:', userCompany);
-  console.log('isMainContractor:', isMainContractor);
-  console.log('Project:', project);
-  console.log('Project company:', project?.company);
-  console.log('Project company type:', project?.company && typeof project.company === 'object' && 'type' in project.company ? (project.company as Company).type : 'N/A');
-  
   // Check if project belongs to main contractor (for subcontractor editing)
   const projectIsMainContractor = project && 
     project.company && 
@@ -98,26 +87,15 @@ export default function EditProjectPage() {
   // Admin can edit subcontractor for ALL projects (main contractor or not)
   // Main contractor can edit subcontractor only for main contractor projects
   const canEditSubcontractor = isAdmin || (projectIsMainContractor && isMainContractor);
-  
-  console.log('projectIsMainContractor:', projectIsMainContractor);
-  console.log('canEditSubcontractor:', canEditSubcontractor);
-  console.log('========================================');
 
   // Fetch available subcontractors
-  const { data: subcontractors = [], isLoading: isLoadingSubcontractors, error: subcontractorsError } = useQuery({
+  const { data: subcontractors = [], isLoading: isLoadingSubcontractors } = useQuery({
     queryKey: ['companies', 'subcontractors'],
     queryFn: async () => {
-      console.log('[Edit Project] Fetching subcontractors...');
-      const result = await companiesApi.getAll({ type: 'subcontractor' });
-      console.log('[Edit Project] Subcontractors fetched:', result);
-      return result;
+      return await companiesApi.getAll({ type: 'subcontractor' });
     },
     enabled: !!canEditSubcontractor,
   });
-
-  if (subcontractorsError) {
-    console.error('[Edit Project] Error fetching subcontractors:', subcontractorsError);
-  }
 
   const form = useForm<ProjectFormValues>({
     resolver: zodResolver(projectSchema),
@@ -170,15 +148,6 @@ export default function EditProjectPage() {
         status: project.status || 'pending',
         subcontractor: subcontractorId,
       });
-
-      console.log('[Edit Project] Form reset with project data:', {
-        client_name: project.client_name,
-        client_street,
-        client_city,
-        client_zip,
-        status: project.status,
-        subcontractor: subcontractorId,
-      });
     }
   }, [project, form]);
   
@@ -213,28 +182,23 @@ export default function EditProjectPage() {
           if (subcontractorStr.length > 10) {
             // Likely a documentId (e.g., "p4fa1a0874bmeddcclcbj393")
             updateData.subcontractor = subcontractorStr;
-            console.log('[Edit Project] Setting subcontractor (documentId):', subcontractorStr);
           } else {
             // Try to parse as number
             const parsedId = parseInt(subcontractorStr, 10);
             if (isNaN(parsedId)) {
-              console.warn('[Edit Project] Invalid subcontractor ID:', data.subcontractor);
               // Skip setting subcontractor if ID is invalid
               delete updateData.subcontractor;
             } else {
               updateData.subcontractor = parsedId;
-              console.log('[Edit Project] Setting subcontractor (numeric id):', parsedId);
             }
           }
         } else {
           // Explicitly set to null to remove subcontractor
           // Note: In Strapi v5, setting to null should work for relations
           updateData.subcontractor = null;
-          console.log('[Edit Project] Removing subcontractor (setting to null)');
         }
       }
       
-      console.log('[Edit Project] Update data before API call:', JSON.stringify(updateData, null, 2));
       return projectsApi.update(projectId, updateData);
     },
     onSuccess: () => {

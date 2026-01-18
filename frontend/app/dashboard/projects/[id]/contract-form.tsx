@@ -139,13 +139,10 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
       <form 
         onSubmit={form.handleSubmit(
           (data) => {
-            console.log('=== FORM VALIDÁCIÓ SIKERES ===');
-            console.log('Validált adatok:', data);
             return onSubmit(data);
           },
-          (errors) => {
-            console.error('=== FORM VALIDÁCIÓ HIBA ===');
-            console.error('Validációs hibák:', errors);
+          () => {
+            // Validation errors are handled by form state
           }
         )} 
         className="space-y-6"
