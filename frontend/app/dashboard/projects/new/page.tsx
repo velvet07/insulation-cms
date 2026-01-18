@@ -93,7 +93,10 @@ export default function NewProjectPage() {
         status: 'pending',
         client_email: data.client_email || undefined,
         client_phone: data.client_phone || undefined,
-        audit_log: [auditLogEntry], // Hozzáadjuk az audit log-ot
+        // Note: audit_log frissítés ideiglenesen kikapcsolva, amíg a Strapi szerver
+        // nem lett újraindítva az audit_log mezőt tartalmazó schema-val
+        // TODO: Engedélyezni az audit_log frissítést, miután a Strapi szerver újraindult
+        // audit_log: [auditLogEntry],
       };
 
       // Automatikusan beállítjuk a company mezőt a user cégére alapozva
@@ -102,11 +105,16 @@ export default function NewProjectPage() {
           // Ha main contractor a user, akkor a projekt is main contractorhoz tartozik
           const companyId = userCompany.documentId || userCompany.id;
           if (companyId) {
-            // Strapi v5: use documentId if available, otherwise numeric id
-            projectData.company = typeof companyId === 'string' && companyId.includes('-') 
-              ? companyId 
-              : parseInt(companyId.toString());
-            console.log('Setting company for main contractor:', projectData.company);
+            // Strapi v5: use documentId if it's a string (with or without hyphens), otherwise numeric id
+            if (typeof companyId === 'string') {
+              // If it's a string (documentId), use as-is (even if it doesn't contain hyphens)
+              projectData.company = companyId;
+              console.log('Setting company for main contractor (documentId):', projectData.company);
+            } else {
+              // If it's a number, use as-is
+              projectData.company = companyId;
+              console.log('Setting company for main contractor (numeric id):', projectData.company);
+            }
           }
         } else if (userCompany.type === 'subcontractor') {
           // Ha subcontractor a user, akkor:
@@ -118,20 +126,26 @@ export default function NewProjectPage() {
           if (parentCompany) {
             const parentId = parentCompany.documentId || parentCompany.id;
             if (parentId) {
-              // Strapi v5: use documentId if available, otherwise numeric id
-              projectData.company = typeof parentId === 'string' && parentId.includes('-') 
-                ? parentId 
-                : parseInt(parentId.toString());
-              console.log('Setting company (parent) for subcontractor:', projectData.company);
+              // Strapi v5: use documentId if it's a string, otherwise numeric id
+              if (typeof parentId === 'string') {
+                projectData.company = parentId;
+                console.log('Setting company (parent) for subcontractor (documentId):', projectData.company);
+              } else {
+                projectData.company = parentId;
+                console.log('Setting company (parent) for subcontractor (numeric id):', projectData.company);
+              }
             }
           }
           
           if (subcontractorId) {
-            // Strapi v5: use documentId if available, otherwise numeric id
-            projectData.subcontractor = typeof subcontractorId === 'string' && subcontractorId.includes('-') 
-              ? subcontractorId 
-              : parseInt(subcontractorId.toString());
-            console.log('Setting subcontractor:', projectData.subcontractor);
+            // Strapi v5: use documentId if it's a string, otherwise numeric id
+            if (typeof subcontractorId === 'string') {
+              projectData.subcontractor = subcontractorId;
+              console.log('Setting subcontractor (documentId):', projectData.subcontractor);
+            } else {
+              projectData.subcontractor = subcontractorId;
+              console.log('Setting subcontractor (numeric id):', projectData.subcontractor);
+            }
           }
         }
       } else {
