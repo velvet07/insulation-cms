@@ -129,9 +129,30 @@ export const photosApi = {
 
   update: async (id: number | string, data: Partial<Photo>) => {
     try {
-      const cleanData = Object.fromEntries(
-        Object.entries(data).filter(([_, value]) => value !== undefined)
-      );
+      const cleanData: any = {};
+      
+      // Handle relation fields specially for Strapi v5
+      Object.entries(data).forEach(([key, value]) => {
+        if (value === undefined) return;
+        
+        // For relation fields (category, project), send as ID or documentId
+        if (key === 'category' || key === 'project') {
+          if (value === null) {
+            cleanData[key] = null;
+          } else if (typeof value === 'string' || typeof value === 'number') {
+            // If it's already a string/number ID, use it directly
+            cleanData[key] = value;
+          } else if (typeof value === 'object' && value !== null) {
+            // If it's an object, extract documentId or id
+            const relationId = (value as any).documentId || (value as any).id;
+            if (relationId) {
+              cleanData[key] = relationId;
+            }
+          }
+        } else {
+          cleanData[key] = value;
+        }
+      });
       
       const response = await strapiApi.put<StrapiResponse<Photo>>(`/photos/${id}`, { data: cleanData });
       return unwrapStrapiResponse(response);

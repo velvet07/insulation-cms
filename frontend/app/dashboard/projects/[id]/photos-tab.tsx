@@ -77,7 +77,7 @@ export function PhotosTab({ project }: PhotosTabProps) {
   });
 
   // Fetch photos - only if we have a projectId and categories are loaded (or errored)
-  const { data: photos = [], isLoading: isLoadingPhotos, isError: isPhotosError } = useQuery({
+  const { data: photosRaw = [], isLoading: isLoadingPhotos, isError: isPhotosError } = useQuery({
     queryKey: ['photos', projectId, selectedCategoryId],
     queryFn: () => {
       const filters: { project: string | number; category?: string | number } = {
@@ -91,6 +91,39 @@ export function PhotosTab({ project }: PhotosTabProps) {
     enabled: !!projectId && !isLoadingCategories, // Only fetch if categories are loaded
     retry: false, // Don't retry if 404 - content types might not be created yet
   });
+
+  // Sort photos by category order (matching menu order), then by createdAt
+  const photos = useMemo(() => {
+    if (!photosRaw || photosRaw.length === 0 || !categories || categories.length === 0) {
+      return photosRaw;
+    }
+    
+    // Create a map of category order for quick lookup
+    const categoryOrderMap = new Map<string, number>();
+    categories.forEach((cat, index) => {
+      const catId = (cat.documentId || cat.id).toString();
+      categoryOrderMap.set(catId, cat.order ?? index);
+    });
+    
+    // Sort photos: first by category order, then by createdAt
+    return [...photosRaw].sort((a, b) => {
+      const aCategoryId = (a.category?.documentId || a.category?.id)?.toString() || '';
+      const bCategoryId = (b.category?.documentId || b.category?.id)?.toString() || '';
+      
+      const aOrder = categoryOrderMap.get(aCategoryId) ?? 9999;
+      const bOrder = categoryOrderMap.get(bCategoryId) ?? 9999;
+      
+      // First sort by category order
+      if (aOrder !== bOrder) {
+        return aOrder - bOrder;
+      }
+      
+      // If same category, sort by createdAt (newest first)
+      const aDate = new Date(a.createdAt).getTime();
+      const bDate = new Date(b.createdAt).getTime();
+      return bDate - aDate;
+    });
+  }, [photosRaw, categories]);
 
   // Fetch all photos for lightbox navigation (always fetch to enable navigation across all photos)
   const { data: allPhotos = [] } = useQuery({
