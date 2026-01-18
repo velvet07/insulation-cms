@@ -201,7 +201,7 @@ export default function ProjectsPage() {
                   <TableHead>Terület (m²)</TableHead>
                   <TableHead>Szigetelés</TableHead>
                   <TableHead>Státusz</TableHead>
-                  <TableHead>Hozzárendelve</TableHead>
+                  <TableHead>Tulajdonos</TableHead>
                   <TableHead className="text-right">Műveletek</TableHead>
                 </TableRow>
               </TableHeader>
@@ -232,7 +232,7 @@ export default function ProjectsPage() {
                       </span>
                     </TableCell>
                     <TableCell>
-                      {project.assigned_to?.email || project.assigned_to?.username || '-'}
+                      {project.subcontractor?.name || project.company?.name || '-'}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
