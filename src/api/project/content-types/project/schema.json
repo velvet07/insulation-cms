@@ -65,6 +65,12 @@
       "target": "api::tenant.tenant",
       "inversedBy": "projects"
     },
+    "company": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::company.company",
+      "inversedBy": "projects"
+    },
     "assigned_to": {
       "type": "relation",
       "relation": "manyToOne",
