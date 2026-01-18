@@ -56,8 +56,22 @@ export const authApi = {
         }
       }
       
-      // Try to fetch company data separately if needed (optional, don't fail if it doesn't work)
-      // But skip getMe for now since it doesn't support populate
+      // Try to populate company data if it's just an ID
+      if (loginResponse.user && loginResponse.user.company) {
+        // If company is just an ID, fetch the full company object
+        if (typeof loginResponse.user.company === 'string' || typeof loginResponse.user.company === 'number') {
+          try {
+            const companyId = loginResponse.user.company;
+            // Import companiesApi here to avoid circular dependency
+            const { companiesApi } = await import('./companies');
+            const company = await companiesApi.getOne(companyId);
+            (loginResponse.user as any).company = company;
+          } catch (error) {
+            console.warn('Failed to fetch company data after login:', error);
+            // Don't fail login if company fetch fails
+          }
+        }
+      }
 
       return loginResponse;
     } catch (error: any) {

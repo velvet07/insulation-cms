@@ -78,6 +78,10 @@ export default function NewProjectPage() {
         if (typeof user.company === 'object' && 'type' in user.company) {
           return user.company as { type: 'main_contractor' | 'subcontractor'; documentId?: string; id?: number; parent_company?: { documentId?: string; id?: number } };
         }
+        // If company is just an ID or documentId
+        if (typeof user.company === 'string' || typeof user.company === 'number') {
+          return null; // Need to fetch company data separately
+        }
         return null;
       };
 
@@ -98,7 +102,11 @@ export default function NewProjectPage() {
           // Ha main contractor a user, akkor a projekt is main contractorhoz tartozik
           const companyId = userCompany.documentId || userCompany.id;
           if (companyId) {
-            projectData.company = companyId;
+            // Strapi v5: use documentId if available, otherwise numeric id
+            projectData.company = typeof companyId === 'string' && companyId.includes('-') 
+              ? companyId 
+              : parseInt(companyId.toString());
+            console.log('Setting company for main contractor:', projectData.company);
           }
         } else if (userCompany.type === 'subcontractor') {
           // Ha subcontractor a user, akkor:
@@ -110,15 +118,29 @@ export default function NewProjectPage() {
           if (parentCompany) {
             const parentId = parentCompany.documentId || parentCompany.id;
             if (parentId) {
-              projectData.company = parentId;
+              // Strapi v5: use documentId if available, otherwise numeric id
+              projectData.company = typeof parentId === 'string' && parentId.includes('-') 
+                ? parentId 
+                : parseInt(parentId.toString());
+              console.log('Setting company (parent) for subcontractor:', projectData.company);
             }
           }
           
           if (subcontractorId) {
-            projectData.subcontractor = subcontractorId;
+            // Strapi v5: use documentId if available, otherwise numeric id
+            projectData.subcontractor = typeof subcontractorId === 'string' && subcontractorId.includes('-') 
+              ? subcontractorId 
+              : parseInt(subcontractorId.toString());
+            console.log('Setting subcontractor:', projectData.subcontractor);
           }
         }
+      } else {
+        console.warn('User company not found or not properly populated. User:', user);
+        console.warn('User company type:', typeof user?.company);
+        console.warn('User company value:', user?.company);
       }
+      
+      console.log('Final project data before creation:', JSON.stringify(projectData, null, 2));
       
       return projectsApi.create(projectData);
     },

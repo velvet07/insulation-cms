@@ -28,9 +28,12 @@ import {
   FormDescription,
 } from '@/components/ui/form';
 import { projectsApi } from '@/lib/api/projects';
+import { companiesApi } from '@/lib/api/companies';
 import { formatDate, formatPhoneNumber, cleanPhoneNumber } from '@/lib/utils';
 import { useAuthStore } from '@/lib/store/auth';
 import { createAuditLogEntry, addAuditLogEntry } from '@/lib/utils/audit-log';
+import { isAdminRole, isUserFoovallalkozo } from '@/lib/utils/user-role';
+import type { Company } from '@/types';
 import { ArrowLeft } from 'lucide-react';
 
 const projectSchema = z.object({
@@ -41,6 +44,7 @@ const projectSchema = z.object({
   client_phone: z.string().optional(),
   client_email: z.string().email('Érvényes email cím szükséges').optional().or(z.literal('')),
   status: z.enum(['pending', 'in_progress', 'ready_for_review', 'approved', 'completed']),
+  subcontractor: z.string().optional(),
 });
 
 type ProjectFormValues = z.infer<typeof projectSchema>;
@@ -58,6 +62,33 @@ export default function EditProjectPage() {
     enabled: !!projectId,
   });
 
+  const { user } = useAuthStore();
+
+  // Check if user can edit subcontractor
+  const getUserCompany = () => {
+    if (!user?.company) return null;
+    if (typeof user.company === 'object' && 'type' in user.company) {
+      return user.company as Company;
+    }
+    return null;
+  };
+
+  const userCompany = getUserCompany();
+  const isMainContractor = userCompany?.type === 'main_contractor';
+  const isAdmin = isAdminRole(user);
+  const canEditSubcontractor = (isAdmin || isMainContractor) && project && 
+    project.company && 
+    typeof project.company === 'object' && 
+    'type' in project.company && 
+    project.company.type === 'main_contractor';
+
+  // Fetch available subcontractors
+  const { data: subcontractors = [] } = useQuery({
+    queryKey: ['companies', 'subcontractors'],
+    queryFn: () => companiesApi.getAll({ type: 'subcontractor' }),
+    enabled: !!canEditSubcontractor,
+  });
+
   const form = useForm<ProjectFormValues>({
     resolver: zodResolver(projectSchema),
     values: project
@@ -73,11 +104,12 @@ export default function EditProjectPage() {
           insulation_option: project.insulation_option || 'A',
           scheduled_date: formatDate(project.scheduled_date),
           status: project.status || 'pending',
+          subcontractor: project.subcontractor && typeof project.subcontractor === 'object' && 'documentId' in project.subcontractor
+            ? (project.subcontractor as Company).documentId || (project.subcontractor as Company).id?.toString() || ''
+            : '',
         }
       : undefined,
   });
-
-  const { user } = useAuthStore();
   
   const mutation = useMutation({
     mutationFn: async (data: ProjectFormValues) => {
@@ -98,13 +130,22 @@ export default function EditProjectPage() {
       // Hozzáadjuk az audit log bejegyzést
       const updatedAuditLog = addAuditLogEntry(currentProject.audit_log, auditLogEntry);
       
-      return projectsApi.update(projectId, {
+      const updateData: any = {
         ...data,
         client_address, // Kompatibilitás miatt
         client_email: data.client_email || undefined,
         client_phone: data.client_phone || undefined,
         audit_log: updatedAuditLog,
-      });
+      };
+
+      // Update subcontractor if changed
+      if ('subcontractor' in data) {
+        updateData.subcontractor = data.subcontractor 
+          ? (data.subcontractor.includes('-') ? data.subcontractor : parseInt(data.subcontractor))
+          : null;
+      }
+      
+      return projectsApi.update(projectId, updateData);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
@@ -317,6 +358,54 @@ export default function EditProjectPage() {
                   />
                 </div>
               </div>
+
+              {/* Subcontractor (only for main contractors or admins) */}
+              {canEditSubcontractor && (
+                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                  <h3 className="text-lg font-semibold mb-4">Kivitelező</h3>
+                  <div className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="subcontractor"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Alvállalkozó (Kivitelező)</FormLabel>
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value || 'none'}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Válasszon kivitelezőt..." />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="none">Nincs kivitelező</SelectItem>
+                              {subcontractors.map((subcontractor) => {
+                                const subId = subcontractor.documentId || subcontractor.id?.toString() || '';
+                                return (
+                                  <SelectItem key={subId} value={subId}>
+                                    {subcontractor.name}
+                                  </SelectItem>
+                                );
+                              })}
+                            </SelectContent>
+                          </Select>
+                          <FormDescription>
+                            Válasszon alvállalkozót a projekt kivitelezéséhez, vagy távolítsa el a jelenlegi kivitelezőt.
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    {subcontractors.length === 0 && (
+                      <p className="text-sm text-gray-500">
+                        Nincs elérhető alvállalkozó. Kérjük, először hozzon létre alvállalkozó céget a Beállítások menüben.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Form Actions */}
               <div className="flex justify-end gap-4">
