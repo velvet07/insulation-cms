@@ -76,11 +76,32 @@ export default function EditProjectPage() {
   const userCompany = getUserCompany();
   const isMainContractor = userCompany?.type === 'main_contractor';
   const isAdmin = isAdminRole(user);
-  const canEditSubcontractor = (isAdmin || isMainContractor) && project && 
+  
+  // Debug logging
+  console.log('=== Edit Project - Permission Check ===');
+  console.log('User:', user?.email || user?.username);
+  console.log('User role:', user?.role);
+  console.log('isAdmin:', isAdmin);
+  console.log('User company:', userCompany);
+  console.log('isMainContractor:', isMainContractor);
+  console.log('Project:', project);
+  console.log('Project company:', project?.company);
+  console.log('Project company type:', project?.company && typeof project.company === 'object' && 'type' in project.company ? (project.company as Company).type : 'N/A');
+  
+  // Check if project belongs to main contractor (for subcontractor editing)
+  const projectIsMainContractor = project && 
     project.company && 
     typeof project.company === 'object' && 
     'type' in project.company && 
-    project.company.type === 'main_contractor';
+    ((project.company as Company).type === 'main_contractor' || (project.company as Company).type === 'Main Contractor');
+  
+  // Admin can edit subcontractor for ALL projects (main contractor or not)
+  // Main contractor can edit subcontractor only for main contractor projects
+  const canEditSubcontractor = isAdmin || (projectIsMainContractor && isMainContractor);
+  
+  console.log('projectIsMainContractor:', projectIsMainContractor);
+  console.log('canEditSubcontractor:', canEditSubcontractor);
+  console.log('========================================');
 
   // Fetch available subcontractors
   const { data: subcontractors = [] } = useQuery({
