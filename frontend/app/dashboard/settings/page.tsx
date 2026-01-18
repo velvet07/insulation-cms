@@ -69,6 +69,12 @@ export default function SettingsPage() {
   const queryClient = useQueryClient();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState<string | null>(null);
+  
+  // Photo category management states
+  const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<PhotoCategory | null>(null);
+  const [categoryName, setCategoryName] = useState('');
+  const [categoryRequired, setCategoryRequired] = useState(false);
 
   const isAdmin = isAdminRole(user);
 
