@@ -243,11 +243,33 @@ export default function MaterialsPage() {
       setPickupPallets('');
       setPickupRolls('');
     },
+    onError: (error: any) => {
+      console.error('Anyagfelvétel hiba:', error);
+      alert(`Hiba történt az anyagfelvétel rögzítése során: ${error.message || 'Ismeretlen hiba'}`);
+    },
   });
 
   const handlePickupSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedMaterial || (!pickupPallets && !pickupRolls)) return;
+    
+    // Validáció: szigetelőanyagnál legalább raklap vagy tekercs kell
+    const selectedMat = materials.find((m) => String(m.id || m.documentId) === selectedMaterial);
+    const isInsulation = selectedMat?.category === 'insulation';
+    
+    if (!selectedMaterial) {
+      alert('Kérjük válasszon anyagot!');
+      return;
+    }
+    
+    if (isInsulation && !pickupPallets && !pickupRolls) {
+      alert('Szigetelőanyagnál legalább raklap vagy tekercs mennyiséget kell megadni!');
+      return;
+    }
+    
+    if (!isInsulation && !pickupRolls) {
+      alert('Fóliánál tekercs mennyiséget kell megadni!');
+      return;
+    }
     
     pickupMutation.mutate({
       material: selectedMaterial,
@@ -641,16 +663,22 @@ export default function MaterialsPage() {
                 </div>
                 <div>
                   <Label htmlFor="material">Anyag típus</Label>
-                  <Select value={selectedMaterial} onValueChange={setSelectedMaterial}>
+                  <Select value={selectedMaterial} onValueChange={setSelectedMaterial} required>
                     <SelectTrigger>
                       <SelectValue placeholder="Válasszon anyagot" />
                     </SelectTrigger>
                     <SelectContent>
-                      {materials.map((material) => (
-                        <SelectItem key={material.id || material.documentId} value={String(material.id || material.documentId)}>
-                          {material.name}
+                      {materials.length === 0 ? (
+                        <SelectItem value="no-materials" disabled>
+                          Nincs elérhető anyag
                         </SelectItem>
-                      ))}
+                      ) : (
+                        materials.map((material) => (
+                          <SelectItem key={material.id || material.documentId} value={String(material.id || material.documentId)}>
+                            {material.name}
+                          </SelectItem>
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
