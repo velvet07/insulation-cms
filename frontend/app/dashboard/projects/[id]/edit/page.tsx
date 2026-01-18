@@ -104,11 +104,20 @@ export default function EditProjectPage() {
   console.log('========================================');
 
   // Fetch available subcontractors
-  const { data: subcontractors = [] } = useQuery({
+  const { data: subcontractors = [], isLoading: isLoadingSubcontractors, error: subcontractorsError } = useQuery({
     queryKey: ['companies', 'subcontractors'],
-    queryFn: () => companiesApi.getAll({ type: 'subcontractor' }),
+    queryFn: async () => {
+      console.log('[Edit Project] Fetching subcontractors...');
+      const result = await companiesApi.getAll({ type: 'subcontractor' });
+      console.log('[Edit Project] Subcontractors fetched:', result);
+      return result;
+    },
     enabled: !!canEditSubcontractor,
   });
+
+  if (subcontractorsError) {
+    console.error('[Edit Project] Error fetching subcontractors:', subcontractorsError);
+  }
 
   const form = useForm<ProjectFormValues>({
     resolver: zodResolver(projectSchema),
