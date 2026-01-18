@@ -443,23 +443,34 @@ export default function ProjectDetailPage() {
 
   // Számítások az állapot összesítőhöz
   // Ellenőrizzük, hogy minden kötelező szerződés adat megvan-e és nem üres
-  const hasClientBirthPlace = project.client_birth_place && project.client_birth_place.trim() !== '';
-  const hasClientBirthDate = project.client_birth_date && project.client_birth_date.trim() !== '';
-  const hasClientTaxId = project.client_tax_id && project.client_tax_id.trim() !== '';
-  const hasAreaSqm = project.area_sqm && project.area_sqm > 0;
+  
+  // Helper függvény: ellenőrzi, hogy a mező létezik-e és nem üres
+  const isFieldFilled = (value: any): boolean => {
+    if (value === null || value === undefined) return false;
+    if (typeof value === 'string') return value.trim() !== '';
+    if (typeof value === 'number') return value > 0;
+    return !!value;
+  };
+
+  const hasClientBirthPlace = isFieldFilled(project.client_birth_place);
+  const hasClientBirthDate = isFieldFilled(project.client_birth_date);
+  const hasClientTaxId = isFieldFilled(project.client_tax_id);
+  const hasAreaSqm = isFieldFilled(project.area_sqm);
   const hasInsulationOption = !!project.insulation_option;
   const hasFloorMaterial = !!project.floor_material;
 
   // Ingatlan cím ellenőrzése
-  // Ha property_address_same === true, akkor az ingatlan cím mezőket kitöltöttnek tekintjük
-  // (mert a client adatokból jönnek)
-  const hasPropertyAddress = project.property_address_same === true
-    ? (project.client_street && project.client_street.trim() !== '' &&
-       project.client_city && project.client_city.trim() !== '' &&
-       project.client_zip && project.client_zip.trim() !== '')
-    : (project.property_street && project.property_street.trim() !== '' &&
-       project.property_city && project.property_city.trim() !== '' &&
-       project.property_zip && project.property_zip.trim() !== '');
+  // Ha property_address_same === true, akkor az ingatlan cím mezőket automatikusan kitöltöttnek tekintjük
+  // Ha property_address_same === false vagy undefined, akkor a property mezőket kell ellenőrizni
+  const propertyAddressSame = project.property_address_same === true;
+  const hasClientAddress = isFieldFilled(project.client_street) && 
+                           isFieldFilled(project.client_city) && 
+                           isFieldFilled(project.client_zip);
+  const hasPropertyAddress = propertyAddressSame
+    ? hasClientAddress // Ha megegyezik, akkor a client cím mezők alapján ellenőrizünk
+    : (isFieldFilled(project.property_street) && 
+       isFieldFilled(project.property_city) && 
+       isFieldFilled(project.property_zip));
 
   const contractFilled = !!(
     hasClientBirthPlace &&
@@ -471,25 +482,33 @@ export default function ProjectDetailPage() {
     hasPropertyAddress
   );
 
-  // Debug információ a konzolba
-  if (!contractFilled) {
-    console.log('[contractFilled] Hiányzó mezők ellenőrzése:', {
-      client_birth_place: hasClientBirthPlace ? 'OK' : 'HIÁNYZIK',
-      client_birth_date: hasClientBirthDate ? 'OK' : 'HIÁNYZIK',
-      client_tax_id: hasClientTaxId ? 'OK' : 'HIÁNYZIK',
-      area_sqm: hasAreaSqm ? 'OK' : 'HIÁNYZIK',
-      insulation_option: hasInsulationOption ? 'OK' : 'HIÁNYZIK',
-      floor_material: hasFloorMaterial ? 'OK' : 'HIÁNYZIK',
-      property_address: hasPropertyAddress ? 'OK' : 'HIÁNYZIK',
+  // Mindig logoljuk a debug információkat, hogy lássuk mi a helyzet
+  console.log('[contractFilled] Ellenőrzés:', {
+    contractFilled,
+    hasClientBirthPlace,
+    hasClientBirthDate,
+    hasClientTaxId,
+    hasAreaSqm,
+    hasInsulationOption,
+    hasFloorMaterial,
+    hasPropertyAddress,
+    propertyAddressSame,
+    values: {
+      client_birth_place: project.client_birth_place,
+      client_birth_date: project.client_birth_date,
+      client_tax_id: project.client_tax_id,
+      area_sqm: project.area_sqm,
+      insulation_option: project.insulation_option,
+      floor_material: project.floor_material,
       property_address_same: project.property_address_same,
-      client_street: project.client_street || 'HIÁNYZIK',
-      client_city: project.client_city || 'HIÁNYZIK',
-      client_zip: project.client_zip || 'HIÁNYZIK',
-      property_street: project.property_street || 'HIÁNYZIK',
-      property_city: project.property_city || 'HIÁNYZIK',
-      property_zip: project.property_zip || 'HIÁNYZIK',
-    });
-  }
+      client_street: project.client_street,
+      client_city: project.client_city,
+      client_zip: project.client_zip,
+      property_street: project.property_street,
+      property_city: project.property_city,
+      property_zip: project.property_zip,
+    },
+  });
 
   const totalDocs = documents.length;
   const signedDocs = documents.filter(d => d.signed).length;
