@@ -471,13 +471,15 @@ export default function ProjectDetailPage() {
        isFieldFilled(project.property_city) && 
        isFieldFilled(project.property_zip));
 
+  // A szerződő cím mindig kötelező az összesítőben
   const contractFilled = !!(
     hasClientBirthPlace &&
     hasClientBirthDate &&
     hasClientTaxId &&
     hasAreaSqm &&
     hasFloorMaterial &&
-    hasPropertyAddress
+    hasClientAddress && // Szerződő cím kötelező
+    hasPropertyAddress // Ingatlan cím ellenőrzése (már tartalmazza a client cím ellenőrzését ha property_address_same === true)
   );
 
   // Debug információ csak ha hiányos

@@ -23,10 +23,10 @@ import { formatDate } from '@/lib/utils';
 import type { Project } from '@/types';
 
 const contractDataSchema = z.object({
-  // Szerződő lakcíme - kötelező mezők
-  client_street: z.string().min(1, 'Az utca, házszám mező kötelező'),
-  client_city: z.string().min(1, 'A város mező kötelező'),
-  client_zip: z.string().min(4, 'Az irányítószám mező kötelező').max(4, 'Az irányítószám 4 számjegy kell legyen').refine((val) => /^\d+$/.test(val), {
+  // Szerződő lakcíme - nem kötelező mezők (csak az összesítő ellenőrzésnél kötelező)
+  client_street: z.string().optional(),
+  client_city: z.string().optional(),
+  client_zip: z.string().optional().refine((val) => !val || (val.length === 4 && /^\d+$/.test(val)), {
     message: 'Az irányítószám 4 számjegy kell legyen',
   }),
   // Születési adatok - nem kötelező mezők
@@ -159,7 +159,7 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
               name="client_street"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Utca, házszám *</FormLabel>
+                  <FormLabel>Utca, házszám</FormLabel>
                   <FormControl>
                     <Input placeholder="utca, házszám" {...field} />
                   </FormControl>
@@ -172,7 +172,7 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
               name="client_city"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Város *</FormLabel>
+                  <FormLabel>Város</FormLabel>
                   <FormControl>
                     <Input placeholder="Város" {...field} />
                   </FormControl>
@@ -187,7 +187,7 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
               name="client_zip"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>IRSZ *</FormLabel>
+                  <FormLabel>IRSZ</FormLabel>
                   <FormControl>
                     <Input 
                       placeholder="1234" 
