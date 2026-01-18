@@ -38,7 +38,7 @@ const contractDataSchema = z.object({
     message: 'Az adóazonosító 10 számjegy kell legyen',
   }),
   // Ingatlan adatok
-  property_address_same: z.boolean(),
+  property_address_same: z.boolean().optional(),
   property_street: z.string().optional(),
   property_city: z.string().optional(),
   property_zip: z.string().optional(),
