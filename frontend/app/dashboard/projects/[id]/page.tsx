@@ -145,8 +145,11 @@ export default function ProjectDetailPage() {
   // Subcontractor update mutation
   const updateSubcontractorMutation = useMutation({
     mutationFn: async (subcontractorId: string | null) => {
+      // In Strapi v5, relations are updated by sending the documentId or id
       const updateData: Partial<Project> = {
-        subcontractor: subcontractorId || null,
+        subcontractor: subcontractorId 
+          ? (subcontractorId.includes('-') ? subcontractorId : parseInt(subcontractorId)) 
+          : null,
       };
       return projectsApi.update(projectId, updateData);
     },
