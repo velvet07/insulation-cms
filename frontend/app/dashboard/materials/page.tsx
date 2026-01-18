@@ -182,10 +182,13 @@ export default function MaterialsPage() {
     let totalVaporBarrierRolls = 0;
     let totalBreathableMembraneRolls = 0;
     let totalArea = 0;
+    let projectsWithData = 0;
 
     relevantProjects.forEach((p: Project) => {
+      // Csak azokat a projekteket számoljuk, amelyeknek van area_sqm és insulation_option értéke
       if (!p.area_sqm || !p.insulation_option) return;
       
+      projectsWithData++;
       totalArea += Number(p.area_sqm);
       const req = calculateMaterials(Number(p.area_sqm), p.insulation_option);
       
@@ -197,9 +200,14 @@ export default function MaterialsPage() {
     const totalInsulationPallets = Math.floor(totalInsulationRolls / 24);
     const remainingInsulationRolls = totalInsulationRolls % 24;
 
+    // Projektek számolása, amelyeknek hiányzik az adat
+    const projectsWithoutData = relevantProjects.length - projectsWithData;
+
     return {
       period: requirementsPeriod,
-      projectCount: relevantProjects.length,
+      projectCount: projectsWithData,
+      totalProjects: relevantProjects.length, // Összes projekt (ideértve azokat is, amiknek hiányzik az adat)
+      projectsWithoutData, // Projektek száma, amelyeknek hiányzik area_sqm vagy insulation_option
       totalArea,
       insulation: {
         total_rolls: totalInsulationRolls,
@@ -573,8 +581,16 @@ export default function MaterialsPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
+                  {materialRequirements.projectsWithoutData > 0 && (
+                    <div className="text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 p-2 rounded">
+                      <span className="font-medium">⚠️ Figyelmeztetés:</span> {materialRequirements.projectsWithoutData} projekt nem számolható bele az anyagigénybe, mert hiányzik a terület (area_sqm) vagy szigetelési opció (insulation_option) adata.
+                    </div>
+                  )}
                   <div className="text-sm">
                     <span className="font-medium">Projektek száma:</span> {materialRequirements.projectCount}
+                    {materialRequirements.totalProjects > materialRequirements.projectCount && (
+                      <span className="text-gray-500 dark:text-gray-400"> (összes: {materialRequirements.totalProjects})</span>
+                    )}
                   </div>
                   <div className="text-sm">
                     <span className="font-medium">Összes terület:</span> {materialRequirements.totalArea.toFixed(0)} m²
