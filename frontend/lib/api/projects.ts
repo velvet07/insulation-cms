@@ -3,7 +3,7 @@ import type { Project, StrapiResponse } from '@/types';
 
 export interface ProjectFilters {
   status?: Project['status'];
-  assigned_to?: number;
+  assigned_to?: number | string; // Support both numeric id and documentId (Strapi v5)
   tenant?: number;
   company?: number | string;
   search?: string;
@@ -17,7 +17,15 @@ export const projectsApi = {
       params.append('filters[status][$eq]', filters.status);
     }
     if (filters?.assigned_to) {
-      params.append('filters[assigned_to][id][$eq]', filters.assigned_to.toString());
+      // Strapi v5 uses documentId, try both id and documentId
+      const assignedToId = filters.assigned_to.toString();
+      if (assignedToId.includes('-')) {
+        // It's a documentId
+        params.append('filters[assigned_to][documentId][$eq]', assignedToId);
+      } else {
+        // It's a numeric id
+        params.append('filters[assigned_to][id][$eq]', assignedToId);
+      }
     }
     if (filters?.tenant) {
       params.append('filters[tenant][id][$eq]', filters.tenant.toString());

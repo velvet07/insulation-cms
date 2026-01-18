@@ -51,13 +51,13 @@ export default function ProjectsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<Project['status'] | 'all'>('all');
 
-  // Build filters - if user is not admin, filter by tenant or company
+  // Build filters - if user is not admin, filter by company or assigned_to
   const filters: ProjectFilters = {
     ...(statusFilter !== 'all' && { status: statusFilter }),
     ...(search && { search }),
   };
 
-  // If user is not admin, filter by tenant or company
+  // If user is not admin (or role is undefined), filter by company or assigned_to
   if (!isAdminRole(user)) {
     // First try to filter by company (higher priority)
     if (user?.company) {
@@ -82,10 +82,16 @@ export default function ProjectsPage() {
 
       const companyId = getUserCompanyId();
       if (companyId) {
+        // If company ID is a string (documentId), use as-is
+        // If it's a number, use as-is
         filters.company = companyId;
       }
-    } else if (user?.tenant?.id || user?.tenant?.documentId) {
-      filters.tenant = parseInt(user.tenant.documentId || user.tenant.id.toString());
+    } else if (user?.id || user?.documentId) {
+      // If user has no company, show only projects assigned to this user
+      const userId = user.documentId || user.id;
+      if (userId) {
+        filters.assigned_to = userId;
+      }
     }
   }
 
