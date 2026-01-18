@@ -106,6 +106,9 @@
       "multiple": true,
       "required": false,
       "allowedTypes": ["images"]
+    },
+    "audit_log": {
+      "type": "json"
     }
   }
 }

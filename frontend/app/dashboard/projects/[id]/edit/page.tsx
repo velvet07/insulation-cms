@@ -215,13 +215,16 @@ export default function EditProjectPage() {
       // Update subcontractor separately if provided and not empty
       if ('subcontractor' in data) {
         if (data.subcontractor && data.subcontractor !== 'none' && data.subcontractor !== '' && data.subcontractor !== null) {
-          // Strapi v5: use documentId if it's a documentId format, otherwise use numeric id
+          // Strapi v5: accept both documentId (string) and numeric id
           const subcontractorStr = data.subcontractor.toString();
-          let subcontractorId: string | number;
           
-          if (subcontractorStr.includes('-')) {
-            // It's a documentId format (contains hyphens)
-            subcontractorId = subcontractorStr;
+          // Strapi v5 documentIds can be strings with or without hyphens
+          // If it's a long string (likely documentId), use as-is
+          // If it's a short numeric string, try to parse as number
+          if (subcontractorStr.length > 10) {
+            // Likely a documentId (e.g., "p4fa1a0874bmeddcclcbj393")
+            updateData.subcontractor = subcontractorStr;
+            console.log('[Edit Project] Setting subcontractor (documentId):', subcontractorStr);
           } else {
             // Try to parse as number
             const parsedId = parseInt(subcontractorStr, 10);
@@ -230,13 +233,9 @@ export default function EditProjectPage() {
               // Skip setting subcontractor if ID is invalid
               delete updateData.subcontractor;
             } else {
-              subcontractorId = parsedId;
+              updateData.subcontractor = parsedId;
+              console.log('[Edit Project] Setting subcontractor (numeric id):', parsedId);
             }
-          }
-          
-          if (subcontractorId !== undefined) {
-            updateData.subcontractor = subcontractorId;
-            console.log('[Edit Project] Setting subcontractor:', subcontractorId);
           }
         } else {
           // Explicitly set to null to remove subcontractor
