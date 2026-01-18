@@ -153,18 +153,29 @@ export default factories.createCoreController('api::photo.photo', ({ strapi }) =
         if (category === null) {
           photoData.category = null;
         } else {
-          // Try to find category by documentId or numeric id
           let categoryDoc;
-          try {
-            // Try documentId first (Strapi v5)
-            categoryDoc = await strapi.documents('api::photo-category.photo-category').findOne({
-              documentId: category.toString(),
-            });
-          } catch (error) {
-            // If not found, try numeric id
-            const categoryId = typeof category === 'number' ? category : parseInt(category, 10);
-            if (!isNaN(categoryId)) {
+          
+          // Check if category is a numeric ID (number or numeric string)
+          const categoryId = typeof category === 'number' ? category : parseInt(category, 10);
+          const isNumericId = !isNaN(categoryId) && categoryId.toString() === category.toString();
+          
+          if (isNumericId) {
+            // If it's already a numeric ID, use it directly
+            try {
               categoryDoc = await strapi.entityService.findOne('api::photo-category.photo-category', categoryId);
+            } catch (error) {
+              strapi.log.error('Error finding category by numeric id:', error);
+              return ctx.badRequest(`Kategória nem található: ${category}`);
+            }
+          } else {
+            // If it's a documentId (string), try to find by documentId first
+            try {
+              categoryDoc = await strapi.documents('api::photo-category.photo-category').findOne({
+                documentId: category.toString(),
+              });
+            } catch (error) {
+              strapi.log.error('Error finding category by documentId:', error);
+              return ctx.badRequest(`Kategória nem található: ${category}`);
             }
           }
 
@@ -181,18 +192,29 @@ export default factories.createCoreController('api::photo.photo', ({ strapi }) =
         if (project === null) {
           photoData.project = null;
         } else {
-          // Try to find project by documentId or numeric id
           let projectDoc;
-          try {
-            // Try documentId first (Strapi v5)
-            projectDoc = await strapi.documents('api::project.project').findOne({
-              documentId: project.toString(),
-            });
-          } catch (error) {
-            // If not found, try numeric id
-            const projectId = typeof project === 'number' ? project : parseInt(project, 10);
-            if (!isNaN(projectId)) {
+          
+          // Check if project is a numeric ID (number or numeric string)
+          const projectId = typeof project === 'number' ? project : parseInt(project, 10);
+          const isNumericId = !isNaN(projectId) && projectId.toString() === project.toString();
+          
+          if (isNumericId) {
+            // If it's already a numeric ID, use it directly
+            try {
               projectDoc = await strapi.entityService.findOne('api::project.project', projectId);
+            } catch (error) {
+              strapi.log.error('Error finding project by numeric id:', error);
+              return ctx.badRequest(`Projekt nem található: ${project}`);
+            }
+          } else {
+            // If it's a documentId (string), try to find by documentId first
+            try {
+              projectDoc = await strapi.documents('api::project.project').findOne({
+                documentId: project.toString(),
+              });
+            } catch (error) {
+              strapi.log.error('Error finding project by documentId:', error);
+              return ctx.badRequest(`Projekt nem található: ${project}`);
             }
           }
 
