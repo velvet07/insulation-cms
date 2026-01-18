@@ -48,56 +48,12 @@ const contractDataSchema = z.object({
   insulation_option: z.enum(['A', 'B']).optional(),
   scheduled_date: z.string().optional(),
 }).superRefine((data, ctx) => {
-  // Ha property_address_same === false, akkor a property mezők kötelezőek
-  if (!data.property_address_same) {
-    if (!data.property_street || data.property_street.trim() === '') {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Az ingatlan utca, házszám kötelező',
-        path: ['property_street'],
-      });
-    }
-    if (!data.property_city || data.property_city.trim() === '') {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Az ingatlan város kötelező',
-        path: ['property_city'],
-      });
-    }
-    if (!data.property_zip || data.property_zip.trim() === '') {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Az ingatlan IRSZ kötelező',
-        path: ['property_zip'],
-      });
-    } else if (data.property_zip.length !== 4 || !/^\d+$/.test(data.property_zip)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Az irányítószám 4 számjegy kell legyen',
-        path: ['property_zip'],
-      });
-    }
-  }
-
-  // Ha property_address_same === true, akkor a property_zip mezőt nem kell validálni
-  // mert automatikusan kitöltődik a client_zip értékével
-  if (data.property_address_same && data.property_zip) {
-    // Ha property_address_same === true és van property_zip érték, akkor validáljuk
-    if (data.property_zip.length !== 4 || !/^\d+$/.test(data.property_zip)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Az irányítószám 4 számjegy kell legyen',
-        path: ['property_zip'],
-      });
-    }
-  }
-
-  // Ha floor_material === 'other', akkor a floor_material_extra kötelező
-  if (data.floor_material === 'other' && (!data.floor_material_extra || data.floor_material_extra.trim() === '')) {
+  // Ha property_zip van kitöltve, validáljuk a formátumát (de nem kötelező)
+  if (data.property_zip && data.property_zip.length !== 4 || (data.property_zip && !/^\d+$/.test(data.property_zip))) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: 'Kérjük, adja meg a födém anyagát',
-      path: ['floor_material_extra'],
+      message: 'Az irányítószám 4 számjegy kell legyen',
+      path: ['property_zip'],
     });
   }
 });
