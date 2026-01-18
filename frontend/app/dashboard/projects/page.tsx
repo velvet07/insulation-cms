@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ProtectedRoute } from '@/components/auth/protected-route';
@@ -23,7 +23,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { projectsApi, type ProjectFilters } from '@/lib/api/projects';
-import { companiesApi } from '@/lib/api/companies';
 import type { Project, Company } from '@/types';
 import { useAuthStore } from '@/lib/store/auth';
 import { isAdminRole } from '@/lib/utils/user-role';
@@ -52,13 +51,6 @@ export default function ProjectsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<Project['status'] | 'all'>('all');
   const [ownerFilter, setOwnerFilter] = useState<string>('all');
-
-  // Fetch companies for owner filter (only if admin)
-  const { data: companies = [] } = useQuery({
-    queryKey: ['companies'],
-    queryFn: () => companiesApi.getAll(),
-    enabled: isAdminRole(user), // Only fetch if admin
-  });
 
   // Build filters - if user is not admin, filter by company or assigned_to
   // Note: Owner filter is applied on frontend because "owner" can be either subcontractor or company
@@ -109,6 +101,31 @@ export default function ProjectsPage() {
     queryKey: ['projects', filters],
     queryFn: () => projectsApi.getAll(filters),
   });
+
+  // Extract unique owners (companies) from the projects list
+  // This prevents data leak - only show companies that have projects
+  const uniqueOwners = useMemo(() => {
+    const ownerMap = new Map<string, Company>();
+    
+    allProjects.forEach((project) => {
+      // Owner is subcontractor if exists, otherwise company
+      const owner = project.subcontractor || project.company;
+      if (owner) {
+        const ownerId = owner.documentId || owner.id;
+        if (ownerId) {
+          const idString = ownerId.toString();
+          if (!ownerMap.has(idString)) {
+            ownerMap.set(idString, owner);
+          }
+        }
+      }
+    });
+    
+    // Convert to array and sort by name
+    return Array.from(ownerMap.values()).sort((a, b) => 
+      (a.name || '').localeCompare(b.name || '')
+    );
+  }, [allProjects]);
 
   // Filter by owner on frontend if ownerFilter is set
   // This is needed because "owner" can be either subcontractor (if exists) or company (if no subcontractor)
@@ -193,18 +210,18 @@ export default function ProjectsPage() {
                 <SelectItem value="completed">Befejezve</SelectItem>
               </SelectContent>
             </Select>
-            {isAdminRole(user) && (
+            {isAdminRole(user) && uniqueOwners.length > 0 && (
               <Select value={ownerFilter} onValueChange={setOwnerFilter}>
                 <SelectTrigger className="w-[250px]">
                   <SelectValue placeholder="Tulajdonos szűrő" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Összes tulajdonos</SelectItem>
-                  {companies.map((company) => {
-                    const companyId = company.documentId || company.id;
+                  {uniqueOwners.map((owner) => {
+                    const ownerId = owner.documentId || owner.id;
                     return (
-                      <SelectItem key={companyId?.toString()} value={companyId?.toString() || ''}>
-                        {company.name}
+                      <SelectItem key={ownerId?.toString()} value={ownerId?.toString() || ''}>
+                        {owner.name}
                       </SelectItem>
                     );
                   })}
