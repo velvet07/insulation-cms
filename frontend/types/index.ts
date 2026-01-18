@@ -27,7 +27,7 @@ export interface Company extends StrapiEntity {
   address?: string;
   parent_company?: Company;
   subcontractors?: Company[];
-  users?: User[];
+  user?: User[];
   projects?: Project[];
 }
 

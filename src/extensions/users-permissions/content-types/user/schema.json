@@ -14,7 +14,7 @@
       "type": "relation",
       "relation": "manyToOne",
       "target": "api::company.company",
-      "inversedBy": "users"
+      "inversedBy": "user"
     }
   }
 }
