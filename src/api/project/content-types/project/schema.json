@@ -20,6 +20,15 @@
       "type": "string",
       "required": true
     },
+    "client_street": {
+      "type": "string"
+    },
+    "client_city": {
+      "type": "string"
+    },
+    "client_zip": {
+      "type": "string"
+    },
     "client_phone": {
       "type": "string"
     },
