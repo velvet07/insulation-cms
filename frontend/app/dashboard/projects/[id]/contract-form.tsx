@@ -23,25 +23,27 @@ import { formatDate } from '@/lib/utils';
 import type { Project } from '@/types';
 
 const contractDataSchema = z.object({
-  // Szerződő lakcíme
-  client_street: z.string().min(1, 'Az utca, házszám kötelező'),
-  client_city: z.string().min(1, 'A város kötelező'),
-  client_zip: z.string().length(4, 'Az irányítószám 4 karakter hosszú kell legyen').regex(/^\d+$/, 'Csak számokat tartalmazhat'),
-  // Születési adatok
-  client_birth_place: z.string().min(1, 'A születési hely kötelező'),
-  client_birth_date: z.string().min(1, 'A születési idő kötelező'),
-  // Egyéb adatok
-  client_mother_name: z.string().min(1, 'Az anyja neve kötelező'),
-  client_tax_id: z.string().length(10, 'Az adóazonosító 10 karakter hosszú kell legyen').regex(/^\d+$/, 'Csak számokat tartalmazhat'),
+  // Szerződő lakcíme - nem kötelező mezők
+  client_street: z.string().optional(),
+  client_city: z.string().optional(),
+  client_zip: z.string().optional().refine((val) => !val || (val.length === 4 && /^\d+$/.test(val)), {
+    message: 'Az irányítószám 4 számjegy kell legyen',
+  }),
+  // Születési adatok - nem kötelező mezők
+  client_birth_place: z.string().optional(),
+  client_birth_date: z.string().optional(),
+  // Egyéb adatok - nem kötelező mezők
+  client_mother_name: z.string().optional(),
+  client_tax_id: z.string().optional().refine((val) => !val || (val.length === 10 && /^\d+$/.test(val)), {
+    message: 'Az adóazonosító 10 számjegy kell legyen',
+  }),
   // Ingatlan adatok
   property_address_same: z.boolean(),
   property_street: z.string().optional(),
   property_city: z.string().optional(),
   property_zip: z.string().optional(),
-  area_sqm: z.number().min(0.01, 'A padlás alapterülete kötelező'),
-  floor_material: z.enum(['wood', 'prefab_rc', 'monolithic_rc', 'rc_slab', 'hollow_block', 'other'], {
-    message: 'A padlásfödém anyaga kötelező',
-  }),
+  area_sqm: z.number().optional(),
+  floor_material: z.enum(['wood', 'prefab_rc', 'monolithic_rc', 'rc_slab', 'hollow_block', 'other']).optional(),
   floor_material_extra: z.string().optional(),
   insulation_option: z.enum(['A', 'B']).optional(),
   scheduled_date: z.string().optional(),

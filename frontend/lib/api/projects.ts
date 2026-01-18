@@ -102,9 +102,12 @@ export const projectsApi = {
 
   update: async (id: number | string, data: Partial<Project>) => {
     try {
-      // Szűrjük ki az undefined értékeket
+      // Szűrjük ki az undefined értékeket ÉS a rendszer mezőket (amiket nem lehet frissíteni)
+      const systemFields = ['id', 'documentId', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy'];
       const cleanData = Object.fromEntries(
-        Object.entries(data).filter(([_, value]) => value !== undefined)
+        Object.entries(data).filter(([key, value]) => 
+          value !== undefined && !systemFields.includes(key)
+        )
       );
       
       console.log('Updating project with ID:', id);

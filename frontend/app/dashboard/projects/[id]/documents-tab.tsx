@@ -116,6 +116,23 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
   });
 
   const handleGenerateAll = () => {
+    // Ellenőrizzük, hogy van-e olyan template, amihez figyelmeztetés kell
+    if (isContractDataIncomplete) {
+      const needsWarning = templates.some(template => 
+        !allowedTemplatesWithoutWarning.includes(template.type)
+      );
+
+      if (needsWarning) {
+        const confirmed = confirm(
+          'FIGYELEM! A szerződés adatok hiányosak. A generált dokumentum nem fog tartalmazni minden adatot!\n\n' +
+          'Folytatja a generálást?'
+        );
+        if (!confirmed) {
+          return;
+        }
+      }
+    }
+
     if (confirm('Biztosan le szeretné generálni az összes elérhető sablont?')) {
       const allTemplateIds = templates.map(t => (t.documentId || t.id).toString());
       generateMutation.mutate(allTemplateIds);
@@ -205,11 +222,44 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
     },
   });
 
+  // Ellenőrizzük, hogy a szerződés adatok hiányosak-e
+  const isContractDataIncomplete = !(
+    project.client_birth_place &&
+    project.client_birth_date &&
+    project.client_tax_id &&
+    project.area_sqm &&
+    project.insulation_option
+  );
+
+  // Engedélyezett template típusok, amikhez NINCS figyelmeztetés hiányos adatoknál
+  const allowedTemplatesWithoutWarning: string[] = ['felmerolap', 'teljesitesi_igazolo', 'egyeb'];
+
   const handleGenerate = () => {
     if (selectedTemplateIds.length === 0) {
       // Nincs alert, csak return
       return;
     }
+
+    // Ellenőrizzük, hogy van-e olyan template, amihez figyelmeztetés kell
+    if (isContractDataIncomplete) {
+      const selectedTemplates = templates.filter(t => 
+        selectedTemplateIds.includes((t.documentId || t.id).toString())
+      );
+      const needsWarning = selectedTemplates.some(template => 
+        !allowedTemplatesWithoutWarning.includes(template.type)
+      );
+
+      if (needsWarning) {
+        const confirmed = confirm(
+          'FIGYELEM! A szerződés adatok hiányosak. A generált dokumentum nem fog tartalmazni minden adatot!\n\n' +
+          'Folytatja a generálást?'
+        );
+        if (!confirmed) {
+          return;
+        }
+      }
+    }
+
     generateMutation.mutate(selectedTemplateIds);
   };
 
