@@ -356,7 +356,7 @@ export default function ProjectDetailPage() {
         `Státusz módosítva: ${statusLabels[project.status]} -> ${statusLabels[newStatus]}`
       );
 
-      const updateData: Partial<Project> = {
+      const updateData: any = {
         status: newStatus,
         audit_log: addAuditLogEntry(project.audit_log, auditLogEntry),
       };
@@ -364,7 +364,7 @@ export default function ProjectDetailPage() {
       // Ha jóváhagyva/befejezve, állítsuk be a dátumot
       if (newStatus === 'approved') {
         updateData.approved_at = new Date().toISOString();
-        // Strapi relation mezőket ID-val frissítjük
+        // Strapi relation mezőket ID-val vagy documentId-val frissítjük
         updateData.approved_by = user?.id || user?.documentId;
       } else if (newStatus === 'completed') {
         updateData.completed_at = new Date().toISOString();
