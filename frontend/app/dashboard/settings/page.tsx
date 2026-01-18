@@ -78,6 +78,8 @@ export default function SettingsPage() {
   const [categoryName, setCategoryName] = useState('');
   const [categoryRequired, setCategoryRequired] = useState(false);
 
+  // Memoize admin check to avoid recalculating on every render
+  const isAdmin = useMemo(() => isAdminRole(user), [user]);
 
   const { data: companies = [], isLoading } = useQuery({
     queryKey: ['companies'],
@@ -90,9 +92,6 @@ export default function SettingsPage() {
     queryFn: () => companiesApi.getAll({ type: 'main_contractor' }),
     enabled: isAdmin,
   });
-
-  // Memoize admin check to avoid recalculating on every render
-  const isAdmin = useMemo(() => isAdminRole(user), [user]);
 
   // Fetch photo categories
   const { data: categories = [], isLoading: isLoadingCategories } = useQuery({
