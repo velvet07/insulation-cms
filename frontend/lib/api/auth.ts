@@ -25,15 +25,27 @@ export const authApi = {
   login: async (credentials: LoginCredentials): Promise<LoginResponse> => {
     try {
       const response = await authApiClient.post<LoginResponse | { data: LoginResponse }>('/auth/local', credentials);
-      // Strapi v5 might wrap the response differently
+      
+      // Extract login response
+      let loginResponse: LoginResponse;
       if (response.data && 'jwt' in response.data && 'user' in response.data) {
-        return response.data as LoginResponse;
+        loginResponse = response.data as LoginResponse;
+      } else if (response.data && typeof response.data === 'object' && 'data' in response.data) {
+        loginResponse = (response.data as { data: LoginResponse }).data;
+      } else {
+        loginResponse = response.data as LoginResponse;
       }
-      // If response is wrapped in data property
-      if (response.data && typeof response.data === 'object' && 'data' in response.data) {
-        return (response.data as { data: LoginResponse }).data;
+
+      // After login, fetch full user data with role and company populated
+      try {
+        const fullUser = await authApi.getMe(loginResponse.jwt);
+        loginResponse.user = fullUser;
+      } catch (meError) {
+        console.warn('Could not fetch full user data, using login response:', meError);
+        // Continue with the user from login response
       }
-      return response.data as LoginResponse;
+
+      return loginResponse;
     } catch (error: any) {
       // Better error handling
       if (error.response) {
