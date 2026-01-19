@@ -144,6 +144,13 @@ export const projectsApi = {
       const response = await strapiApi.put<StrapiResponse<Project>>(`/projects/${id}`, { data: cleanData });
       return unwrapStrapiResponse(response);
     } catch (error: any) {
+      // 404-es hibák esetén ne dobjunk hibát - csendben kihagyjuk (projekt lehet törölve lett)
+      if (error.response?.status === 404) {
+        // Visszatérünk null-lal, hogy a hívó oldalon tudja, hogy nem sikerült
+        // De nem dobunk hibát, hogy ne jelenjen meg a konzolban
+        return null as any;
+      }
+      
       if (error.response) {
         // Részletesebb hibaüzenet
         let errorMessage = 'Hiba történt a projekt frissítése során';
@@ -165,8 +172,6 @@ export const projectsApi = {
           // Ha üres az error.response.data, nézzük meg a status kódot
           if (error.response.status === 400) {
             errorMessage = 'Érvénytelen adatok (400 Bad Request). Ellenőrizd, hogy minden mező helyes-e.';
-          } else if (error.response.status === 404) {
-            errorMessage = 'Projekt nem található (404 Not Found)';
           } else if (error.response.status === 403) {
             errorMessage = 'Nincs jogosultság a projekt frissítéséhez (403 Forbidden)';
           } else if (error.response.status === 401) {
