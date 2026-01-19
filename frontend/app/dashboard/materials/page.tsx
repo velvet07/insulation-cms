@@ -725,8 +725,13 @@ export default function MaterialsPage() {
                                       variant="ghost"
                                       size="sm"
                                       onClick={() => {
+                                        // Törlés megerősítés nélkül (audit log miatt)
+                                        // A tranzakció adatai már rendelkezésre állnak, nem kell újra lekérni
                                         summary.transactions.forEach((t: any) => {
-                                          deleteTransactionMutation.mutate(t.id || t.documentId);
+                                          deleteTransactionMutation.mutate({
+                                            id: t.id || t.documentId,
+                                            transaction: t, // A tranzakció adatai már itt vannak
+                                          });
                                         });
                                       }}
                                       className="text-red-600 hover:text-red-700"
