@@ -344,14 +344,26 @@ export default function MaterialsPage() {
 
         // Minden projekthez hozzáadjuk az audit log bejegyzést
         const updatePromises = allProjects.map((project: Project) => {
+          const projectId = project.id || project.documentId;
+          if (!projectId) {
+            console.warn('Projekt ID hiányzik, audit log frissítés kihagyva');
+            return Promise.resolve();
+          }
+          
           const updatedAuditLog = addAuditLogEntry(project.audit_log, auditLogEntry);
-          return projectsApi.update(project.id || project.documentId!, {
+          return projectsApi.update(projectId, {
             audit_log: updatedAuditLog,
           }).catch((error: any) => {
             // Ha nincs audit_log mező, csak logoljuk
             if (error?.message?.includes('Invalid key audit_log') || 
                 error?.response?.data?.error?.message?.includes('Invalid key audit_log')) {
               console.warn('audit_log mező nem létezik a projektben, audit log frissítés kihagyva');
+            } else if (error?.response?.status === 404) {
+              // Projekt nem található (lehet, hogy törölve lett)
+              console.warn(`Projekt nem található (ID: ${projectId}), audit log frissítés kihagyva`);
+            } else {
+              // Egyéb hiba
+              console.warn(`Audit log frissítés hiba projektnél (ID: ${projectId}):`, error?.message || error);
             }
           });
         });
@@ -517,13 +529,26 @@ export default function MaterialsPage() {
         auditLogEntry.module = 'Anyaggazdálkodás';
 
         const updatePromises = allProjects.map((project: Project) => {
+          const projectId = project.id || project.documentId;
+          if (!projectId) {
+            console.warn('Projekt ID hiányzik, audit log frissítés kihagyva');
+            return Promise.resolve();
+          }
+          
           const updatedAuditLog = addAuditLogEntry(project.audit_log, auditLogEntry);
-          return projectsApi.update(project.id || project.documentId!, {
+          return projectsApi.update(projectId, {
             audit_log: updatedAuditLog,
           }).catch((error: any) => {
+            // Ha nincs audit_log mező, csak logoljuk
             if (error?.message?.includes('Invalid key audit_log') || 
                 error?.response?.data?.error?.message?.includes('Invalid key audit_log')) {
               console.warn('audit_log mező nem létezik a projektben, audit log frissítés kihagyva');
+            } else if (error?.response?.status === 404) {
+              // Projekt nem található (lehet, hogy törölve lett)
+              console.warn(`Projekt nem található (ID: ${projectId}), audit log frissítés kihagyva`);
+            } else {
+              // Egyéb hiba
+              console.warn(`Audit log frissítés hiba projektnél (ID: ${projectId}):`, error?.message || error);
             }
           });
         });
@@ -566,13 +591,26 @@ export default function MaterialsPage() {
         auditLogEntry.module = 'Anyaggazdálkodás';
 
         const updatePromises = allProjects.map((project: Project) => {
+          const projectId = project.id || project.documentId;
+          if (!projectId) {
+            console.warn('Projekt ID hiányzik, audit log frissítés kihagyva');
+            return Promise.resolve();
+          }
+          
           const updatedAuditLog = addAuditLogEntry(project.audit_log, auditLogEntry);
-          return projectsApi.update(project.id || project.documentId!, {
+          return projectsApi.update(projectId, {
             audit_log: updatedAuditLog,
           }).catch((error: any) => {
+            // Ha nincs audit_log mező, csak logoljuk
             if (error?.message?.includes('Invalid key audit_log') || 
                 error?.response?.data?.error?.message?.includes('Invalid key audit_log')) {
               console.warn('audit_log mező nem létezik a projektben, audit log frissítés kihagyva');
+            } else if (error?.response?.status === 404) {
+              // Projekt nem található (lehet, hogy törölve lett)
+              console.warn(`Projekt nem található (ID: ${projectId}), audit log frissítés kihagyva`);
+            } else {
+              // Egyéb hiba
+              console.warn(`Audit log frissítés hiba projektnél (ID: ${projectId}):`, error?.message || error);
             }
           });
         });
