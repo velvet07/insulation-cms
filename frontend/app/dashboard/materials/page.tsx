@@ -69,7 +69,36 @@ export default function MaterialsPage() {
   const [editingTransaction, setEditingTransaction] = useState<{ date: string; materialId: string } | null>(null);
   const [editTransactionData, setEditTransactionData] = useState<{ pallets: string; rolls: string } | null>(null);
   
-  // Admin jog ellenőrzése - eltávolítva, mert mindenki módosíthat ha logolva van
+  // Helyi log a törlések és módosítások tárolásához (localStorage-ban perzisztálva)
+  type MaterialLogEntry = {
+    id: string;
+    timestamp: string;
+    action: 'pickup' | 'modified' | 'deleted';
+    materialName: string;
+    quantity: { pallets?: number; rolls?: number };
+    oldQuantity?: { pallets?: number; rolls?: number };
+    user: string;
+  };
+  const [materialLog, setMaterialLog] = useState<MaterialLogEntry[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('materialMovementLog');
+      return saved ? JSON.parse(saved) : [];
+    }
+    return [];
+  });
+  
+  const addLogEntry = (entry: Omit<MaterialLogEntry, 'id' | 'timestamp'>) => {
+    const newEntry: MaterialLogEntry = {
+      ...entry,
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: new Date().toISOString(),
+    };
+    setMaterialLog((prev) => {
+      const updated = [newEntry, ...prev].slice(0, 100); // Max 100 bejegyzés
+      localStorage.setItem('materialMovementLog', JSON.stringify(updated));
+      return updated;
+    });
+  };
 
   const userId = user?.documentId || user?.id;
 
@@ -80,7 +109,7 @@ export default function MaterialsPage() {
   });
 
   // Anyagegyenlegek lekérése (jelenlegi felhasználó)
-  const { data: balances = [], isLoading: balancesLoading } = useQuery({
+  const { data: balances = [] } = useQuery({
     queryKey: ['material-balances', userId],
     queryFn: () => materialBalancesApi.getByUser(userId!),
     enabled: !!userId,
@@ -377,7 +406,17 @@ export default function MaterialsPage() {
 
       return createdTransactions;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      // Helyi log hozzáadása minden anyaghoz
+      variables.forEach((item) => {
+        addLogEntry({
+          action: 'pickup',
+          materialName: item.materialName || 'Ismeretlen anyag',
+          quantity: { pallets: item.quantity_pallets, rolls: item.quantity_rolls },
+          user: user?.username || user?.email || 'Ismeretlen',
+        });
+      });
+      
       queryClient.invalidateQueries({ queryKey: ['material-balances'] });
       queryClient.invalidateQueries({ queryKey: ['material-transactions'] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
@@ -442,24 +481,6 @@ export default function MaterialsPage() {
 
     pickupMutation.mutate(transactionsToCreate);
   };
-
-  // Anyagegyenlegek kategorizálása
-  const balancesByCategory = useMemo(() => {
-    const categories: Record<string, MaterialBalance[]> = {
-      insulation: [],
-      vapor_barrier: [],
-      breathable_membrane: [],
-    };
-
-    balances.forEach((balance) => {
-      const category = balance.material?.category || 'unknown';
-      if (category in categories) {
-        categories[category].push(balance);
-      }
-    });
-
-    return categories;
-  }, [balances]);
 
   // Riasztások (negatív egyenleg)
   const deficits = useMemo(() => {
@@ -597,18 +618,6 @@ export default function MaterialsPage() {
     return { insulation, foils, all: balance };
   }, [transactions, projects, materials]);
 
-  // Anyag mozgás log (legutóbbi tranzakciók)
-  const materialMovementLog = useMemo(() => {
-    // Az összes tranzakciót időrendben rendezzük (legújabb elöl)
-    const allTransactions = [...(transactions as any[])].sort((a, b) => {
-      const dateA = a.updatedAt || a.createdAt || '';
-      const dateB = b.updatedAt || b.createdAt || '';
-      return dateB.localeCompare(dateA);
-    });
-    
-    return allTransactions.slice(0, 20); // Csak az utolsó 20 bejegyzés
-  }, [transactions]);
-
   // Tranzakció törlés mutation
   const deleteTransactionMutation = useMutation({
     mutationFn: async ({ id, transaction }: { id: string | number; transaction: any }) => {
@@ -663,9 +672,20 @@ export default function MaterialsPage() {
         console.warn('Audit log frissítés hiba (nem kritikus):', error);
       }
 
-      return deleted;
+      return { deleted, transaction };
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      // Helyi log hozzáadása
+      addLogEntry({
+        action: 'deleted',
+        materialName: variables.transaction?.material?.name || 'Ismeretlen anyag',
+        quantity: { 
+          pallets: variables.transaction?.quantity_pallets || 0, 
+          rolls: variables.transaction?.quantity_rolls || 0 
+        },
+        user: user?.username || user?.email || 'Ismeretlen',
+      });
+      
       queryClient.invalidateQueries({ queryKey: ['material-balances'] });
       queryClient.invalidateQueries({ queryKey: ['material-transactions'] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
@@ -728,9 +748,24 @@ export default function MaterialsPage() {
         console.warn('Audit log frissítés hiba (nem kritikus):', error);
       }
 
-      return updated;
+      return { updated, oldTransaction, newData: data };
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      // Helyi log hozzáadása
+      addLogEntry({
+        action: 'modified',
+        materialName: variables.oldTransaction?.material?.name || 'Ismeretlen anyag',
+        quantity: { 
+          pallets: variables.data.quantity_pallets || 0, 
+          rolls: variables.data.quantity_rolls || 0 
+        },
+        oldQuantity: {
+          pallets: variables.oldTransaction?.quantity_pallets || 0,
+          rolls: variables.oldTransaction?.quantity_rolls || 0,
+        },
+        user: user?.username || user?.email || 'Ismeretlen',
+      });
+      
       queryClient.invalidateQueries({ queryKey: ['material-balances'] });
       queryClient.invalidateQueries({ queryKey: ['material-transactions'] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
@@ -972,6 +1007,7 @@ export default function MaterialsPage() {
                             quantity_pallets: pallets,
                             quantity_rolls: rolls,
                           },
+                          oldTransaction: t,
                         });
                       });
                     }
@@ -984,201 +1020,6 @@ export default function MaterialsPage() {
             </DialogContent>
           </Dialog>
         )}
-
-        {/* Anyagegyenlegek */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-semibold">Anyagegyenlegem</h3>
-            {balances.length > 0 && (
-              <div className="text-sm text-gray-600 dark:text-gray-400">
-                Összesen: {balances.length} anyag
-              </div>
-            )}
-          </div>
-          {balances.length === 0 && !balancesLoading && (
-            <Card className="mb-4">
-              <CardContent className="py-8 text-center text-gray-500">
-                <Package className="mx-auto h-12 w-12 mb-2 text-gray-400" />
-                <p className="text-sm">Még nincs anyagegyenleg adat.</p>
-                <p className="text-xs text-gray-400 mt-1">Az anyagfelvétel után itt jelenik meg az egyenleg.</p>
-              </CardContent>
-            </Card>
-          )}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {balancesByCategory.insulation.map((balance) => {
-              const pickedUp = balance.total_picked_up || {};
-              const used = balance.total_used || {};
-              const bal = balance.balance || {};
-              const status = balance.status || 'balanced';
-
-              return (
-                <Card
-                  key={balance.documentId || balance.id}
-                  className={status === 'deficit' ? 'border-red-200 dark:border-red-900' : ''}
-                >
-                  <CardHeader>
-                    <CardTitle className="text-lg flex items-center">
-                      <Package className="mr-2 h-5 w-5" />
-                      {balance.material?.name || 'Szigetelőanyag'}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="text-sm">
-                      <div className="flex justify-between mb-1">
-                        <span className="text-gray-600 dark:text-gray-400">Felvéve:</span>
-                        <span>{formatInsulationQuantity(pickedUp.pallets || 0, pickedUp.rolls || 0)}</span>
-                      </div>
-                      <div className="flex justify-between mb-1">
-                        <span className="text-gray-600 dark:text-gray-400">Bedolgozva:</span>
-                        <span>{formatInsulationQuantity(used.pallets || 0, used.rolls || 0)}</span>
-                      </div>
-                      <div className="flex justify-between font-semibold pt-2 border-t">
-                        <span>Egyenleg:</span>
-                        <span
-                          className={
-                            status === 'deficit'
-                              ? 'text-red-600 dark:text-red-400'
-                              : status === 'surplus'
-                              ? 'text-green-600 dark:text-green-400'
-                              : ''
-                          }
-                        >
-                          {formatInsulationQuantity(bal.pallets || 0, bal.rolls || 0)}
-                        </span>
-                      </div>
-                    </div>
-                    {status === 'deficit' && (
-                      <div className="flex items-center text-sm text-red-600 dark:text-red-400">
-                        <TrendingDown className="mr-1 h-4 w-4" />
-                        Hiány - Kérj utánpótlást!
-                      </div>
-                    )}
-                    {status === 'surplus' && (
-                      <div className="flex items-center text-sm text-green-600 dark:text-green-400">
-                        <CheckCircle2 className="mr-1 h-4 w-4" />
-                        Többlet
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              );
-            })}
-
-            {balancesByCategory.vapor_barrier.map((balance) => {
-              const pickedUp = balance.total_picked_up || {};
-              const used = balance.total_used || {};
-              const bal = balance.balance || {};
-              const status = balance.status || 'balanced';
-
-              return (
-                <Card
-                  key={balance.documentId || balance.id}
-                  className={status === 'deficit' ? 'border-red-200 dark:border-red-900' : ''}
-                >
-                  <CardHeader>
-                    <CardTitle className="text-lg flex items-center">
-                      <Package className="mr-2 h-5 w-5" />
-                      {balance.material?.name || 'Párazáró fólia'}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="text-sm">
-                      <div className="flex justify-between mb-1">
-                        <span className="text-gray-600 dark:text-gray-400">Felvéve:</span>
-                        <span>{formatFoilQuantity(pickedUp.rolls || 0)}</span>
-                      </div>
-                      <div className="flex justify-between mb-1">
-                        <span className="text-gray-600 dark:text-gray-400">Bedolgozva:</span>
-                        <span>{formatFoilQuantity(used.rolls || 0)}</span>
-                      </div>
-                      <div className="flex justify-between font-semibold pt-2 border-t">
-                        <span>Egyenleg:</span>
-                        <span
-                          className={
-                            status === 'deficit'
-                              ? 'text-red-600 dark:text-red-400'
-                              : status === 'surplus'
-                              ? 'text-green-600 dark:text-green-400'
-                              : ''
-                          }
-                        >
-                          {formatFoilQuantity(bal.rolls || 0)}
-                        </span>
-                      </div>
-                    </div>
-                    {status === 'deficit' && (
-                      <div className="flex items-center text-sm text-red-600 dark:text-red-400">
-                        <TrendingDown className="mr-1 h-4 w-4" />
-                        Hiány - Kérj utánpótlást!
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              );
-            })}
-
-            {balancesByCategory.breathable_membrane.map((balance) => {
-              const pickedUp = balance.total_picked_up || {};
-              const used = balance.total_used || {};
-              const bal = balance.balance || {};
-              const status = balance.status || 'balanced';
-
-              return (
-                <Card
-                  key={balance.documentId || balance.id}
-                  className={status === 'deficit' ? 'border-red-200 dark:border-red-900' : ''}
-                >
-                  <CardHeader>
-                    <CardTitle className="text-lg flex items-center">
-                      <Package className="mr-2 h-5 w-5" />
-                      {balance.material?.name || 'Légáteresztő fólia'}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="text-sm">
-                      <div className="flex justify-between mb-1">
-                        <span className="text-gray-600 dark:text-gray-400">Felvéve:</span>
-                        <span>{formatFoilQuantity(pickedUp.rolls || 0)}</span>
-                      </div>
-                      <div className="flex justify-between mb-1">
-                        <span className="text-gray-600 dark:text-gray-400">Bedolgozva:</span>
-                        <span>{formatFoilQuantity(used.rolls || 0)}</span>
-                      </div>
-                      <div className="flex justify-between font-semibold pt-2 border-t">
-                        <span>Egyenleg:</span>
-                        <span
-                          className={
-                            status === 'deficit'
-                              ? 'text-red-600 dark:text-red-400'
-                              : status === 'surplus'
-                              ? 'text-green-600 dark:text-green-400'
-                              : ''
-                          }
-                        >
-                          {formatFoilQuantity(bal.rolls || 0)}
-                        </span>
-                      </div>
-                    </div>
-                    {status === 'deficit' && (
-                      <div className="flex items-center text-sm text-red-600 dark:text-red-400">
-                        <TrendingDown className="mr-1 h-4 w-4" />
-                        Hiány - Kérj utánpótlást!
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              );
-            })}
-
-            {balances.length === 0 && !balancesLoading && (
-              <Card className="col-span-full">
-                <CardContent className="py-8 text-center text-gray-500">
-                  Még nincs anyagegyenleg adat.
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </div>
 
         {/* Anyagigény számítás */}
         {materialRequirements && dateRange && (
@@ -1593,60 +1434,90 @@ export default function MaterialsPage() {
               <List className="mr-2 h-5 w-5" />
               Anyag mozgás napló
             </h3>
+            {materialLog.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setMaterialLog([]);
+                  localStorage.removeItem('materialMovementLog');
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                Napló törlése
+              </Button>
+            )}
           </div>
           <Card>
             <CardContent className="py-4">
-              {materialMovementLog.length === 0 ? (
+              {materialLog.length === 0 ? (
                 <div className="text-center text-gray-500 py-8">
                   <List className="mx-auto h-12 w-12 mb-2 text-gray-400" />
                   <p className="text-sm">Még nincs anyag mozgás.</p>
+                  <p className="text-xs text-gray-400 mt-1">Az anyagfelvétel, módosítás és törlés itt jelenik meg.</p>
                 </div>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Dátum</TableHead>
-                      <TableHead>Típus</TableHead>
+                      <TableHead>Művelet</TableHead>
                       <TableHead>Anyag</TableHead>
+                      <TableHead>Felhasználó</TableHead>
                       <TableHead className="text-right">Mennyiség</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {materialMovementLog.map((t: any) => {
-                      const date = t.pickup_date || t.used_date || t.createdAt;
-                      const typeLabels: Record<string, string> = {
+                    {materialLog.map((entry) => {
+                      const actionLabels: Record<string, string> = {
                         pickup: 'Felvétel',
-                        usage: 'Felhasználás',
+                        modified: 'Módosítás',
+                        deleted: 'Törlés',
                       };
-                      const typeColors: Record<string, string> = {
+                      const actionColors: Record<string, string> = {
                         pickup: 'text-green-600 dark:text-green-400',
-                        usage: 'text-blue-600 dark:text-blue-400',
+                        modified: 'text-amber-600 dark:text-amber-400',
+                        deleted: 'text-red-600 dark:text-red-400',
                       };
                       
                       return (
-                        <TableRow key={t.documentId || t.id}>
+                        <TableRow key={entry.id}>
                           <TableCell className="text-sm text-gray-600 dark:text-gray-400">
-                            {date ? new Date(date).toLocaleDateString('hu-HU', {
+                            {new Date(entry.timestamp).toLocaleDateString('hu-HU', {
                               year: 'numeric',
                               month: 'short',
                               day: 'numeric',
                               hour: '2-digit',
                               minute: '2-digit',
-                            }) : '-'}
+                            })}
                           </TableCell>
                           <TableCell>
-                            <span className={`font-medium ${typeColors[t.type] || ''}`}>
-                              {typeLabels[t.type] || t.type}
+                            <span className={`font-medium ${actionColors[entry.action] || ''}`}>
+                              {actionLabels[entry.action] || entry.action}
                             </span>
                           </TableCell>
                           <TableCell className="font-medium">
-                            {t.material?.name || 'Ismeretlen anyag'}
+                            {entry.materialName}
+                          </TableCell>
+                          <TableCell className="text-sm text-gray-600 dark:text-gray-400">
+                            {entry.user}
                           </TableCell>
                           <TableCell className="text-right">
-                            {t.quantity_pallets > 0 && `${t.quantity_pallets} raklap`}
-                            {t.quantity_pallets > 0 && t.quantity_rolls > 0 && ', '}
-                            {t.quantity_rolls > 0 && `${t.quantity_rolls} tekercs`}
-                            {!t.quantity_pallets && !t.quantity_rolls && '0'}
+                            {entry.action === 'modified' && entry.oldQuantity ? (
+                              <>
+                                <span className="text-gray-400 line-through mr-2">
+                                  {entry.oldQuantity.pallets || 0} r, {entry.oldQuantity.rolls || 0} t
+                                </span>
+                                <span>→ {entry.quantity.pallets || 0} raklap, {entry.quantity.rolls || 0} tekercs</span>
+                              </>
+                            ) : (
+                              <>
+                                {(entry.quantity.pallets || 0) > 0 && `${entry.quantity.pallets} raklap`}
+                                {(entry.quantity.pallets || 0) > 0 && (entry.quantity.rolls || 0) > 0 && ', '}
+                                {(entry.quantity.rolls || 0) > 0 && `${entry.quantity.rolls} tekercs`}
+                                {!entry.quantity.pallets && !entry.quantity.rolls && '0'}
+                              </>
+                            )}
                           </TableCell>
                         </TableRow>
                       );
