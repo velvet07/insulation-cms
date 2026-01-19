@@ -496,19 +496,23 @@ export default function MaterialsPage() {
 
   // Tranzakció törlés mutation
   const deleteTransactionMutation = useMutation({
-    mutationFn: async (id: string | number) => {
-      // Először lekérjük a tranzakciót az audit loghoz
-      const transaction = await materialTransactionsApi.getOne(id);
+    mutationFn: async ({ id, transaction }: { id: string | number; transaction: any }) => {
+      // A tranzakció adatai már rendelkezésre állnak, nem kell újra lekérni
       const deleted = await materialTransactionsApi.delete(id);
       
       // Audit log hozzáadása minden projekthez
       try {
         const allProjects = await projectsApi.getAll();
         const materialName = transaction.material?.name || 'Ismeretlen anyag';
+        const pickupDate = transaction.pickup_date 
+          ? new Date(transaction.pickup_date).toLocaleDateString('hu-HU')
+          : transaction.createdAt
+          ? new Date(transaction.createdAt).toLocaleDateString('hu-HU')
+          : 'ismeretlen dátum';
         const auditLogEntry = createAuditLogEntry(
           'material_removed',
           user,
-          `Anyagfelvétel törölve: ${materialName} - ${transaction.quantity_pallets || 0} raklap, ${transaction.quantity_rolls || 0} tekercs (${transaction.pickup_date || transaction.createdAt})`
+          `Anyagfelvétel törölve: ${materialName} - ${transaction.quantity_pallets || 0} raklap, ${transaction.quantity_rolls || 0} tekercs (${pickupDate})`
         );
         auditLogEntry.module = 'Anyaggazdálkodás';
 
