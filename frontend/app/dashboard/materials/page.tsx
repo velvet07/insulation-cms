@@ -451,7 +451,23 @@ export default function MaterialsPage() {
 
         {/* Anyagegyenlegek */}
         <div className="mb-6">
-          <h3 className="text-xl font-semibold mb-4">Anyagegyenlegem</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-semibold">Anyagegyenlegem</h3>
+            {balances.length > 0 && (
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                Összesen: {balances.length} anyag
+              </div>
+            )}
+          </div>
+          {balances.length === 0 && !balancesLoading && (
+            <Card className="mb-4">
+              <CardContent className="py-8 text-center text-gray-500">
+                <Package className="mx-auto h-12 w-12 mb-2 text-gray-400" />
+                <p className="text-sm">Még nincs anyagegyenleg adat.</p>
+                <p className="text-xs text-gray-400 mt-1">Az anyagfelvétel után itt jelenik meg az egyenleg.</p>
+              </CardContent>
+            </Card>
+          )}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {balancesByCategory.insulation.map((balance) => {
               const pickedUp = balance.total_picked_up || {};
