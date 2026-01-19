@@ -395,7 +395,7 @@ export default function MaterialsPage() {
     
     // Szűrjük az elérhető anyagokat
     const availableMaterials = materials.filter(
-      (m) => availableMaterialsIds.length === 0 || availableMaterialsIds.includes(String(m.id || m.documentId))
+      (m) => availableMaterialsIds.length === 0 || availableMaterialsIds.includes(String(m.documentId || m.id))
     );
 
     if (availableMaterials.length === 0) {
@@ -407,7 +407,7 @@ export default function MaterialsPage() {
     const transactionsToCreate: Array<{ material: string; quantity_pallets: number; quantity_rolls: number }> = [];
 
     availableMaterials.forEach((material) => {
-      const materialId = String(material.id || material.documentId);
+      const materialId = String(material.documentId || material.id);
       const quantities = pickupQuantities[materialId] || { pallets: '', rolls: '' };
       const pallets = quantities.pallets ? parseInt(quantities.pallets) : 0;
       const rolls = quantities.rolls ? parseInt(quantities.rolls) : 0;
@@ -692,7 +692,7 @@ export default function MaterialsPage() {
             <CardContent>
               <div className="space-y-2">
                 {deficits.map((balance) => (
-                  <div key={balance.id || balance.documentId} className="text-sm">
+                  <div key={balance.documentId || balance.id} className="text-sm">
                     <span className="font-medium">{balance.material?.name || 'Ismeretlen anyag'}:</span>
                     {' '}
                     <span className="text-red-600 dark:text-red-400">
@@ -776,7 +776,7 @@ export default function MaterialsPage() {
                                         // A tranzakció adatai már rendelkezésre állnak, nem kell újra lekérni
                                         summary.transactions.forEach((t: any) => {
                                           deleteTransactionMutation.mutate({
-                                            id: t.id || t.documentId,
+                                            id: t.documentId || t.id,
                                             transaction: t, // A tranzakció adatai már itt vannak
                                           });
                                         });
@@ -867,7 +867,7 @@ export default function MaterialsPage() {
                         const pallets = palletsPerTransaction + (index < remainingPallets ? 1 : 0);
                         const rolls = rollsPerTransaction + (index < remainingRolls ? 1 : 0);
                         updateTransactionMutation.mutate({
-                          id: t.id || t.documentId,
+                          id: t.documentId || t.id,
                           data: {
                             quantity_pallets: pallets,
                             quantity_rolls: rolls,
@@ -913,7 +913,7 @@ export default function MaterialsPage() {
 
               return (
                 <Card
-                  key={balance.id || balance.documentId}
+                  key={balance.documentId || balance.id}
                   className={status === 'deficit' ? 'border-red-200 dark:border-red-900' : ''}
                 >
                   <CardHeader>
@@ -972,7 +972,7 @@ export default function MaterialsPage() {
 
               return (
                 <Card
-                  key={balance.id || balance.documentId}
+                  key={balance.documentId || balance.id}
                   className={status === 'deficit' ? 'border-red-200 dark:border-red-900' : ''}
                 >
                   <CardHeader>
@@ -1025,7 +1025,7 @@ export default function MaterialsPage() {
 
               return (
                 <Card
-                  key={balance.id || balance.documentId}
+                  key={balance.documentId || balance.id}
                   className={status === 'deficit' ? 'border-red-200 dark:border-red-900' : ''}
                 >
                   <CardHeader>
@@ -1158,10 +1158,10 @@ export default function MaterialsPage() {
                     <div className="font-medium text-gray-700 dark:text-gray-300 mb-1">Kiválasztott anyagok:</div>
                     <div className="flex flex-wrap gap-2">
                       {materials
-                        .filter((m) => availableMaterialsIds.includes(String(m.id || m.documentId)))
+                        .filter((m) => availableMaterialsIds.includes(String(m.documentId || m.id)))
                         .map((material) => (
                           <span
-                            key={material.id || material.documentId}
+                            key={material.documentId || material.id}
                             className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded text-xs"
                           >
                             {material.name}
@@ -1315,9 +1315,9 @@ export default function MaterialsPage() {
                       </TableHeader>
                       <TableBody>
                         {materials
-                          .filter((m) => availableMaterialsIds.length === 0 || availableMaterialsIds.includes(String(m.id || m.documentId)))
+                          .filter((m) => availableMaterialsIds.length === 0 || availableMaterialsIds.includes(String(m.documentId || m.id)))
                           .map((material) => {
-                            const materialId = String(material.id || material.documentId);
+                            const materialId = String(material.documentId || material.id);
                             const isInsulation = material.category === 'insulation';
                             const quantities = pickupQuantities[materialId] || { pallets: '', rolls: '' };
                             
@@ -1374,7 +1374,7 @@ export default function MaterialsPage() {
                               </TableRow>
                             );
                           })}
-                        {materials.filter((m) => availableMaterialsIds.length === 0 || availableMaterialsIds.includes(String(m.id || m.documentId))).length === 0 && (
+                        {materials.filter((m) => availableMaterialsIds.length === 0 || availableMaterialsIds.includes(String(m.documentId || m.id))).length === 0 && (
                           <TableRow>
                             <TableCell colSpan={3} className="text-center text-gray-500 py-4">
                               Nincs elérhető anyag
@@ -1419,7 +1419,7 @@ export default function MaterialsPage() {
                   <p className="text-sm text-gray-500">Nincs elérhető anyag.</p>
                 ) : (
                   materials.map((material) => {
-                    const materialId = String(material.id || material.documentId);
+                    const materialId = String(material.documentId || material.id);
                     const isChecked = availableMaterialsIds.includes(materialId);
                     
                     return (
