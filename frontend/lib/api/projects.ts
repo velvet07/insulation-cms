@@ -142,6 +142,10 @@ export const projectsApi = {
       }
       
       const response = await strapiApi.put<StrapiResponse<Project>>(`/projects/${id}`, { data: cleanData });
+      // Ha a response null (404-es hiba volt, de az interceptor elnyelte), akkor null-lal térünk vissza
+      if (!response || !response.data || !response.data.data) {
+        return null as any;
+      }
       return unwrapStrapiResponse(response);
     } catch (error: any) {
       // 404-es hibák esetén ne dobjunk hibát - csendben kihagyjuk (projekt lehet törölve lett)

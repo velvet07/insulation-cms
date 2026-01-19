@@ -26,12 +26,23 @@ strapiApi.interceptors.response.use(
       console.error('API 401 Error:', error.response?.data);
     }
     
-    // 404-es hibákat csendben kezeljük - ne logoljuk a konzolba
-    // Még mindig reject-eljük, hogy a hívó oldalon kezelni lehessen
-    // De jelezzük, hogy ez egy 404-es hiba, amit csendben kell kezelni
-    if (error.response?.status === 404) {
+    // 404-es hibákat projekt frissítéseknél csendben kezeljük
+    // Ha projekt frissítés 404-et ad (projekt törölve lett), akkor egy sikeres válasszal térünk vissza
+    // így a böngésző nem logolja hibának
+    if (error.response?.status === 404 && 
+        error.config?.method === 'put' && 
+        error.config?.url?.includes('/projects/')) {
       // Jelöljük meg, hogy ez egy csendben kezelendő 404-es hiba
       error._silent404 = true;
+      // Elnyeljük a hibát, és egy sikeres válasszal térünk vissza
+      // Így a böngésző nem logolja hibának
+      return Promise.resolve({
+        data: { data: null },
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config: error.config,
+      });
     }
     
     return Promise.reject(error);
