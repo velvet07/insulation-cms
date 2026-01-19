@@ -1184,6 +1184,7 @@ export default function ProjectDetailPage() {
                             // Anyagok modul
                             'material_added': 'Anyag hozzáadva',
                             'material_removed': 'Anyag eltávolítva',
+                            'material_modified': 'Anyag módosítva',
                             // Naptár modul
                             'scheduled_date_set': 'Ütemezett dátum beállítva',
                             'scheduled_date_modified': 'Ütemezett dátum módosítva',
