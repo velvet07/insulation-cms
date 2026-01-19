@@ -28,7 +28,14 @@ import { materialsApi } from '@/lib/api/materials';
 import { materialBalancesApi, type MaterialBalance } from '@/lib/api/material-balances';
 import { materialTransactionsApi } from '@/lib/api/material-transactions';
 import { projectsApi } from '@/lib/api/projects';
-import { calculateMaterials, formatInsulationQuantity, formatFoilQuantity } from '@/lib/utils/material-calculation';
+import { 
+  calculateMaterials, 
+  formatInsulationQuantity, 
+  formatFoilQuantity,
+  calculateAvailableMaterials,
+  determineInsulationOption,
+  type AvailableMaterial,
+} from '@/lib/utils/material-calculation';
 import type { Project } from '@/types';
 import { Plus, AlertTriangle, CheckCircle2, TrendingDown, Package, Calendar, CalendarDays } from 'lucide-react';
 
@@ -41,6 +48,9 @@ export default function MaterialsPage() {
   const [requirementsPeriod, setRequirementsPeriod] = useState<RequirementsPeriod>('week');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
+  // Elérhető anyagok dátum range (az anyagigény számításhoz)
+  const [availabilityStartDate, setAvailabilityStartDate] = useState('');
+  const [availabilityEndDate, setAvailabilityEndDate] = useState('');
   const [pickupDate, setPickupDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedMaterial, setSelectedMaterial] = useState<string>('');
   const [pickupPallets, setPickupPallets] = useState('');
@@ -65,6 +75,13 @@ export default function MaterialsPage() {
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
     queryFn: () => projectsApi.getAll(),
+  });
+
+  // Material Transactions lekérése (elérhető anyagok számításhoz)
+  const { data: transactions = [] } = useQuery({
+    queryKey: ['material-transactions', userId],
+    queryFn: () => materialTransactionsApi.getAll({ user: userId }),
+    enabled: !!userId,
   });
 
   // Dátum tartomány számítása
@@ -177,26 +194,66 @@ export default function MaterialsPage() {
       return scheduledDate >= startDate && scheduledDate <= endDate;
     });
 
+    // Elérhető anyagok számítása dátum alapján
+    // Ha nincs beállítva elérhetőségi dátum, akkor a mai dátumig számolunk
+    const availabilityDate = availabilityEndDate 
+      ? new Date(availabilityEndDate)
+      : new Date(); // Ha nincs beállítva, akkor mai dátumig
+    availabilityDate.setHours(23, 59, 59, 999);
+
+    const availableMaterials = calculateAvailableMaterials(
+      transactions as any[],
+      availabilityDate
+    );
+
     // Összesített anyagigény számítás
-    let totalInsulationRolls = 0;
+    let totalInsulationRollsA = 0; // Opció A (10cm + 15cm)
+    let totalInsulationRollsB = 0; // Opció B (12.5cm + 12.5cm)
     let totalVaporBarrierRolls = 0;
     let totalBreathableMembraneRolls = 0;
     let totalArea = 0;
     let projectsWithData = 0;
+    let projectsOptionA = 0;
+    let projectsOptionB = 0;
+    let projectsNoOption = 0;
 
     relevantProjects.forEach((p: Project) => {
-      // Csak azokat a projekteket számoljuk, amelyeknek van area_sqm és insulation_option értéke
-      if (!p.area_sqm || !p.insulation_option) return;
+      // Csak azokat a projekteket számoljuk, amelyeknek van area_sqm értéke
+      if (!p.area_sqm) return;
       
       projectsWithData++;
-      totalArea += Number(p.area_sqm);
-      const req = calculateMaterials(Number(p.area_sqm), p.insulation_option);
+      const area = Number(p.area_sqm);
+      totalArea += area;
+
+      // Insulation option meghatározása elérhető anyagokból
+      const insulationOptions = determineInsulationOption(availableMaterials, area);
       
-      totalInsulationRolls += req.insulation.total_rolls;
+      // Opció A számítás (10cm + 15cm)
+      if (insulationOptions.optionA?.available) {
+        projectsOptionA++;
+        const reqA = calculateMaterials(area, 'A');
+        totalInsulationRollsA += reqA.insulation.total_rolls;
+      }
+
+      // Opció B számítás (12.5cm + 12.5cm)
+      if (insulationOptions.optionB?.available) {
+        projectsOptionB++;
+        const reqB = calculateMaterials(area, 'B');
+        totalInsulationRollsB += reqB.insulation.total_rolls;
+      }
+
+      if (!insulationOptions.optionA?.available && !insulationOptions.optionB?.available) {
+        projectsNoOption++;
+      }
+
+      // Fóliák mindig ugyanazok (nem függnek az insulation_option-tól)
+      const req = calculateMaterials(area, 'A'); // Opció A-t használjuk a fóliákhoz (ugyanaz mindkét opciónál)
       totalVaporBarrierRolls += req.vapor_barrier.rolls;
       totalBreathableMembraneRolls += req.breathable_membrane.rolls;
     });
 
+    // Összesített szigetelőanyag (a nagyobb opció alapján, vagy mindkettő)
+    const totalInsulationRolls = Math.max(totalInsulationRollsA, totalInsulationRollsB);
     const totalInsulationPallets = Math.floor(totalInsulationRolls / 24);
     const remainingInsulationRolls = totalInsulationRolls % 24;
 
@@ -206,13 +263,19 @@ export default function MaterialsPage() {
     return {
       period: requirementsPeriod,
       projectCount: projectsWithData,
-      totalProjects: relevantProjects.length, // Összes projekt (ideértve azokat is, amiknek hiányzik az adat)
-      projectsWithoutData, // Projektek száma, amelyeknek hiányzik area_sqm vagy insulation_option
+      totalProjects: relevantProjects.length,
+      projectsWithoutData,
+      projectsOptionA,
+      projectsOptionB,
+      projectsNoOption,
       totalArea,
+      availableMaterials,
       insulation: {
         total_rolls: totalInsulationRolls,
         total_pallets: totalInsulationPallets,
         remaining_rolls: remainingInsulationRolls,
+        optionA_rolls: totalInsulationRollsA,
+        optionB_rolls: totalInsulationRollsB,
       },
       vapor_barrier: {
         rolls: totalVaporBarrierRolls,
@@ -221,7 +284,7 @@ export default function MaterialsPage() {
         rolls: totalBreathableMembraneRolls,
       },
     };
-  }, [projects, dateRange, requirementsPeriod]);
+  }, [projects, dateRange, requirementsPeriod, transactions, availabilityEndDate]);
 
   // Anyagfelvétel form submit
   const pickupMutation = useMutation({
@@ -595,6 +658,20 @@ export default function MaterialsPage() {
                 </div>
               </div>
             )}
+            {/* Elérhető anyagok dátum range */}
+            <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <Label className="text-sm font-medium mb-2 block">Elérhető anyagok számítása dátumig:</Label>
+              <Input
+                type="date"
+                value={availabilityEndDate}
+                onChange={(e) => setAvailabilityEndDate(e.target.value)}
+                className="w-full max-w-xs"
+                placeholder="Válasszon dátumot az elérhető anyagok számításához"
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Az anyagigény számítás az ezen dátumig elérhető anyagokból határozza meg az insulation_option-t.
+              </p>
+            </div>
             <Card>
               <CardHeader>
                 <CardTitle>
@@ -603,11 +680,43 @@ export default function MaterialsPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {materialRequirements.projectsWithoutData > 0 && (
-                    <div className="text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 p-2 rounded">
-                      <span className="font-medium">⚠️ Figyelmeztetés:</span> {materialRequirements.projectsWithoutData} projekt nem számolható bele az anyagigénybe, mert hiányzik a terület (area_sqm) vagy szigetelési opció (insulation_option) adata.
+                  {/* Elérhető anyagok megjelenítése */}
+                  {materialRequirements.availableMaterials && materialRequirements.availableMaterials.length > 0 && (
+                    <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded">
+                      <div className="text-sm font-medium mb-2">Elérhető anyagok ({availabilityEndDate || 'mai dátumig'}):</div>
+                      <div className="space-y-1 text-xs">
+                        {materialRequirements.availableMaterials.map((mat: AvailableMaterial) => (
+                          <div key={String(mat.materialId)} className="flex justify-between">
+                            <span>{mat.materialName}</span>
+                            <span>
+                              {mat.category === 'insulation' 
+                                ? formatInsulationQuantity(mat.availablePallets, mat.availableRolls)
+                                : formatFoilQuantity(mat.totalRolls)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
+                  
+                  {materialRequirements.projectsNoOption > 0 && (
+                    <div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-2 rounded">
+                      <span className="font-medium">❌ Hiány:</span> {materialRequirements.projectsNoOption} projekt nem készíthető el, mert nincs elég anyag sem Opció A-hoz, sem Opció B-höz.
+                    </div>
+                  )}
+                  
+                  {materialRequirements.projectsOptionA > 0 && materialRequirements.projectsOptionB > 0 && (
+                    <div className="text-sm text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 p-2 rounded">
+                      <span className="font-medium">ℹ️ Info:</span> {materialRequirements.projectsOptionA} projekt Opció A-val, {materialRequirements.projectsOptionB} projekt Opció B-vel készíthető el.
+                    </div>
+                  )}
+                  
+                  {materialRequirements.projectsWithoutData > 0 && (
+                    <div className="text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 p-2 rounded">
+                      <span className="font-medium">⚠️ Figyelmeztetés:</span> {materialRequirements.projectsWithoutData} projekt nem számolható bele az anyagigénybe, mert hiányzik a terület (area_sqm) adata.
+                    </div>
+                  )}
+                  
                   <div className="text-sm">
                     <span className="font-medium">Projektek száma:</span> {materialRequirements.projectCount}
                     {materialRequirements.totalProjects > materialRequirements.projectCount && (
@@ -623,6 +732,11 @@ export default function MaterialsPage() {
                       {formatInsulationQuantity(
                         materialRequirements.insulation.total_pallets,
                         materialRequirements.insulation.remaining_rolls
+                      )}
+                      {materialRequirements.insulation.optionA_rolls > 0 && materialRequirements.insulation.optionB_rolls > 0 && (
+                        <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
+                          (Opció A: {Math.ceil(materialRequirements.insulation.optionA_rolls / 24)} raklap, Opció B: {Math.ceil(materialRequirements.insulation.optionB_rolls / 24)} raklap)
+                        </span>
                       )}
                     </div>
                     <div>
