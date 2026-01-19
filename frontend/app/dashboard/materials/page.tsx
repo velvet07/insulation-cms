@@ -781,7 +781,17 @@ export default function MaterialsPage() {
                       )}
                       {materialRequirements.insulation.optionA_rolls > 0 && materialRequirements.insulation.optionB_rolls > 0 && (
                         <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
-                          (Opció A: {Math.ceil(materialRequirements.insulation.optionA_rolls / 24)} raklap, Opció B: {Math.ceil(materialRequirements.insulation.optionB_rolls / 24)} raklap)
+                          (10cm+15cm: {Math.ceil(materialRequirements.insulation.optionA_rolls / 24)} raklap, 12.5cm+12.5cm: {Math.ceil(materialRequirements.insulation.optionB_rolls / 24)} raklap)
+                        </span>
+                      )}
+                      {materialRequirements.insulation.optionA_rolls > 0 && materialRequirements.insulation.optionB_rolls === 0 && (
+                        <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
+                          (10cm+15cm: {Math.ceil(materialRequirements.insulation.optionA_rolls / 24)} raklap)
+                        </span>
+                      )}
+                      {materialRequirements.insulation.optionA_rolls === 0 && materialRequirements.insulation.optionB_rolls > 0 && (
+                        <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
+                          (12.5cm+12.5cm: {Math.ceil(materialRequirements.insulation.optionB_rolls / 24)} raklap)
                         </span>
                       )}
                     </div>
