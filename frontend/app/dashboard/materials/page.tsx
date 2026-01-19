@@ -237,17 +237,25 @@ export default function MaterialsPage() {
       // Insulation option meghatározása elérhető anyagokból
       const insulationOptions = determineInsulationOption(availableMaterials, area);
       
+      // Számoljuk az anyagigényt mindkét opcióhoz (függetlenül attól, hogy van-e elég anyag)
+      const reqA = calculateMaterials(area, 'A');
+      const reqB = calculateMaterials(area, 'B');
+      
       // 10cm + 15cm számítás
       if (insulationOptions.optionA?.available) {
         projectsOptionA++;
-        const reqA = calculateMaterials(area, 'A');
+        totalInsulationRollsA += reqA.insulation.total_rolls;
+      } else {
+        // Ha nincs elég anyag, akkor is számoljuk az igényt (de nem számítjuk bele a projektek számába)
         totalInsulationRollsA += reqA.insulation.total_rolls;
       }
 
       // 12.5cm + 12.5cm számítás
       if (insulationOptions.optionB?.available) {
         projectsOptionB++;
-        const reqB = calculateMaterials(area, 'B');
+        totalInsulationRollsB += reqB.insulation.total_rolls;
+      } else {
+        // Ha nincs elég anyag, akkor is számoljuk az igényt (de nem számítjuk bele a projektek számába)
         totalInsulationRollsB += reqB.insulation.total_rolls;
       }
 
@@ -256,9 +264,8 @@ export default function MaterialsPage() {
       }
 
       // Fóliák mindig ugyanazok (nem függnek az insulation_option-tól)
-      const req = calculateMaterials(area, 'A'); // Opció A-t használjuk a fóliákhoz (ugyanaz mindkét opciónál)
-      totalVaporBarrierRolls += req.vapor_barrier.rolls;
-      totalBreathableMembraneRolls += req.breathable_membrane.rolls;
+      totalVaporBarrierRolls += reqA.vapor_barrier.rolls;
+      totalBreathableMembraneRolls += reqA.breathable_membrane.rolls;
     });
 
     // Összesített szigetelőanyag (a nagyobb opció alapján, vagy mindkettő)
