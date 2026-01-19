@@ -38,7 +38,7 @@ import {
   type AvailableMaterial,
 } from '@/lib/utils/material-calculation';
 import type { Project } from '@/types';
-import { Plus, AlertTriangle, CheckCircle2, TrendingDown, Package, Calendar, CalendarDays, List } from 'lucide-react';
+import { Plus, AlertTriangle, CheckCircle2, TrendingDown, Package, Calendar, CalendarDays, List, Edit, Trash2 } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -64,6 +64,12 @@ export default function MaterialsPage() {
   const [pickupDate, setPickupDate] = useState(new Date().toISOString().split('T')[0]);
   // Táblázatos anyagfelvétel: minden anyaghoz külön mennyiség
   const [pickupQuantities, setPickupQuantities] = useState<Record<string, { pallets: string; rolls: string }>>({});
+  // Tranzakció szerkesztés/törlés
+  const [editingTransaction, setEditingTransaction] = useState<string | null>(null);
+  const [editTransactionData, setEditTransactionData] = useState<{ pallets: string; rolls: string } | null>(null);
+  
+  // Admin jog ellenőrzése
+  const isAdmin = user?.role === 'admin' || (typeof user?.role === 'object' && user?.role?.name === 'admin');
 
   const userId = user?.documentId || user?.id;
 
@@ -417,6 +423,78 @@ export default function MaterialsPage() {
     });
   }, [balances]);
 
+  // Felvett anyagok összesítése anyagtípusra és dátumra
+  const pickupTransactionsGrouped = useMemo(() => {
+    const pickupTransactions = (transactions as any[]).filter((t) => t.type === 'pickup');
+    
+    // Csoportosítás dátumra és anyagra
+    const grouped: Record<string, Record<string, { pallets: number; rolls: number; transactions: any[]; materialName: string }>> = {};
+    
+    pickupTransactions.forEach((transaction) => {
+      const date = transaction.pickup_date 
+        ? new Date(transaction.pickup_date).toISOString().split('T')[0]
+        : transaction.createdAt
+        ? new Date(transaction.createdAt).toISOString().split('T')[0]
+        : 'unknown';
+      
+      const materialId = String(transaction.material?.documentId || transaction.material?.id || 'unknown');
+      const materialName = transaction.material?.name || 'Ismeretlen anyag';
+      
+      if (!grouped[date]) {
+        grouped[date] = {};
+      }
+      
+      if (!grouped[date][materialId]) {
+        grouped[date][materialId] = {
+          pallets: 0,
+          rolls: 0,
+          transactions: [],
+          materialName,
+        };
+      }
+      
+      grouped[date][materialId].pallets += transaction.quantity_pallets || 0;
+      grouped[date][materialId].rolls += transaction.quantity_rolls || 0;
+      grouped[date][materialId].transactions.push(transaction);
+    });
+    
+    return grouped;
+  }, [transactions]);
+
+  // Tranzakció törlés mutation
+  const deleteTransactionMutation = useMutation({
+    mutationFn: async (id: string | number) => {
+      return materialTransactionsApi.delete(id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['material-balances'] });
+      queryClient.invalidateQueries({ queryKey: ['material-transactions'] });
+      alert('Tranzakció sikeresen törölve!');
+    },
+    onError: (error: any) => {
+      console.error('Tranzakció törlés hiba:', error);
+      alert(`Hiba történt a tranzakció törlése során: ${error.message || 'Ismeretlen hiba'}`);
+    },
+  });
+
+  // Tranzakció frissítés mutation
+  const updateTransactionMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string | number; data: Partial<any> }) => {
+      return materialTransactionsApi.update(id, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['material-balances'] });
+      queryClient.invalidateQueries({ queryKey: ['material-transactions'] });
+      setEditingTransaction(null);
+      setEditTransactionData(null);
+      alert('Tranzakció sikeresen frissítve!');
+    },
+    onError: (error: any) => {
+      console.error('Tranzakció frissítés hiba:', error);
+      alert(`Hiba történt a tranzakció frissítése során: ${error.message || 'Ismeretlen hiba'}`);
+    },
+  });
+
   const getPeriodLabel = (period: RequirementsPeriod) => {
     switch (period) {
       case 'today':
@@ -442,11 +520,11 @@ export default function MaterialsPage() {
         <div className="mb-6">
           <div className="flex items-center justify-between mb-2">
             <div>
-              <h2 className="text-3xl font-bold">Anyagok</h2>
-              <p className="text-gray-600 dark:text-gray-400 mt-1">
-                Kezelje a szigetelőanyagokat és készleteket
-              </p>
-            </div>
+          <h2 className="text-3xl font-bold">Anyagok</h2>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">
+            Kezelje a szigetelőanyagokat és készleteket
+          </p>
+        </div>
             <Button onClick={() => setIsPickupDialogOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
               Anyag felvétel
@@ -480,7 +558,7 @@ export default function MaterialsPage() {
           </Card>
         )}
 
-        {/* Felvett anyagok listája */}
+        {/* Felvett anyagok listája - összesítve */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-xl font-semibold flex items-center">
@@ -490,46 +568,83 @@ export default function MaterialsPage() {
           </div>
           <Card>
             <CardContent className="py-4">
-              {transactions.filter((t: any) => t.type === 'pickup').length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Dátum</TableHead>
-                      <TableHead>Anyag</TableHead>
-                      <TableHead className="text-right">Raklapok</TableHead>
-                      <TableHead className="text-right">Tekercsek</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {transactions
-                      .filter((t: any) => t.type === 'pickup')
-                      .sort((a: any, b: any) => {
-                        const dateA = new Date(a.pickup_date || a.createdAt || 0);
-                        const dateB = new Date(b.pickup_date || b.createdAt || 0);
-                        return dateB.getTime() - dateA.getTime();
-                      })
-                      .map((transaction: any) => (
-                        <TableRow key={transaction.id || transaction.documentId}>
-                          <TableCell>
-                            {transaction.pickup_date
-                              ? new Date(transaction.pickup_date).toLocaleDateString('hu-HU')
-                              : transaction.createdAt
-                              ? new Date(transaction.createdAt).toLocaleDateString('hu-HU')
-                              : '-'}
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            {transaction.material?.name || 'Ismeretlen anyag'}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {transaction.quantity_pallets || 0}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {transaction.quantity_rolls || 0}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                  </TableBody>
-                </Table>
+              {Object.keys(pickupTransactionsGrouped).length > 0 ? (
+                <div className="space-y-6">
+                  {Object.entries(pickupTransactionsGrouped)
+                    .sort(([dateA], [dateB]) => dateB.localeCompare(dateA))
+                    .map(([date, materialsByDate]) => (
+                      <div key={date} className="border-b last:border-b-0 pb-4 last:pb-0">
+                        <div className="font-semibold text-lg mb-3 text-gray-700 dark:text-gray-300">
+                          {new Date(date).toLocaleDateString('hu-HU', { 
+                            year: 'numeric', 
+                            month: 'long', 
+                            day: 'numeric',
+                            weekday: 'long'
+                          })}
+                        </div>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Anyag</TableHead>
+                              <TableHead className="text-right">Raklapok</TableHead>
+                              <TableHead className="text-right">Tekercsek</TableHead>
+                              {isAdmin && <TableHead className="text-right">Műveletek</TableHead>}
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {Object.entries(materialsByDate).map(([materialId, summary]) => (
+                              <TableRow key={materialId}>
+                                <TableCell className="font-medium">
+                                  {summary.materialName}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  {summary.pallets || 0}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  {summary.rolls || 0}
+                                </TableCell>
+                                {isAdmin && (
+                                  <TableCell className="text-right">
+                                    <div className="flex justify-end gap-2">
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                          setEditingTransaction({ date, materialId });
+                                          setEditTransactionData({
+                                            pallets: String(summary.pallets),
+                                            rolls: String(summary.rolls),
+                                          });
+                                        }}
+                                      >
+                                        <Edit className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                          if (confirm(`Biztosan törölni szeretné az összes tranzakciót erre az anyagra (${summary.materialName}) ezen a napon?`)) {
+                                            summary.transactions.forEach((t: any) => {
+                                              deleteTransactionMutation.mutate(t.id || t.documentId);
+                                            });
+                                          }
+                                        }}
+                                        className="text-red-600 hover:text-red-700"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                                )}
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    ))}
+                </div>
               ) : (
                 <div className="text-center py-8 text-gray-500">
                   <Package className="mx-auto h-12 w-12 mb-2 text-gray-400" />
@@ -540,6 +655,86 @@ export default function MaterialsPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Tranzakció szerkesztés dialog (admin) */}
+        {isAdmin && editingTransaction && editTransactionData && (
+          <Dialog open={!!editingTransaction} onOpenChange={(open) => !open && setEditingTransaction(null)}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Tranzakció szerkesztése</DialogTitle>
+                <DialogDescription>
+                  Módosítsa a tranzakció mennyiségét. Az összes tranzakció ezen a napon erre az anyagra frissül.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div>
+                  <Label htmlFor="edit-pallets">Raklapok</Label>
+                  <Input
+                    id="edit-pallets"
+                    type="number"
+                    min="0"
+                    value={editTransactionData.pallets}
+                    onChange={(e) => setEditTransactionData({ ...editTransactionData, pallets: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit-rolls">Tekercsek</Label>
+                  <Input
+                    id="edit-rolls"
+                    type="number"
+                    min="0"
+                    value={editTransactionData.rolls}
+                    onChange={(e) => setEditTransactionData({ ...editTransactionData, rolls: e.target.value })}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setEditingTransaction(null);
+                    setEditTransactionData(null);
+                  }}
+                >
+                  Mégse
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    if (!editingTransaction) return;
+                    const { date, materialId } = editingTransaction;
+                    const summary = pickupTransactionsGrouped[date]?.[materialId];
+                    if (summary && summary.transactions.length > 0) {
+                      const transactions = summary.transactions;
+                      const totalPallets = parseInt(editTransactionData.pallets || '0');
+                      const totalRolls = parseInt(editTransactionData.rolls || '0');
+                      const palletsPerTransaction = Math.floor(totalPallets / transactions.length);
+                      const rollsPerTransaction = Math.floor(totalRolls / transactions.length);
+                      const remainingPallets = totalPallets % transactions.length;
+                      const remainingRolls = totalRolls % transactions.length;
+                      
+                      transactions.forEach((t: any, index: number) => {
+                        const pallets = palletsPerTransaction + (index < remainingPallets ? 1 : 0);
+                        const rolls = rollsPerTransaction + (index < remainingRolls ? 1 : 0);
+                        updateTransactionMutation.mutate({
+                          id: t.id || t.documentId,
+                          data: {
+                            quantity_pallets: pallets,
+                            quantity_rolls: rolls,
+                          },
+                        });
+                      });
+                    }
+                  }}
+                  disabled={updateTransactionMutation.isPending}
+                >
+                  {updateTransactionMutation.isPending ? 'Mentés...' : 'Mentés'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
 
         {/* Anyagegyenlegek */}
         <div className="mb-6">
