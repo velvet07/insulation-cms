@@ -65,7 +65,7 @@ export default function MaterialsPage() {
   // Táblázatos anyagfelvétel: minden anyaghoz külön mennyiség
   const [pickupQuantities, setPickupQuantities] = useState<Record<string, { pallets: string; rolls: string }>>({});
   // Tranzakció szerkesztés/törlés
-  const [editingTransaction, setEditingTransaction] = useState<string | null>(null);
+  const [editingTransaction, setEditingTransaction] = useState<{ date: string; materialId: string } | null>(null);
   const [editTransactionData, setEditTransactionData] = useState<{ pallets: string; rolls: string } | null>(null);
   
   // Admin jog ellenőrzése
