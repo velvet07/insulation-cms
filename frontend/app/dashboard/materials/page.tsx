@@ -196,14 +196,21 @@ export default function MaterialsPage() {
     });
 
     // Elérhető anyagok számítása dátum alapján
-    // Ha nincs beállítva elérhetőségi dátum, akkor a mai dátumig számolunk
+    // Csak a kiválasztott anyagokat számoljuk
     const availabilityDate = availabilityEndDate 
       ? new Date(availabilityEndDate)
       : new Date(); // Ha nincs beállítva, akkor mai dátumig
     availabilityDate.setHours(23, 59, 59, 999);
 
+    // Szűrjük a tranzakciókat a kiválasztott anyagokra
+    const filteredTransactions = (transactions as any[]).filter((t) => {
+      if (!t.material) return false;
+      const materialId = String(t.material.documentId || t.material.id);
+      return availableMaterialsIds.length === 0 || availableMaterialsIds.includes(materialId);
+    });
+
     const availableMaterials = calculateAvailableMaterials(
-      transactions as any[],
+      filteredTransactions,
       availabilityDate
     );
 
