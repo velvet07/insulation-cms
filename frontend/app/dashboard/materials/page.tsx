@@ -358,9 +358,12 @@ export default function MaterialsPage() {
             if (error?.message?.includes('Invalid key audit_log') || 
                 error?.response?.data?.error?.message?.includes('Invalid key audit_log')) {
               console.warn('audit_log mező nem létezik a projektben, audit log frissítés kihagyva');
-            } else if (error?.response?.status === 404) {
-              // Projekt nem található (lehet, hogy törölve lett)
-              console.warn(`Projekt nem található (ID: ${projectId}), audit log frissítés kihagyva`);
+            } else if (error?.response?.status === 404 || 
+                       error?.message?.includes('404') || 
+                       error?.message?.includes('nem található') ||
+                       error?.message?.includes('Not Found')) {
+              // Projekt nem található (lehet, hogy törölve lett) - csendben kihagyjuk
+              // Nem logoljuk, mert ez normális esemény lehet
             } else {
               // Egyéb hiba
               console.warn(`Audit log frissítés hiba projektnél (ID: ${projectId}):`, error?.message || error);
@@ -543,9 +546,12 @@ export default function MaterialsPage() {
             if (error?.message?.includes('Invalid key audit_log') || 
                 error?.response?.data?.error?.message?.includes('Invalid key audit_log')) {
               console.warn('audit_log mező nem létezik a projektben, audit log frissítés kihagyva');
-            } else if (error?.response?.status === 404) {
-              // Projekt nem található (lehet, hogy törölve lett)
-              console.warn(`Projekt nem található (ID: ${projectId}), audit log frissítés kihagyva`);
+            } else if (error?.response?.status === 404 || 
+                       error?.message?.includes('404') || 
+                       error?.message?.includes('nem található') ||
+                       error?.message?.includes('Not Found')) {
+              // Projekt nem található (lehet, hogy törölve lett) - csendben kihagyjuk
+              // Nem logoljuk, mert ez normális esemény lehet
             } else {
               // Egyéb hiba
               console.warn(`Audit log frissítés hiba projektnél (ID: ${projectId}):`, error?.message || error);
@@ -605,9 +611,12 @@ export default function MaterialsPage() {
             if (error?.message?.includes('Invalid key audit_log') || 
                 error?.response?.data?.error?.message?.includes('Invalid key audit_log')) {
               console.warn('audit_log mező nem létezik a projektben, audit log frissítés kihagyva');
-            } else if (error?.response?.status === 404) {
-              // Projekt nem található (lehet, hogy törölve lett)
-              console.warn(`Projekt nem található (ID: ${projectId}), audit log frissítés kihagyva`);
+            } else if (error?.response?.status === 404 || 
+                       error?.message?.includes('404') || 
+                       error?.message?.includes('nem található') ||
+                       error?.message?.includes('Not Found')) {
+              // Projekt nem található (lehet, hogy törölve lett) - csendben kihagyjuk
+              // Nem logoljuk, mert ez normális esemény lehet
             } else {
               // Egyéb hiba
               console.warn(`Audit log frissítés hiba projektnél (ID: ${projectId}):`, error?.message || error);
