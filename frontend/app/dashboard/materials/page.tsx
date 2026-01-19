@@ -39,6 +39,7 @@ import {
 } from '@/lib/utils/material-calculation';
 import type { Project } from '@/types';
 import { Plus, AlertTriangle, CheckCircle2, TrendingDown, Package, Calendar, CalendarDays, List, Edit, Trash2 } from 'lucide-react';
+import { createAuditLogEntry, addAuditLogEntry } from '@/lib/utils/audit-log';
 import {
   Table,
   TableBody,
@@ -68,8 +69,7 @@ export default function MaterialsPage() {
   const [editingTransaction, setEditingTransaction] = useState<{ date: string; materialId: string } | null>(null);
   const [editTransactionData, setEditTransactionData] = useState<{ pallets: string; rolls: string } | null>(null);
   
-  // Admin jog ellenőrzése
-  const isAdmin = user?.role === 'admin' || (typeof user?.role === 'object' && user?.role?.name === 'admin');
+  // Admin jog ellenőrzése - eltávolítva, mert mindenki módosíthat ha logolva van
 
   const userId = user?.documentId || user?.id;
 
@@ -317,23 +317,55 @@ export default function MaterialsPage() {
 
   // Anyagfelvétel form submit (több anyag egyszerre)
   const pickupMutation = useMutation({
-    mutationFn: async (data: Array<{ material: string; quantity_pallets: number; quantity_rolls: number }>) => {
+    mutationFn: async (data: Array<{ material: string; quantity_pallets: number; quantity_rolls: number; materialName?: string }>) => {
       // Több tranzakció létrehozása párhuzamosan
-      const promises = data.map((item) =>
-        materialTransactionsApi.create({
-          type: 'pickup',
-          pickup_date: pickupDate,
-          material: item.material,
-          quantity_pallets: item.quantity_pallets || 0,
-          quantity_rolls: item.quantity_rolls || 0,
-          user: userId,
-        })
+      const createdTransactions = await Promise.all(
+        data.map((item) =>
+          materialTransactionsApi.create({
+            type: 'pickup',
+            pickup_date: pickupDate,
+            material: item.material,
+            quantity_pallets: item.quantity_pallets || 0,
+            quantity_rolls: item.quantity_rolls || 0,
+            user: userId,
+          })
+        )
       );
-      return Promise.all(promises);
+
+      // Audit log hozzáadása minden projekthez
+      try {
+        const allProjects = await projectsApi.getAll();
+        const auditLogEntry = createAuditLogEntry(
+          'material_added',
+          user,
+          `Anyagfelvétel: ${data.map((d) => `${d.materialName || 'Ismeretlen'}: ${d.quantity_pallets || 0} raklap, ${d.quantity_rolls || 0} tekercs`).join(', ')} (${pickupDate})`
+        );
+        auditLogEntry.module = 'Anyaggazdálkodás';
+
+        // Minden projekthez hozzáadjuk az audit log bejegyzést
+        const updatePromises = allProjects.map((project: Project) => {
+          const updatedAuditLog = addAuditLogEntry(project.audit_log, auditLogEntry);
+          return projectsApi.update(project.id || project.documentId!, {
+            audit_log: updatedAuditLog,
+          }).catch((error: any) => {
+            // Ha nincs audit_log mező, csak logoljuk
+            if (error?.message?.includes('Invalid key audit_log') || 
+                error?.response?.data?.error?.message?.includes('Invalid key audit_log')) {
+              console.warn('audit_log mező nem létezik a projektben, audit log frissítés kihagyva');
+            }
+          });
+        });
+        await Promise.all(updatePromises);
+      } catch (error) {
+        console.warn('Audit log frissítés hiba (nem kritikus):', error);
+      }
+
+      return createdTransactions;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['material-balances'] });
       queryClient.invalidateQueries({ queryKey: ['material-transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
       setIsPickupDialogOpen(false);
       setPickupQuantities({});
       alert('Anyagfelvételek sikeresen rögzítve!');
@@ -373,6 +405,7 @@ export default function MaterialsPage() {
             material: materialId,
             quantity_pallets: pallets,
             quantity_rolls: rolls,
+            materialName: material.name,
           });
         }
       } else {
@@ -382,6 +415,7 @@ export default function MaterialsPage() {
             material: materialId,
             quantity_pallets: 0,
             quantity_rolls: rolls,
+            materialName: material.name,
           });
         }
       }
@@ -464,12 +498,43 @@ export default function MaterialsPage() {
   // Tranzakció törlés mutation
   const deleteTransactionMutation = useMutation({
     mutationFn: async (id: string | number) => {
-      return materialTransactionsApi.delete(id);
+      // Először lekérjük a tranzakciót az audit loghoz
+      const transaction = await materialTransactionsApi.getOne(id);
+      const deleted = await materialTransactionsApi.delete(id);
+      
+      // Audit log hozzáadása minden projekthez
+      try {
+        const allProjects = await projectsApi.getAll();
+        const materialName = transaction.material?.name || 'Ismeretlen anyag';
+        const auditLogEntry = createAuditLogEntry(
+          'material_removed',
+          user,
+          `Anyagfelvétel törölve: ${materialName} - ${transaction.quantity_pallets || 0} raklap, ${transaction.quantity_rolls || 0} tekercs (${transaction.pickup_date || transaction.createdAt})`
+        );
+        auditLogEntry.module = 'Anyaggazdálkodás';
+
+        const updatePromises = allProjects.map((project: Project) => {
+          const updatedAuditLog = addAuditLogEntry(project.audit_log, auditLogEntry);
+          return projectsApi.update(project.id || project.documentId!, {
+            audit_log: updatedAuditLog,
+          }).catch((error: any) => {
+            if (error?.message?.includes('Invalid key audit_log') || 
+                error?.response?.data?.error?.message?.includes('Invalid key audit_log')) {
+              console.warn('audit_log mező nem létezik a projektben, audit log frissítés kihagyva');
+            }
+          });
+        });
+        await Promise.all(updatePromises);
+      } catch (error) {
+        console.warn('Audit log frissítés hiba (nem kritikus):', error);
+      }
+
+      return deleted;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['material-balances'] });
       queryClient.invalidateQueries({ queryKey: ['material-transactions'] });
-      alert('Tranzakció sikeresen törölve!');
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
     },
     onError: (error: any) => {
       console.error('Tranzakció törlés hiba:', error);
@@ -479,12 +544,46 @@ export default function MaterialsPage() {
 
   // Tranzakció frissítés mutation
   const updateTransactionMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string | number; data: Partial<any> }) => {
-      return materialTransactionsApi.update(id, data);
+    mutationFn: async ({ id, data, oldTransaction }: { id: string | number; data: Partial<any>; oldTransaction: any }) => {
+      const updated = await materialTransactionsApi.update(id, data);
+      
+      // Audit log hozzáadása minden projekthez
+      try {
+        const allProjects = await projectsApi.getAll();
+        const materialName = oldTransaction.material?.name || 'Ismeretlen anyag';
+        const oldPallets = oldTransaction.quantity_pallets || 0;
+        const oldRolls = oldTransaction.quantity_rolls || 0;
+        const newPallets = data.quantity_pallets || 0;
+        const newRolls = data.quantity_rolls || 0;
+        const auditLogEntry = createAuditLogEntry(
+          'material_modified',
+          user,
+          `Anyagfelvétel módosítva: ${materialName} - ${oldPallets} raklap, ${oldRolls} tekercs → ${newPallets} raklap, ${newRolls} tekercs (${oldTransaction.pickup_date || oldTransaction.createdAt})`
+        );
+        auditLogEntry.module = 'Anyaggazdálkodás';
+
+        const updatePromises = allProjects.map((project: Project) => {
+          const updatedAuditLog = addAuditLogEntry(project.audit_log, auditLogEntry);
+          return projectsApi.update(project.id || project.documentId!, {
+            audit_log: updatedAuditLog,
+          }).catch((error: any) => {
+            if (error?.message?.includes('Invalid key audit_log') || 
+                error?.response?.data?.error?.message?.includes('Invalid key audit_log')) {
+              console.warn('audit_log mező nem létezik a projektben, audit log frissítés kihagyva');
+            }
+          });
+        });
+        await Promise.all(updatePromises);
+      } catch (error) {
+        console.warn('Audit log frissítés hiba (nem kritikus):', error);
+      }
+
+      return updated;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['material-balances'] });
       queryClient.invalidateQueries({ queryKey: ['material-transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
       setEditingTransaction(null);
       setEditTransactionData(null);
       alert('Tranzakció sikeresen frissítve!');
@@ -588,7 +687,7 @@ export default function MaterialsPage() {
                               <TableHead>Anyag</TableHead>
                               <TableHead className="text-right">Raklapok</TableHead>
                               <TableHead className="text-right">Tekercsek</TableHead>
-                              {isAdmin && <TableHead className="text-right">Műveletek</TableHead>}
+                              <TableHead className="text-right">Műveletek</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -603,41 +702,37 @@ export default function MaterialsPage() {
                                 <TableCell className="text-right">
                                   {summary.rolls || 0}
                                 </TableCell>
-                                {isAdmin && (
-                                  <TableCell className="text-right">
-                                    <div className="flex justify-end gap-2">
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => {
-                                          setEditingTransaction({ date, materialId });
-                                          setEditTransactionData({
-                                            pallets: String(summary.pallets),
-                                            rolls: String(summary.rolls),
-                                          });
-                                        }}
-                                      >
-                                        <Edit className="h-4 w-4" />
-                                      </Button>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => {
-                                          if (confirm(`Biztosan törölni szeretné az összes tranzakciót erre az anyagra (${summary.materialName}) ezen a napon?`)) {
-                                            summary.transactions.forEach((t: any) => {
-                                              deleteTransactionMutation.mutate(t.id || t.documentId);
-                                            });
-                                          }
-                                        }}
-                                        className="text-red-600 hover:text-red-700"
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    </div>
-                                  </TableCell>
-                                )}
+                                <TableCell className="text-right">
+                                  <div className="flex justify-end gap-2">
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => {
+                                        setEditingTransaction({ date, materialId });
+                                        setEditTransactionData({
+                                          pallets: String(summary.pallets),
+                                          rolls: String(summary.rolls),
+                                        });
+                                      }}
+                                    >
+                                      <Edit className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => {
+                                        summary.transactions.forEach((t: any) => {
+                                          deleteTransactionMutation.mutate(t.id || t.documentId);
+                                        });
+                                      }}
+                                      className="text-red-600 hover:text-red-700"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
                               </TableRow>
                             ))}
                           </TableBody>
@@ -656,8 +751,8 @@ export default function MaterialsPage() {
           </Card>
         </div>
 
-        {/* Tranzakció szerkesztés dialog (admin) */}
-        {isAdmin && editingTransaction && editTransactionData && (
+        {/* Tranzakció szerkesztés dialog */}
+        {editingTransaction && editTransactionData && (
           <Dialog open={!!editingTransaction} onOpenChange={(open) => !open && setEditingTransaction(null)}>
             <DialogContent>
               <DialogHeader>

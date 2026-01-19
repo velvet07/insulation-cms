@@ -116,9 +116,10 @@ export interface ProjectAuditLogEntry {
     | 'photo_deleted'
     // Státusz modul
     | 'status_changed'
-    // Anyagok modul (jövőbeli)
+    // Anyagok modul
     | 'material_added'
     | 'material_removed'
+    | 'material_modified'
     // Naptár modul (jövőbeli)
     | 'scheduled_date_set'
     | 'scheduled_date_modified';
