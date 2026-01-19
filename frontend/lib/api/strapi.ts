@@ -31,14 +31,18 @@ strapiApi.interceptors.response.use(
     // így a böngésző nem logolja hibának
     if (error.response?.status === 404) {
       const method = error.config?.method?.toLowerCase();
-      const url = error.config?.url || error.config?.baseURL + error.request?.path || '';
+      const url = error.config?.url || error.config?.baseURL || '';
+      const fullUrl = error.request?.responseURL || url;
       
       // Ellenőrizzük, hogy ez projekt frissítés PUT kérés-e
-      if (method === 'put' && (url.includes('/projects/') || url.includes('projects/'))) {
+      // A URL lehet '/projects/123' vagy 'https://cms.emermedia.eu/api/projects/123'
+      if (method === 'put' && (url.includes('/projects/') || fullUrl.includes('/projects/'))) {
         // Jelöljük meg, hogy ez egy csendben kezelendő 404-es hiba
         error._silent404 = true;
         // Elnyeljük a hibát, és egy sikeres válasszal térünk vissza
         // Így a böngésző nem logolja hibának
+        // VISSZAIGAZÍTÁS: A böngésző konzol még mindig logolhatja a hálózati hibákat,
+        // de legalább nem dobunk exception-t, így a kód nem fog hibát jelezni
         return Promise.resolve({
           data: { data: null },
           status: 200,
