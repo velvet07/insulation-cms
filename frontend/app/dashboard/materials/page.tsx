@@ -509,6 +509,106 @@ export default function MaterialsPage() {
     return grouped;
   }, [transactions]);
 
+  // Anyagegyenleg számítás: felvett anyagok - kész/elmúlt projektek anyagigénye
+  const calculatedBalance = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // 1. Felvett anyagok összesítése anyagtípusonként
+    const pickedUp: Record<string, { pallets: number; rolls: number; name: string; category: string }> = {};
+    
+    (transactions as any[])
+      .filter((t) => t.type === 'pickup')
+      .forEach((t) => {
+        const materialId = String(t.material?.documentId || t.material?.id || 'unknown');
+        const materialName = t.material?.name || 'Ismeretlen anyag';
+        const category = t.material?.category || 'unknown';
+        
+        if (!pickedUp[materialId]) {
+          pickedUp[materialId] = { pallets: 0, rolls: 0, name: materialName, category };
+        }
+        pickedUp[materialId].pallets += t.quantity_pallets || 0;
+        pickedUp[materialId].rolls += t.quantity_rolls || 0;
+      });
+
+    // 2. Kész vagy elmúlt projektek anyagigénye
+    const usedByProjects: Record<string, { pallets: number; rolls: number }> = {};
+    
+    (projects as Project[]).forEach((p) => {
+      if (!p.area_sqm) return;
+      
+      const scheduledDate = p.scheduled_date ? new Date(p.scheduled_date) : null;
+      if (scheduledDate) scheduledDate.setHours(0, 0, 0, 0);
+      
+      // Levonás, ha:
+      // 1. A projekt státusza "completed"
+      // 2. VAGY az ütemezett dátum a múltban van (és nem completed)
+      const shouldDeduct = p.status === 'completed' || (scheduledDate && scheduledDate < today);
+      
+      if (!shouldDeduct) return;
+      
+      const area = Number(p.area_sqm);
+      const req = calculateMaterials(area, 'A'); // Alapértelmezett opció
+      
+      // Szigetelő anyagigény
+      materials.forEach((m) => {
+        const materialId = String(m.documentId || m.id);
+        if (!usedByProjects[materialId]) {
+          usedByProjects[materialId] = { pallets: 0, rolls: 0 };
+        }
+        
+        if (m.category === 'insulation') {
+          // Egyszerűsített számítás: a teljes igényt az adott vastagságú anyagra
+          const rollsNeeded = Math.ceil(area / (m.coverage_per_roll || 9.24));
+          usedByProjects[materialId].rolls += rollsNeeded;
+          if (m.rolls_per_pallet) {
+            usedByProjects[materialId].pallets += Math.floor(rollsNeeded / m.rolls_per_pallet);
+          }
+        } else if (m.category === 'vapor_barrier') {
+          usedByProjects[materialId].rolls += req.vapor_barrier.rolls;
+        } else if (m.category === 'breathable_membrane') {
+          usedByProjects[materialId].rolls += req.breathable_membrane.rolls;
+        }
+      });
+    });
+
+    // 3. Egyenleg számítás
+    const balance: Record<string, { pallets: number; rolls: number; name: string; category: string }> = {};
+    
+    Object.entries(pickedUp).forEach(([materialId, picked]) => {
+      const used = usedByProjects[materialId] || { pallets: 0, rolls: 0 };
+      balance[materialId] = {
+        pallets: picked.pallets - used.pallets,
+        rolls: picked.rolls - used.rolls,
+        name: picked.name,
+        category: picked.category,
+      };
+    });
+
+    // 4. Kategóriák szerinti csoportosítás
+    const insulation = Object.entries(balance)
+      .filter(([, b]) => b.category === 'insulation')
+      .sort(([, a], [, b]) => a.name.localeCompare(b.name));
+    
+    const foils = Object.entries(balance)
+      .filter(([, b]) => b.category === 'vapor_barrier' || b.category === 'breathable_membrane')
+      .sort(([, a], [, b]) => a.name.localeCompare(b.name));
+
+    return { insulation, foils, all: balance };
+  }, [transactions, projects, materials]);
+
+  // Anyag mozgás log (legutóbbi tranzakciók)
+  const materialMovementLog = useMemo(() => {
+    // Az összes tranzakciót időrendben rendezzük (legújabb elöl)
+    const allTransactions = [...(transactions as any[])].sort((a, b) => {
+      const dateA = a.updatedAt || a.createdAt || '';
+      const dateB = b.updatedAt || b.createdAt || '';
+      return dateB.localeCompare(dateA);
+    });
+    
+    return allTransactions.slice(0, 20); // Csak az utolsó 20 bejegyzés
+  }, [transactions]);
+
   // Tranzakció törlés mutation
   const deleteTransactionMutation = useMutation({
     mutationFn: async ({ id, transaction }: { id: string | number; transaction: any }) => {
@@ -1403,6 +1503,160 @@ export default function MaterialsPage() {
             </form>
           </DialogContent>
         </Dialog>
+
+        {/* Aktuális anyagegyenleg - számított */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-semibold flex items-center">
+              <Package className="mr-2 h-5 w-5" />
+              Aktuális anyagegyenleg
+            </h3>
+          </div>
+          <p className="text-sm text-gray-500 mb-4">
+            Felvett anyagok - (kész projektek + elmúlt ütemezésű projektek anyagigénye)
+          </p>
+          
+          {Object.keys(calculatedBalance.all).length === 0 ? (
+            <Card>
+              <CardContent className="py-8 text-center text-gray-500">
+                <Package className="mx-auto h-12 w-12 mb-2 text-gray-400" />
+                <p className="text-sm">Még nincs anyagegyenleg adat.</p>
+                <p className="text-xs text-gray-400 mt-1">Az anyagfelvétel után itt jelenik meg az egyenleg.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {/* Szigetelőanyagok */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Szigetelőanyagok</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {calculatedBalance.insulation.length === 0 ? (
+                    <p className="text-sm text-gray-500">Nincs felvett szigetelőanyag.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {calculatedBalance.insulation.map(([materialId, balance]) => (
+                        <div key={materialId} className="flex justify-between items-center border-b pb-2 last:border-b-0">
+                          <span className="font-medium">{balance.name}</span>
+                          <span className={
+                            balance.rolls < 0 || balance.pallets < 0
+                              ? 'text-red-600 dark:text-red-400 font-semibold'
+                              : 'text-green-600 dark:text-green-400 font-semibold'
+                          }>
+                            {balance.pallets !== 0 && `${balance.pallets} raklap`}
+                            {balance.pallets !== 0 && balance.rolls !== 0 && ', '}
+                            {balance.rolls !== 0 && `${balance.rolls} tekercs`}
+                            {balance.pallets === 0 && balance.rolls === 0 && '0'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Fóliák */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Fóliák</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {calculatedBalance.foils.length === 0 ? (
+                    <p className="text-sm text-gray-500">Nincs felvett fólia.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {calculatedBalance.foils.map(([materialId, balance]) => (
+                        <div key={materialId} className="flex justify-between items-center border-b pb-2 last:border-b-0">
+                          <span className="font-medium">{balance.name}</span>
+                          <span className={
+                            balance.rolls < 0
+                              ? 'text-red-600 dark:text-red-400 font-semibold'
+                              : 'text-green-600 dark:text-green-400 font-semibold'
+                          }>
+                            {balance.rolls} tekercs
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </div>
+
+        {/* Anyag mozgás log */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-semibold flex items-center">
+              <List className="mr-2 h-5 w-5" />
+              Anyag mozgás napló
+            </h3>
+          </div>
+          <Card>
+            <CardContent className="py-4">
+              {materialMovementLog.length === 0 ? (
+                <div className="text-center text-gray-500 py-8">
+                  <List className="mx-auto h-12 w-12 mb-2 text-gray-400" />
+                  <p className="text-sm">Még nincs anyag mozgás.</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Dátum</TableHead>
+                      <TableHead>Típus</TableHead>
+                      <TableHead>Anyag</TableHead>
+                      <TableHead className="text-right">Mennyiség</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {materialMovementLog.map((t: any) => {
+                      const date = t.pickup_date || t.used_date || t.createdAt;
+                      const typeLabels: Record<string, string> = {
+                        pickup: 'Felvétel',
+                        usage: 'Felhasználás',
+                      };
+                      const typeColors: Record<string, string> = {
+                        pickup: 'text-green-600 dark:text-green-400',
+                        usage: 'text-blue-600 dark:text-blue-400',
+                      };
+                      
+                      return (
+                        <TableRow key={t.documentId || t.id}>
+                          <TableCell className="text-sm text-gray-600 dark:text-gray-400">
+                            {date ? new Date(date).toLocaleDateString('hu-HU', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            }) : '-'}
+                          </TableCell>
+                          <TableCell>
+                            <span className={`font-medium ${typeColors[t.type] || ''}`}>
+                              {typeLabels[t.type] || t.type}
+                            </span>
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {t.material?.name || 'Ismeretlen anyag'}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {t.quantity_pallets > 0 && `${t.quantity_pallets} raklap`}
+                            {t.quantity_pallets > 0 && t.quantity_rolls > 0 && ', '}
+                            {t.quantity_rolls > 0 && `${t.quantity_rolls} tekercs`}
+                            {!t.quantity_pallets && !t.quantity_rolls && '0'}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Elérhető anyagok kiválasztása dialog */}
         <Dialog open={isAvailableMaterialsDialogOpen} onOpenChange={setIsAvailableMaterialsDialogOpen}>
