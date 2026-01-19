@@ -145,7 +145,7 @@ export const projectsApi = {
       return unwrapStrapiResponse(response);
     } catch (error: any) {
       // 404-es hibák esetén ne dobjunk hibát - csendben kihagyjuk (projekt lehet törölve lett)
-      if (error.response?.status === 404) {
+      if (error.response?.status === 404 || error._silent404) {
         // Visszatérünk null-lal, hogy a hívó oldalon tudja, hogy nem sikerült
         // De nem dobunk hibát, hogy ne jelenjen meg a konzolban
         return null as any;

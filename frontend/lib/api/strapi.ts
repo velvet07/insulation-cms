@@ -25,6 +25,15 @@ strapiApi.interceptors.response.use(
       // Log but don't redirect - let the calling code handle it
       console.error('API 401 Error:', error.response?.data);
     }
+    
+    // 404-es hibákat csendben kezeljük - ne logoljuk a konzolba
+    // Még mindig reject-eljük, hogy a hívó oldalon kezelni lehessen
+    // De jelezzük, hogy ez egy 404-es hiba, amit csendben kell kezelni
+    if (error.response?.status === 404) {
+      // Jelöljük meg, hogy ez egy csendben kezelendő 404-es hiba
+      error._silent404 = true;
+    }
+    
     return Promise.reject(error);
   }
 );
