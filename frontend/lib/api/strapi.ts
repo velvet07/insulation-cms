@@ -29,20 +29,24 @@ strapiApi.interceptors.response.use(
     // 404-es hibákat projekt frissítéseknél csendben kezeljük
     // Ha projekt frissítés 404-et ad (projekt törölve lett), akkor egy sikeres válasszal térünk vissza
     // így a böngésző nem logolja hibának
-    if (error.response?.status === 404 && 
-        error.config?.method === 'put' && 
-        error.config?.url?.includes('/projects/')) {
-      // Jelöljük meg, hogy ez egy csendben kezelendő 404-es hiba
-      error._silent404 = true;
-      // Elnyeljük a hibát, és egy sikeres válasszal térünk vissza
-      // Így a böngésző nem logolja hibának
-      return Promise.resolve({
-        data: { data: null },
-        status: 200,
-        statusText: 'OK',
-        headers: {},
-        config: error.config,
-      });
+    if (error.response?.status === 404) {
+      const method = error.config?.method?.toLowerCase();
+      const url = error.config?.url || error.config?.baseURL + error.request?.path || '';
+      
+      // Ellenőrizzük, hogy ez projekt frissítés PUT kérés-e
+      if (method === 'put' && (url.includes('/projects/') || url.includes('projects/'))) {
+        // Jelöljük meg, hogy ez egy csendben kezelendő 404-es hiba
+        error._silent404 = true;
+        // Elnyeljük a hibát, és egy sikeres válasszal térünk vissza
+        // Így a böngésző nem logolja hibának
+        return Promise.resolve({
+          data: { data: null },
+          status: 200,
+          statusText: 'OK',
+          headers: error.response?.headers || {},
+          config: error.config,
+        });
+      }
     }
     
     return Promise.reject(error);
