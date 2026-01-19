@@ -48,9 +48,10 @@ export default function MaterialsPage() {
   const [requirementsPeriod, setRequirementsPeriod] = useState<RequirementsPeriod>('week');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
-  // Elérhető anyagok dátum range (az anyagigény számításhoz)
-  const [availabilityStartDate, setAvailabilityStartDate] = useState('');
+  // Elérhető anyagok kezelése (checklist + end date)
+  const [availableMaterialsIds, setAvailableMaterialsIds] = useState<string[]>([]);
   const [availabilityEndDate, setAvailabilityEndDate] = useState('');
+  const [isAvailableMaterialsDialogOpen, setIsAvailableMaterialsDialogOpen] = useState(false);
   const [pickupDate, setPickupDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedMaterial, setSelectedMaterial] = useState<string>('');
   const [pickupPallets, setPickupPallets] = useState('');
@@ -228,14 +229,14 @@ export default function MaterialsPage() {
       // Insulation option meghatározása elérhető anyagokból
       const insulationOptions = determineInsulationOption(availableMaterials, area);
       
-      // Opció A számítás (10cm + 15cm)
+      // 10cm + 15cm számítás
       if (insulationOptions.optionA?.available) {
         projectsOptionA++;
         const reqA = calculateMaterials(area, 'A');
         totalInsulationRollsA += reqA.insulation.total_rolls;
       }
 
-      // Opció B számítás (12.5cm + 12.5cm)
+      // 12.5cm + 12.5cm számítás
       if (insulationOptions.optionB?.available) {
         projectsOptionB++;
         const reqB = calculateMaterials(area, 'B');
@@ -284,7 +285,7 @@ export default function MaterialsPage() {
         rolls: totalBreathableMembraneRolls,
       },
     };
-  }, [projects, dateRange, requirementsPeriod, transactions, availabilityEndDate]);
+  }, [projects, dateRange, requirementsPeriod, transactions, availabilityEndDate, availableMaterialsIds]);
 
   // Anyagfelvétel form submit
   const pickupMutation = useMutation({
@@ -658,19 +659,39 @@ export default function MaterialsPage() {
                 </div>
               </div>
             )}
-            {/* Elérhető anyagok dátum range */}
+            {/* Elérhető anyagok kezelése */}
             <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <Label className="text-sm font-medium mb-2 block">Elérhető anyagok számítása dátumig:</Label>
-              <Input
-                type="date"
-                value={availabilityEndDate}
-                onChange={(e) => setAvailabilityEndDate(e.target.value)}
-                className="w-full max-w-xs"
-                placeholder="Válasszon dátumot az elérhető anyagok számításához"
-              />
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Az anyagigény számítás az ezen dátumig elérhető anyagokból határozza meg az insulation_option-t.
-              </p>
+              <div className="flex items-center justify-between mb-3">
+                <Label className="text-sm font-medium">Elérhető anyagok beállítása:</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsAvailableMaterialsDialogOpen(true)}
+                >
+                  <Package className="mr-2 h-4 w-4" />
+                  {availableMaterialsIds.length > 0 ? `${availableMaterialsIds.length} anyag kiválasztva` : 'Anyagok kiválasztása'}
+                </Button>
+              </div>
+              <div className="mb-3">
+                <Label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">Számítás dátumig:</Label>
+                <Input
+                  type="date"
+                  value={availabilityEndDate}
+                  onChange={(e) => setAvailabilityEndDate(e.target.value)}
+                  className="w-full max-w-xs"
+                />
+              </div>
+              {availableMaterialsIds.length > 0 && (
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {availableMaterialsIds.length} anyag kiválasztva. Az anyagigény számítás csak ezekből az anyagokból történik.
+                </p>
+              )}
+              {availableMaterialsIds.length === 0 && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  ⚠️ Nincs kiválasztott anyag. Kattintson az "Anyagok kiválasztása" gombra!
+                </p>
+              )}
             </div>
             <Card>
               <CardHeader>
@@ -701,13 +722,23 @@ export default function MaterialsPage() {
                   
                   {materialRequirements.projectsNoOption > 0 && (
                     <div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-2 rounded">
-                      <span className="font-medium">❌ Hiány:</span> {materialRequirements.projectsNoOption} projekt nem készíthető el, mert nincs elég anyag sem Opció A-hoz, sem Opció B-höz.
+                      <span className="font-medium">❌ Hiány:</span> {materialRequirements.projectsNoOption} projekt nem készíthető el, mert nincs elég anyag sem a 10cm+15cm, sem a 12.5cm+12.5cm kombinációhoz.
                     </div>
                   )}
                   
                   {materialRequirements.projectsOptionA > 0 && materialRequirements.projectsOptionB > 0 && (
                     <div className="text-sm text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 p-2 rounded">
-                      <span className="font-medium">ℹ️ Info:</span> {materialRequirements.projectsOptionA} projekt Opció A-val, {materialRequirements.projectsOptionB} projekt Opció B-vel készíthető el.
+                      <span className="font-medium">ℹ️ Info:</span> {materialRequirements.projectsOptionA} projekt 10cm+15cm kombinációval, {materialRequirements.projectsOptionB} projekt 12.5cm+12.5cm kombinációval készíthető el.
+                    </div>
+                  )}
+                  {materialRequirements.projectsOptionA > 0 && materialRequirements.projectsOptionB === 0 && (
+                    <div className="text-sm text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 p-2 rounded">
+                      <span className="font-medium">ℹ️ Info:</span> {materialRequirements.projectsOptionA} projekt 10cm+15cm kombinációval készíthető el.
+                    </div>
+                  )}
+                  {materialRequirements.projectsOptionA === 0 && materialRequirements.projectsOptionB > 0 && (
+                    <div className="text-sm text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 p-2 rounded">
+                      <span className="font-medium">ℹ️ Info:</span> {materialRequirements.projectsOptionB} projekt 12.5cm+12.5cm kombinációval készíthető el.
                     </div>
                   )}
                   
@@ -787,14 +818,22 @@ export default function MaterialsPage() {
                           Nincs elérhető anyag
                         </SelectItem>
                       ) : (
-                        materials.map((material) => (
-                          <SelectItem key={material.id || material.documentId} value={String(material.id || material.documentId)}>
-                            {material.name}
-                          </SelectItem>
-                        ))
+                        // Csak az elérhető anyagok közül választhat
+                        materials
+                          .filter((m) => availableMaterialsIds.length === 0 || availableMaterialsIds.includes(String(m.id || m.documentId)))
+                          .map((material) => (
+                            <SelectItem key={material.id || material.documentId} value={String(material.id || material.documentId)}>
+                              {material.name}
+                            </SelectItem>
+                          ))
                       )}
                     </SelectContent>
                   </Select>
+                  {availableMaterialsIds.length > 0 && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Csak az elérhető anyagok közül választhat.
+                    </p>
+                  )}
                 </div>
                 {selectedMaterial && materials.find((m) => String(m.id || m.documentId) === selectedMaterial)?.category === 'insulation' && (
                   <>
@@ -833,6 +872,11 @@ export default function MaterialsPage() {
                     />
                   </div>
                 )}
+                <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                  <p className="text-xs text-blue-700 dark:text-blue-300">
+                    <strong>ℹ️ Tájékoztatás:</strong> A szállítólevelet a projekt <strong>Képek</strong> menüpontjában, az <strong>"Egyéb"</strong> kategóriába töltse fel!
+                  </p>
+                </div>
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsPickupDialogOpen(false)}>
@@ -843,6 +887,90 @@ export default function MaterialsPage() {
                 </Button>
               </DialogFooter>
             </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Elérhető anyagok kiválasztása dialog */}
+        <Dialog open={isAvailableMaterialsDialogOpen} onOpenChange={setIsAvailableMaterialsDialogOpen}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Elérhető anyagok kiválasztása</DialogTitle>
+              <DialogDescription>
+                Válassza ki, hogy mely anyagok érhetők el az anyagigény számításhoz és az anyagfelvételhez.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-3">
+                {materials.length === 0 ? (
+                  <p className="text-sm text-gray-500">Nincs elérhető anyag.</p>
+                ) : (
+                  materials.map((material) => {
+                    const materialId = String(material.id || material.documentId);
+                    const isChecked = availableMaterialsIds.includes(materialId);
+                    
+                    return (
+                      <div key={materialId} className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">
+                        <Checkbox
+                          id={`material-${materialId}`}
+                          checked={isChecked}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setAvailableMaterialsIds([...availableMaterialsIds, materialId]);
+                            } else {
+                              setAvailableMaterialsIds(availableMaterialsIds.filter((id) => id !== materialId));
+                            }
+                          }}
+                        />
+                        <Label
+                          htmlFor={`material-${materialId}`}
+                          className="flex-1 cursor-pointer"
+                        >
+                          <div className="font-medium">{material.name}</div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            {material.category === 'insulation' && material.thickness_cm && (
+                              <>Vastagság: {material.thickness_cm.replace('cm', '')} cm • </>
+                            )}
+                            {material.coverage_per_roll && (
+                              <>m²/tekercs: {material.coverage_per_roll} • </>
+                            )}
+                            {material.rolls_per_pallet && (
+                              <>Tekercs/raklap: {material.rolls_per_pallet}</>
+                            )}
+                            {!material.rolls_per_pallet && material.category !== 'insulation' && (
+                              <>Fólia</>
+                            )}
+                          </div>
+                        </Label>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+              {availableMaterialsIds.length === 0 && (
+                <p className="text-sm text-amber-600 dark:text-amber-400">
+                  ⚠️ Ha nem választ ki anyagot, az összes anyag elérhetőnek számít.
+                </p>
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setAvailableMaterialsIds([]);
+                }}
+              >
+                Összes törlése
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  setIsAvailableMaterialsDialogOpen(false);
+                }}
+              >
+                Mentés
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </DashboardLayout>
