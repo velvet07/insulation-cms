@@ -344,7 +344,7 @@ export default function MaterialsPage() {
 
         // Minden projekthez hozzáadjuk az audit log bejegyzést
         const updatePromises = allProjects.map((project: Project) => {
-          const projectId = project.id || project.documentId;
+          const projectId = project.documentId || project.id;
           if (!projectId) {
             console.warn('Projekt ID hiányzik, audit log frissítés kihagyva');
             return Promise.resolve();
@@ -532,7 +532,7 @@ export default function MaterialsPage() {
         auditLogEntry.module = 'Anyaggazdálkodás';
 
         const updatePromises = allProjects.map((project: Project) => {
-          const projectId = project.id || project.documentId;
+          const projectId = project.documentId || project.id;
           if (!projectId) {
             console.warn('Projekt ID hiányzik, audit log frissítés kihagyva');
             return Promise.resolve();
@@ -597,7 +597,7 @@ export default function MaterialsPage() {
         auditLogEntry.module = 'Anyaggazdálkodás';
 
         const updatePromises = allProjects.map((project: Project) => {
-          const projectId = project.id || project.documentId;
+          const projectId = project.documentId || project.id;
           if (!projectId) {
             console.warn('Projekt ID hiányzik, audit log frissítés kihagyva');
             return Promise.resolve();
