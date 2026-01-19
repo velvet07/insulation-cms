@@ -368,7 +368,6 @@ export default function MaterialsPage() {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       setIsPickupDialogOpen(false);
       setPickupQuantities({});
-      alert('Anyagfelvételek sikeresen rögzítve!');
     },
     onError: (error: any) => {
       console.error('Anyagfelvétel hiba:', error);
@@ -586,7 +585,6 @@ export default function MaterialsPage() {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       setEditingTransaction(null);
       setEditTransactionData(null);
-      alert('Tranzakció sikeresen frissítve!');
     },
     onError: (error: any) => {
       console.error('Tranzakció frissítés hiba:', error);
