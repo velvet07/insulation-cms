@@ -38,7 +38,15 @@ import {
   type AvailableMaterial,
 } from '@/lib/utils/material-calculation';
 import type { Project } from '@/types';
-import { Plus, AlertTriangle, CheckCircle2, TrendingDown, Package, Calendar, CalendarDays } from 'lucide-react';
+import { Plus, AlertTriangle, CheckCircle2, TrendingDown, Package, Calendar, CalendarDays, List } from 'lucide-react';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 type RequirementsPeriod = 'today' | 'tomorrow' | 'week' | 'two-weeks' | 'month' | 'custom';
 
@@ -54,9 +62,8 @@ export default function MaterialsPage() {
   const [availabilityEndDate, setAvailabilityEndDate] = useState('');
   const [isAvailableMaterialsDialogOpen, setIsAvailableMaterialsDialogOpen] = useState(false);
   const [pickupDate, setPickupDate] = useState(new Date().toISOString().split('T')[0]);
-  const [selectedMaterial, setSelectedMaterial] = useState<string>('');
-  const [pickupPallets, setPickupPallets] = useState('');
-  const [pickupRolls, setPickupRolls] = useState('');
+  // Táblázatos anyagfelvétel: minden anyaghoz külön mennyiség
+  const [pickupQuantities, setPickupQuantities] = useState<Record<string, { pallets: string; rolls: string }>>({});
 
   const userId = user?.documentId || user?.id;
 
@@ -302,60 +309,84 @@ export default function MaterialsPage() {
     };
   }, [projects, dateRange, requirementsPeriod, transactions, availabilityEndDate, availableMaterialsIds]);
 
-  // Anyagfelvétel form submit
+  // Anyagfelvétel form submit (több anyag egyszerre)
   const pickupMutation = useMutation({
-    mutationFn: async (data: any) => {
-      return materialTransactionsApi.create({
-        type: 'pickup',
-        pickup_date: data.pickup_date,
-        material: data.material,
-        quantity_pallets: data.quantity_pallets || 0,
-        quantity_rolls: data.quantity_rolls || 0,
-        user: userId,
-      });
+    mutationFn: async (data: Array<{ material: string; quantity_pallets: number; quantity_rolls: number }>) => {
+      // Több tranzakció létrehozása párhuzamosan
+      const promises = data.map((item) =>
+        materialTransactionsApi.create({
+          type: 'pickup',
+          pickup_date: pickupDate,
+          material: item.material,
+          quantity_pallets: item.quantity_pallets || 0,
+          quantity_rolls: item.quantity_rolls || 0,
+          user: userId,
+        })
+      );
+      return Promise.all(promises);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['material-balances'] });
       queryClient.invalidateQueries({ queryKey: ['material-transactions'] });
       setIsPickupDialogOpen(false);
-      setSelectedMaterial('');
-      setPickupPallets('');
-      setPickupRolls('');
+      setPickupQuantities({});
+      alert('Anyagfelvételek sikeresen rögzítve!');
     },
     onError: (error: any) => {
       console.error('Anyagfelvétel hiba:', error);
-      alert(`Hiba történt az anyagfelvétel rögzítése során: ${error.message || 'Ismeretlen hiba'}`);
+      alert(`Hiba történt az anyagfelvételek rögzítése során: ${error.message || 'Ismeretlen hiba'}`);
     },
   });
 
   const handlePickupSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validáció: szigetelőanyagnál legalább raklap vagy tekercs kell
-    const selectedMat = materials.find((m) => String(m.id || m.documentId) === selectedMaterial);
-    const isInsulation = selectedMat?.category === 'insulation';
-    
-    if (!selectedMaterial) {
-      alert('Kérjük válasszon anyagot!');
+    // Szűrjük az elérhető anyagokat
+    const availableMaterials = materials.filter(
+      (m) => availableMaterialsIds.length === 0 || availableMaterialsIds.includes(String(m.id || m.documentId))
+    );
+
+    if (availableMaterials.length === 0) {
+      alert('Nincs elérhető anyag!');
       return;
     }
-    
-    if (isInsulation && !pickupPallets && !pickupRolls) {
-      alert('Szigetelőanyagnál legalább raklap vagy tekercs mennyiséget kell megadni!');
-      return;
-    }
-    
-    if (!isInsulation && !pickupRolls) {
-      alert('Fóliánál tekercs mennyiséget kell megadni!');
-      return;
-    }
-    
-    pickupMutation.mutate({
-      material: selectedMaterial,
-      pickup_date: pickupDate,
-      quantity_pallets: pickupPallets ? parseInt(pickupPallets) : 0,
-      quantity_rolls: pickupRolls ? parseInt(pickupRolls) : 0,
+
+    // Összegyűjtjük a kitöltött mennyiségeket
+    const transactionsToCreate: Array<{ material: string; quantity_pallets: number; quantity_rolls: number }> = [];
+
+    availableMaterials.forEach((material) => {
+      const materialId = String(material.id || material.documentId);
+      const quantities = pickupQuantities[materialId] || { pallets: '', rolls: '' };
+      const pallets = quantities.pallets ? parseInt(quantities.pallets) : 0;
+      const rolls = quantities.rolls ? parseInt(quantities.rolls) : 0;
+
+      // Validáció
+      if (material.category === 'insulation') {
+        if (pallets > 0 || rolls > 0) {
+          transactionsToCreate.push({
+            material: materialId,
+            quantity_pallets: pallets,
+            quantity_rolls: rolls,
+          });
+        }
+      } else {
+        // Fóliák
+        if (rolls > 0) {
+          transactionsToCreate.push({
+            material: materialId,
+            quantity_pallets: 0,
+            quantity_rolls: rolls,
+          });
+        }
+      }
     });
+
+    if (transactionsToCreate.length === 0) {
+      alert('Kérjük adjon meg legalább egy anyag mennyiségét!');
+      return;
+    }
+
+    pickupMutation.mutate(transactionsToCreate);
   };
 
   // Anyagegyenlegek kategorizálása
@@ -448,6 +479,67 @@ export default function MaterialsPage() {
             </CardContent>
           </Card>
         )}
+
+        {/* Felvett anyagok listája */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-semibold flex items-center">
+              <List className="mr-2 h-5 w-5" />
+              Felvett anyagok
+            </h3>
+          </div>
+          <Card>
+            <CardContent className="py-4">
+              {transactions.filter((t: any) => t.type === 'pickup').length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Dátum</TableHead>
+                      <TableHead>Anyag</TableHead>
+                      <TableHead className="text-right">Raklapok</TableHead>
+                      <TableHead className="text-right">Tekercsek</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {transactions
+                      .filter((t: any) => t.type === 'pickup')
+                      .sort((a: any, b: any) => {
+                        const dateA = new Date(a.pickup_date || a.createdAt || 0);
+                        const dateB = new Date(b.pickup_date || b.createdAt || 0);
+                        return dateB.getTime() - dateA.getTime();
+                      })
+                      .map((transaction: any) => (
+                        <TableRow key={transaction.id || transaction.documentId}>
+                          <TableCell>
+                            {transaction.pickup_date
+                              ? new Date(transaction.pickup_date).toLocaleDateString('hu-HU')
+                              : transaction.createdAt
+                              ? new Date(transaction.createdAt).toLocaleDateString('hu-HU')
+                              : '-'}
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {transaction.material?.name || 'Ismeretlen anyag'}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {transaction.quantity_pallets || 0}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {transaction.quantity_rolls || 0}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <Package className="mx-auto h-12 w-12 mb-2 text-gray-400" />
+                  <p className="text-sm">Még nincs felvett anyag.</p>
+                  <p className="text-xs text-gray-400 mt-1">Az anyagfelvétel után itt jelenik meg a lista.</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Anyagegyenlegek */}
         <div className="mb-6">
@@ -714,9 +806,26 @@ export default function MaterialsPage() {
                 />
               </div>
               {availableMaterialsIds.length > 0 && (
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {availableMaterialsIds.length} anyag kiválasztva. Az anyagigény számítás csak ezekből az anyagokból történik.
-                </p>
+                <div className="mt-3">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                    {availableMaterialsIds.length} anyag kiválasztva. Az anyagigény számítás csak ezekből az anyagokból történik.
+                  </p>
+                  <div className="text-xs space-y-1">
+                    <div className="font-medium text-gray-700 dark:text-gray-300 mb-1">Kiválasztott anyagok:</div>
+                    <div className="flex flex-wrap gap-2">
+                      {materials
+                        .filter((m) => availableMaterialsIds.includes(String(m.id || m.documentId)))
+                        .map((material) => (
+                          <span
+                            key={material.id || material.documentId}
+                            className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded text-xs"
+                          >
+                            {material.name}
+                          </span>
+                        ))}
+                    </div>
+                  </div>
+                </div>
               )}
               {availableMaterialsIds.length === 0 && (
                 <p className="text-xs text-amber-600 dark:text-amber-400">
@@ -847,72 +956,92 @@ export default function MaterialsPage() {
                     required
                   />
                 </div>
+                
+                {/* Táblázatos anyagfelvétel */}
                 <div>
-                  <Label htmlFor="material">Anyag típus</Label>
-                  <Select value={selectedMaterial} onValueChange={setSelectedMaterial} required>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Válasszon anyagot" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {materials.length === 0 ? (
-                        <SelectItem value="no-materials" disabled>
-                          Nincs elérhető anyag
-                        </SelectItem>
-                      ) : (
-                        // Csak az elérhető anyagok közül választhat
-                        materials
+                  <Label className="mb-2 block">Anyagok és mennyiségek:</Label>
+                  <div className="border rounded-lg overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Anyag</TableHead>
+                          <TableHead className="text-right">Raklapok</TableHead>
+                          <TableHead className="text-right">Tekercsek</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {materials
                           .filter((m) => availableMaterialsIds.length === 0 || availableMaterialsIds.includes(String(m.id || m.documentId)))
-                          .map((material) => (
-                            <SelectItem key={material.id || material.documentId} value={String(material.id || material.documentId)}>
-                              {material.name}
-                            </SelectItem>
-                          ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                  {availableMaterialsIds.length > 0 && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      Csak az elérhető anyagok közül választhat.
-                    </p>
-                  )}
-                </div>
-                {selectedMaterial && materials.find((m) => String(m.id || m.documentId) === selectedMaterial)?.category === 'insulation' && (
-                  <>
-                    <div>
-                      <Label htmlFor="pallets">Raklapok száma</Label>
-                      <Input
-                        id="pallets"
-                        type="number"
-                        min="0"
-                        value={pickupPallets}
-                        onChange={(e) => setPickupPallets(e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="rolls">Tekercsek száma</Label>
-                      <Input
-                        id="rolls"
-                        type="number"
-                        min="0"
-                        value={pickupRolls}
-                        onChange={(e) => setPickupRolls(e.target.value)}
-                      />
-                    </div>
-                  </>
-                )}
-                {selectedMaterial && materials.find((m) => String(m.id || m.documentId) === selectedMaterial)?.category !== 'insulation' && (
-                  <div>
-                    <Label htmlFor="rolls">Tekercsek száma</Label>
-                    <Input
-                      id="rolls"
-                      type="number"
-                      min="0"
-                      value={pickupRolls}
-                      onChange={(e) => setPickupRolls(e.target.value)}
-                      required
-                    />
+                          .map((material) => {
+                            const materialId = String(material.id || material.documentId);
+                            const isInsulation = material.category === 'insulation';
+                            const quantities = pickupQuantities[materialId] || { pallets: '', rolls: '' };
+                            
+                            return (
+                              <TableRow key={materialId}>
+                                <TableCell className="font-medium">
+                                  {material.name}
+                                  {material.thickness_cm && (
+                                    <span className="text-xs text-gray-500 ml-2">
+                                      ({material.thickness_cm.replace('cm', '')} cm)
+                                    </span>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  {isInsulation ? (
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      value={quantities.pallets}
+                                      onChange={(e) => {
+                                        setPickupQuantities({
+                                          ...pickupQuantities,
+                                          [materialId]: {
+                                            ...quantities,
+                                            pallets: e.target.value,
+                                          },
+                                        });
+                                      }}
+                                      className="w-20 ml-auto"
+                                      placeholder="0"
+                                    />
+                                  ) : (
+                                    <span className="text-gray-400 text-sm">-</span>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    value={quantities.rolls}
+                                    onChange={(e) => {
+                                      setPickupQuantities({
+                                        ...pickupQuantities,
+                                        [materialId]: {
+                                          ...quantities,
+                                          rolls: e.target.value,
+                                        },
+                                      });
+                                    }}
+                                    className="w-20 ml-auto"
+                                    placeholder="0"
+                                  />
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        {materials.filter((m) => availableMaterialsIds.length === 0 || availableMaterialsIds.includes(String(m.id || m.documentId))).length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={3} className="text-center text-gray-500 py-4">
+                              Nincs elérhető anyag
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
                   </div>
-                )}
+                </div>
+                
                 <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                   <p className="text-xs text-blue-700 dark:text-blue-300">
                     <strong>ℹ️ Tájékoztatás:</strong> A szállítólevelet a projekt <strong>Képek</strong> menüpontjában, az <strong>"Egyéb"</strong> kategóriába töltse fel!
