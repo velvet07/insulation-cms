@@ -851,7 +851,9 @@ export function PhotosTab({ project }: PhotosTabProps) {
                                 if (selectedCategory) {
                                   // Use numeric id if available, otherwise try documentId
                                   const categoryIdToUse = selectedCategory.id || selectedCategory.documentId;
-                                  photoCategoryUpdateMutation.mutate({ photoId, categoryId: categoryIdToUse });
+                                  if (categoryIdToUse) {
+                                    photoCategoryUpdateMutation.mutate({ photoId, categoryId: categoryIdToUse });
+                                  }
                                 }
                               }}
                               disabled={photoCategoryUpdateMutation.isPending}
@@ -963,7 +965,9 @@ export function PhotosTab({ project }: PhotosTabProps) {
                               if (selectedCategory) {
                                 // Use numeric id if available, otherwise try documentId
                                 const categoryIdToUse = selectedCategory.id || selectedCategory.documentId;
-                                photoCategoryUpdateMutation.mutate({ photoId, categoryId: categoryIdToUse });
+                                if (categoryIdToUse) {
+                                  photoCategoryUpdateMutation.mutate({ photoId, categoryId: categoryIdToUse });
+                                }
                               }
                             }}
                             disabled={photoCategoryUpdateMutation.isPending}
