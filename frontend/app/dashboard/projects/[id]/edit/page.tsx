@@ -32,7 +32,7 @@ import { companiesApi } from '@/lib/api/companies';
 import { formatDate, formatPhoneNumber, cleanPhoneNumber } from '@/lib/utils';
 import { useAuthStore } from '@/lib/store/auth';
 import { createAuditLogEntry, addAuditLogEntry } from '@/lib/utils/audit-log';
-import { isAdminRole, isUserFoovallalkozo } from '@/lib/utils/user-role';
+import { isAdminRole } from '@/lib/utils/user-role';
 import type { Company } from '@/types';
 import { ArrowLeft } from 'lucide-react';
 
