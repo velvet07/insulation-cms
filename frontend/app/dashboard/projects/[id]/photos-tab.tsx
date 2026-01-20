@@ -252,7 +252,7 @@ export function PhotosTab({ project }: PhotosTabProps) {
     mutationFn: async ({ photoIds, categoryId }: { photoIds: string[]; categoryId: string | number }) => {
       // Update all selected photos to the new category
       await Promise.all(
-        photoIds.map(id => photosApi.update(id, { category: categoryId }))
+        photoIds.map(id => photosApi.update(id, { category: categoryId as any }))
       );
       
       // Audit log
