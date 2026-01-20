@@ -22,7 +22,9 @@ export default [
         'http://localhost:3000',
         'http://localhost:3001',
         'https://cms.emermedia.eu',
+        'https://thermodesk.vercel.app',
         /^https:\/\/.*\.emermedia\.eu$/,
+        /^https:\/\/.*\.vercel\.app$/,
       ],
       headers: [
         'Content-Type',

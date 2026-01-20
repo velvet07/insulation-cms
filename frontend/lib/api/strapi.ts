@@ -1,4 +1,4 @@
-import axios, { AxiosInstance } from 'axios';
+import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 
 const strapiUrl = process.env.NEXT_PUBLIC_STRAPI_URL || 'https://cms.emermedia.eu';
 const apiToken = process.env.NEXT_PUBLIC_STRAPI_API_TOKEN;
@@ -13,7 +13,38 @@ export const strapiApi: AxiosInstance = axios.create({
     'Authorization': `Bearer ${apiToken}`,
     'Content-Type': 'application/json',
   },
+  withCredentials: true, // Enable cookies for CORS
 });
+
+// Request interceptor to add JWT token from auth store
+strapiApi.interceptors.request.use(
+  (config: InternalAxiosRequestConfig) => {
+    // Only add JWT token on client side
+    if (typeof window !== 'undefined') {
+      try {
+        // Get token from localStorage (same as auth store uses)
+        const authStorage = localStorage.getItem('auth-storage');
+        if (authStorage) {
+          const authData = JSON.parse(authStorage);
+          const jwtToken = authData?.state?.token;
+          
+          if (jwtToken) {
+            // Add JWT token to Authorization header
+            // If API token is also present, we can use both, but JWT takes precedence for user-specific endpoints
+            config.headers.Authorization = `Bearer ${jwtToken}`;
+          }
+        }
+      } catch (error) {
+        // Silently fail if we can't read from localStorage
+        console.warn('Failed to read auth token from storage:', error);
+      }
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
 
 // Response interceptor for error handling
 strapiApi.interceptors.response.use(

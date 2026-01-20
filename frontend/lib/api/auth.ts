@@ -9,6 +9,7 @@ const authApiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true, // Enable cookies for CORS
 });
 
 export interface LoginResponse {
