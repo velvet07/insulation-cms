@@ -1590,7 +1590,7 @@ export default function MaterialsPage() {
                   ⚠️ Ha nem választ ki anyagot, az összes anyag elérhetőnek számít.
                 </p>
               )}
-            </div>
+        </div>
             <DialogFooter>
               <Button
                 type="button"
