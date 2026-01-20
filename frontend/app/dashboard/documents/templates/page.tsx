@@ -418,7 +418,7 @@ export default function TemplatesPage() {
                   {templates.map((template) => (
                     <TableRow key={template.id}>
                       <TableCell className="font-medium">{template.name}</TableCell>
-                      <TableCell>{TEMPLATE_TYPE_LABELS[template.type]}</TableCell>
+                      <TableCell>{TEMPLATE_TYPE_LABELS[template.type as TemplateType] || template.type}</TableCell>
                       <TableCell>
                         {template.template_file ? (
                           <span className="text-green-600 dark:text-green-400">
