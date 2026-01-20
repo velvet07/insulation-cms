@@ -114,6 +114,7 @@ export interface ProjectAuditLogEntry {
     // Fényképek modul
     | 'photo_uploaded' 
     | 'photo_deleted'
+    | 'photo_category_changed'
     // Státusz modul
     | 'status_changed'
     // Anyagok modul
