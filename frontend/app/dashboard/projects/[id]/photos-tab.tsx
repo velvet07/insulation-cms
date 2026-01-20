@@ -287,7 +287,7 @@ export function PhotosTab({ project }: PhotosTabProps) {
   // Single photo category update mutation
   const photoCategoryUpdateMutation = useMutation({
     mutationFn: async ({ photoId, categoryId }: { photoId: string | number; categoryId: string | number }) => {
-      await photosApi.update(photoId, { category: categoryId });
+      await photosApi.update(photoId, { category: categoryId as any });
       
       // Audit log
       const photo = photos.find(p => (p.documentId || p.id).toString() === photoId.toString());
