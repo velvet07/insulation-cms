@@ -82,7 +82,7 @@ export default function EditProjectPage() {
     project.company && 
     typeof project.company === 'object' && 
     'type' in project.company && 
-    ((project.company as Company).type === 'main_contractor' || (project.company as Company).type === 'Main Contractor');
+    (project.company as Company).type === 'main_contractor';
   
   // Admin can edit subcontractor for ALL projects (main contractor or not)
   // Main contractor can edit subcontractor only for main contractor projects
