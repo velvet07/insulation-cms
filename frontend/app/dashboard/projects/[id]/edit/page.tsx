@@ -29,7 +29,7 @@ import {
 } from '@/components/ui/form';
 import { projectsApi } from '@/lib/api/projects';
 import { companiesApi } from '@/lib/api/companies';
-import { formatDate, formatPhoneNumber, cleanPhoneNumber } from '@/lib/utils';
+import { formatPhoneNumber, cleanPhoneNumber } from '@/lib/utils';
 import { useAuthStore } from '@/lib/store/auth';
 import { createAuditLogEntry, addAuditLogEntry } from '@/lib/utils/audit-log';
 import { isAdminRole } from '@/lib/utils/user-role';

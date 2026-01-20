@@ -140,7 +140,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 </p>
               )}
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                {user?.role || 'Felhasználó'}
+                {user?.role ? String(user.role) : 'Felhasználó'}
               </p>
             </div>
             <Button

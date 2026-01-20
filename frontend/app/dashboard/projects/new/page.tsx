@@ -30,7 +30,6 @@ import {
 import { projectsApi } from '@/lib/api/projects';
 import { useAuthStore } from '@/lib/store/auth';
 import { createAuditLogEntry } from '@/lib/utils/audit-log';
-import { formatPhoneNumber, cleanPhoneNumber } from '@/lib/utils';
 import { ArrowLeft } from 'lucide-react';
 
 const projectSchema = z.object({
@@ -63,7 +62,7 @@ export default function NewProjectPage() {
   });
 
   const mutation = useMutation({
-    mutationFn: (data: ProjectFormValues & { title: string; client_address?: string }) => {
+    mutationFn: (data: ProjectFormValues & { title: string; client_address?: string; area_sqm?: number; status: 'pending' | 'in_progress' | 'ready_for_review' | 'approved' | 'completed' }) => {
       // Audit log bejegyzés a projekt létrehozásához - Projekt modul
       const auditLogEntry = createAuditLogEntry(
         'project_created',

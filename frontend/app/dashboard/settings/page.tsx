@@ -58,7 +58,7 @@ import type { PhotoCategory } from '@/types';
 const companySchema = z.object({
   name: z.string().min(1, 'A cég neve kötelező'),
   type: z.enum(['main_contractor', 'subcontractor'], {
-    required_error: 'A cég típusa kötelező',
+    message: 'A cég típusa kötelező',
   }),
   tax_number: z.string().optional(),
   address: z.string().optional(),
@@ -928,7 +928,7 @@ export default function SettingsPage() {
                     {materialCategory === 'insulation' && (
                       <div>
                         <Label htmlFor="material-thickness">Vastagság</Label>
-                        <Select value={materialThickness || ''} onValueChange={(v: Material['thickness_cm']) => setMaterialThickness(v || undefined)}>
+                        <Select value={materialThickness || ''} onValueChange={(v: string) => setMaterialThickness((v as Material['thickness_cm']) || undefined)}>
                           <SelectTrigger>
                             <SelectValue placeholder="Válasszon vastagságot" />
                           </SelectTrigger>
@@ -1023,10 +1023,10 @@ export default function SettingsPage() {
                         {material.name}
                       </TableCell>
                       <TableCell>
-                        {materialCategoryLabels[material.category]}
+                        {materialCategoryLabels[material.category as Material['category']]}
                       </TableCell>
                       <TableCell>
-                        {material.thickness_cm ? thicknessLabels[material.thickness_cm] : '-'}
+                        {material.thickness_cm ? thicknessLabels[material.thickness_cm as NonNullable<Material['thickness_cm']>] : '-'}
                       </TableCell>
                       <TableCell>
                         {material.coverage_per_roll?.toFixed(2) || '-'}
