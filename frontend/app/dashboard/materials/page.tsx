@@ -199,11 +199,19 @@ export default function MaterialsPage() {
       return {
         period: requirementsPeriod,
         projectCount: 0,
+        totalProjects: 0,
+        projectsWithoutData: 0,
+        projectsOptionA: 0,
+        projectsOptionB: 0,
+        projectsNoOption: 0,
         totalArea: 0,
+        availableMaterials: [],
         insulation: {
           total_rolls: 0,
           total_pallets: 0,
           remaining_rolls: 0,
+          optionA_rolls: 0,
+          optionB_rolls: 0,
         },
         vapor_barrier: {
           rolls: 0,
