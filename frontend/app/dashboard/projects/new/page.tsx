@@ -63,7 +63,7 @@ export default function NewProjectPage() {
   });
 
   const mutation = useMutation({
-    mutationFn: (data: ProjectFormValues & { title: string }) => {
+    mutationFn: (data: ProjectFormValues & { title: string; client_address?: string }) => {
       // Audit log bejegyzés a projekt létrehozásához - Projekt modul
       const auditLogEntry = createAuditLogEntry(
         'project_created',
