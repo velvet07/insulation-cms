@@ -443,7 +443,7 @@ export default function MaterialsPage() {
     }
 
     // Összegyűjtjük a kitöltött mennyiségeket
-    const transactionsToCreate: Array<{ material: string; quantity_pallets: number; quantity_rolls: number }> = [];
+    const transactionsToCreate: Array<{ material: string; quantity_pallets: number; quantity_rolls: number; materialName?: string }> = [];
 
     availableMaterials.forEach((material) => {
       const materialId = String(material.documentId || material.id);
