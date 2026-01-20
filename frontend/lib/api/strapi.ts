@@ -30,8 +30,22 @@ strapiApi.interceptors.request.use(
           
           if (jwtToken) {
             // Add JWT token to Authorization header
-            // If API token is also present, we can use both, but JWT takes precedence for user-specific endpoints
+            // JWT token takes precedence over API token for user-specific endpoints
             config.headers.Authorization = `Bearer ${jwtToken}`;
+            // Debug log (only in development)
+            if (process.env.NODE_ENV === 'development') {
+              console.log('[strapiApi] Using JWT token for request:', config.url);
+            }
+          } else {
+            // Debug log if no JWT token found
+            if (process.env.NODE_ENV === 'development') {
+              console.warn('[strapiApi] No JWT token found, using API token for:', config.url);
+            }
+          }
+        } else {
+          // Debug log if no auth storage found
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('[strapiApi] No auth storage found, using API token for:', config.url);
           }
         }
       } catch (error) {
@@ -55,6 +69,16 @@ strapiApi.interceptors.response.use(
     if (error.response?.status === 401) {
       // Log but don't redirect - let the calling code handle it
       console.error('API 401 Error:', error.response?.data);
+    }
+    
+    // Log 403 errors with more details
+    if (error.response?.status === 403) {
+      console.error('API 403 Forbidden Error:', {
+        url: error.config?.url,
+        method: error.config?.method,
+        headers: error.config?.headers,
+        response: error.response?.data,
+      });
     }
     
     // 404-es hibákat projekt frissítéseknél csendben kezeljük
