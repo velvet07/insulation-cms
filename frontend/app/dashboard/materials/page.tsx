@@ -41,7 +41,6 @@ import type { Project, Company } from '@/types';
 import { Plus, AlertTriangle, CheckCircle2, TrendingDown, Package, Calendar, CalendarDays, List, Edit, Trash2 } from 'lucide-react';
 import { createAuditLogEntry, addAuditLogEntry } from '@/lib/utils/audit-log';
 import { isAdminRole } from '@/lib/utils/user-role';
-import { Card, CardContent } from '@/components/ui/card';
 import {
   Table,
   TableBody,
