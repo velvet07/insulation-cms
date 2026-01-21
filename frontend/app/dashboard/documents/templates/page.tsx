@@ -8,7 +8,8 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAuthStore } from '@/lib/store/auth';
-import { isAdminRole, isSubcontractor, isMainContractor } from '@/lib/utils/user-role';
+import { isAdminRole } from '@/lib/utils/user-role';
+import type { Company } from '@/types';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -74,10 +75,21 @@ export default function TemplatesPage() {
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   
-  // Only allow main contractors and admins
-  const isSubContractor = isSubcontractor(user);
+  // Check if user is subcontractor - same way as in projects page
+  const getUserCompany = () => {
+    if (!user?.company) return null;
+    if (typeof user.company === 'object' && 'type' in user.company) {
+      return user.company as Company;
+    }
+    return null;
+  };
+
+  const userCompany = getUserCompany();
+  const isSubContractor = userCompany?.type === 'subcontractor';
+  const isAdmin = isAdminRole(user);
   
-  if (isSubContractor) {
+  // Only allow main contractors and admins
+  if (isSubContractor && !isAdmin) {
     return (
       <ProtectedRoute>
         <DashboardLayout>
@@ -95,8 +107,7 @@ export default function TemplatesPage() {
   }
   
   // Only allow main contractors and admins to create/edit/delete templates
-  const isMainContractor = isMainContractor(user);
-  const isAdmin = isAdminRole(user);
+  const isMainContractor = userCompany?.type === 'main_contractor';
   const canManageTemplates = isMainContractor || isAdmin;
 
   const { data: templates = [], isLoading } = useQuery({

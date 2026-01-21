@@ -7,16 +7,28 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { FileText, FileEdit, ArrowRight } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth';
-import { isSubcontractor } from '@/lib/utils/user-role';
+import { isAdminRole } from '@/lib/utils/user-role';
+import type { Company } from '@/types';
 
 export default function DocumentsPage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   
-  // Only allow main contractors and admins
-  const isSubContractor = isSubcontractor(user);
+  // Check if user is subcontractor - same way as in projects page
+  const getUserCompany = () => {
+    if (!user?.company) return null;
+    if (typeof user.company === 'object' && 'type' in user.company) {
+      return user.company as Company;
+    }
+    return null;
+  };
+
+  const userCompany = getUserCompany();
+  const isSubContractor = userCompany?.type === 'subcontractor';
+  const isAdmin = isAdminRole(user);
   
-  if (isSubContractor) {
+  // Only allow main contractors and admins
+  if (isSubContractor && !isAdmin) {
     return (
       <ProtectedRoute>
         <DashboardLayout>

@@ -5,7 +5,8 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/lib/store/auth';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { isAdminRole, isSubcontractor as isSubcontractorHelper } from '@/lib/utils/user-role';
+import { isAdminRole } from '@/lib/utils/user-role';
+import type { Company } from '@/types';
 import {
   LayoutDashboard,
   FolderKanban,
@@ -68,8 +69,17 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
   const { user, clearAuth } = useAuthStore();
 
-  // Memoize subcontractor check
-  const isSubContractor = isSubcontractorHelper(user);
+  // Check if user is subcontractor - same way as in projects page
+  const getUserCompany = () => {
+    if (!user?.company) return null;
+    if (typeof user.company === 'object' && 'type' in user.company) {
+      return user.company as Company;
+    }
+    return null;
+  };
+
+  const userCompany = getUserCompany();
+  const isSubContractor = userCompany?.type === 'subcontractor';
 
   const handleLogout = () => {
     clearAuth();

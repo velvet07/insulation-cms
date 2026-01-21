@@ -50,7 +50,8 @@ import { photoCategoriesApi } from '@/lib/api/photo-categories';
 import { materialsApi, type Material } from '@/lib/api/materials';
 import { Building2, Plus, Trash2, Edit, FolderTree, Package } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { isAdminRole, isSubcontractor, isMainContractor as isMainContractorHelper } from '@/lib/utils/user-role';
+import { isAdminRole } from '@/lib/utils/user-role';
+import type { Company } from '@/types';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2 } from 'lucide-react';
 import type { PhotoCategory } from '@/types';
@@ -88,9 +89,18 @@ export default function SettingsPage() {
   const [materialCoverage, setMaterialCoverage] = useState('');
   const [materialRollsPerPallet, setMaterialRollsPerPallet] = useState('24');
 
-  // Memoize admin check to avoid recalculating on every render
+  // Check if user is subcontractor - same way as in projects page
+  const getUserCompany = () => {
+    if (!user?.company) return null;
+    if (typeof user.company === 'object' && 'type' in user.company) {
+      return user.company as Company;
+    }
+    return null;
+  };
+
+  const userCompany = getUserCompany();
+  const isSubContractor = userCompany?.type === 'subcontractor';
   const isAdmin = useMemo(() => isAdminRole(user), [user]);
-  const isSubContractor = useMemo(() => isSubcontractor(user), [user]);
 
   const { data: companies = [], isLoading } = useQuery({
     queryKey: ['companies'],
@@ -476,8 +486,8 @@ export default function SettingsPage() {
     cm15: '15 cm',
   };
 
-  // Determine user permissions
-  const isMainContractor = useMemo(() => isMainContractorHelper(user), [user]);
+  // Determine user permissions - same way as in projects page
+  const isMainContractor = userCompany?.type === 'main_contractor';
   
   const canManageCompanies = isAdmin || isMainContractor;
   
