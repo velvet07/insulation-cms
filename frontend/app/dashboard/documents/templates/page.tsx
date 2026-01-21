@@ -249,29 +249,6 @@ export default function TemplatesPage() {
     <ProtectedRoute>
       <DashboardLayout>
         <div className="mb-6">
-          <Alert className="mb-6 border-yellow-200 bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-800">
-            <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
-            <AlertTitle className="text-yellow-800 dark:text-yellow-300">Strapi Schema frissítés szükséges</AlertTitle>
-            <AlertDescription className="text-yellow-700 dark:text-yellow-400 mt-2">
-              A sablonok létrehozásához először frissíteni kell a Strapi szerveren a dokumentum típusok sémáját.
-              <br />
-              <strong>Lépések:</strong>
-              <br />
-              1. Lépjen be: <a href="https://cms.emermedia.eu/admin" target="_blank" rel="noopener noreferrer" className="underline">https://cms.emermedia.eu/admin</a>
-              <br />
-              2. Menjen a <strong>Content-Type Builder</strong> menüpontra
-              <br />
-              3. Keresse meg a <strong>Template</strong> content type-ot
-              <br />
-              4. Frissítse a <strong>type</strong> mező enum értékeit az új értékekre
-              <br />
-              5. Ismételje meg ugyanezt a <strong>Document</strong> content type-nál is
-              <br />
-              <br />
-              Részletes útmutató: <code className="text-xs bg-yellow-100 dark:bg-yellow-900/40 px-1 py-0.5 rounded">docs/STRAPI_SCHEMA_UPDATE.md</code>
-            </AlertDescription>
-          </Alert>
-          
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-3xl font-bold">Dokumentum sablonok</h2>

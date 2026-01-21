@@ -95,6 +95,7 @@ export default function CalendarPage() {
       pending: '#f59e0b', // yellow
       in_progress: '#3b82f6', // blue
       ready_for_review: '#8b5cf6', // purple
+      sent_back_for_revision: '#ef4444', // red
       approved: '#10b981', // green
       completed: '#6b7280', // gray
       archived: '#94a3b8', // slate

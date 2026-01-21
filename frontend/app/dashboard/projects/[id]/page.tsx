@@ -10,6 +10,7 @@ import { ProtectedRoute } from '@/components/auth/protected-route';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Form,
@@ -81,6 +82,7 @@ const statusLabels: Record<Project['status'], string> = {
   pending: 'Függőben',
   in_progress: 'Folyamatban',
   ready_for_review: 'Átnézésre vár',
+  sent_back_for_revision: 'Visszaküldve javításra',
   approved: 'Jóváhagyva',
   completed: 'Befejezve',
   archived: 'Archivált',
@@ -90,6 +92,7 @@ const statusColors: Record<Project['status'], string> = {
   pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
   in_progress: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
   ready_for_review: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
+  sent_back_for_revision: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
   approved: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
   completed: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400',
   archived: 'bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-400',
@@ -104,6 +107,8 @@ export default function ProjectDetailPage() {
   const [activeTab, setActiveTab] = useState<'info' | 'contract' | 'documents' | 'photos'>('info');
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isSubcontractorDialogOpen, setIsSubcontractorDialogOpen] = useState(false);
+  const [isRevisionDialogOpen, setIsRevisionDialogOpen] = useState(false);
+  const [revisionNotes, setRevisionNotes] = useState('');
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleStartTime, setScheduleStartTime] = useState('08:00');
   const [scheduleEndTime, setScheduleEndTime] = useState('16:00');
@@ -395,6 +400,10 @@ export default function ProjectDetailPage() {
         updateData.approved_at = new Date().toISOString();
         // Strapi relation mezőket ID-val vagy documentId-val frissítjük
         updateData.approved_by = user?.id || user?.documentId;
+        // Jóváhagyás után töröljük a revision jegyzetet
+        updateData.revision_notes = null;
+        updateData.sent_back_at = null;
+        updateData.sent_back_by = null;
       } else if (newStatus === 'completed') {
         updateData.completed_at = new Date().toISOString();
       }
@@ -413,6 +422,49 @@ export default function ProjectDetailPage() {
       // Sikeres státusz módosítás - nincs felugró ablak
     } catch (error: any) {
       // Hiba esetén csak console-ba írunk, nincs felugró ablak
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  const handleSendBackForRevision = async () => {
+    if (!project || !revisionNotes.trim()) {
+      alert('Kérjük, adja meg a javítási megjegyzést!');
+      return;
+    }
+
+    setIsUpdatingStatus(true);
+    try {
+      const auditLogEntry = createAuditLogEntry(
+        'status_changed',
+        user,
+        `Projekt visszaküldve javításra: ${revisionNotes}`
+      );
+
+      const updateData: any = {
+        status: 'sent_back_for_revision',
+        revision_notes: revisionNotes.trim(),
+        sent_back_at: new Date().toISOString(),
+        sent_back_by: user?.id || user?.documentId,
+        audit_log: addAuditLogEntry(project.audit_log, auditLogEntry),
+      };
+
+      // Szűrjük ki a szerveren még nem létező mezőket
+      const fieldsNotOnServer = ['audit_log'];
+      const cleanUpdateData = Object.fromEntries(
+        Object.entries(updateData).filter(([key]) => !fieldsNotOnServer.includes(key))
+      );
+
+      await projectsApi.update(projectId, cleanUpdateData);
+      
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      
+      setIsRevisionDialogOpen(false);
+      setRevisionNotes('');
+    } catch (error: any) {
+      console.error('Hiba a projekt visszaküldése során:', error);
+      alert('Hiba történt a projekt visszaküldése során.');
     } finally {
       setIsUpdatingStatus(false);
     }
@@ -697,7 +749,7 @@ export default function ProjectDetailPage() {
                     size="sm" 
                     variant="outline"
                     className="text-red-600 border-red-200 hover:bg-red-50"
-                    onClick={() => handleStatusChange('in_progress')}
+                    onClick={() => setIsRevisionDialogOpen(true)}
                     disabled={isUpdatingStatus}
                   >
                     Visszaküldés javításra
@@ -711,6 +763,16 @@ export default function ProjectDetailPage() {
                     Jóváhagyás
                   </Button>
                 </>
+              )}
+              {project.status === 'sent_back_for_revision' && !isMainContractor && !isAdmin && (
+                <Button 
+                  size="sm" 
+                  variant="secondary"
+                  onClick={() => handleStatusChange('ready_for_review')}
+                  disabled={isUpdatingStatus}
+                >
+                  Ismét jóváhagyásra küldés
+                </Button>
               )}
               {project.status === 'approved' && (
                 <Button 
@@ -728,6 +790,77 @@ export default function ProjectDetailPage() {
             </div>
           </div>
         </div>
+
+        {/* Revision Notes Alert - csak sent_back_for_revision vagy ready_for_review státuszban */}
+        {(project.status === 'sent_back_for_revision' || project.status === 'ready_for_review') && 
+         project.revision_notes && (
+          <div className="mb-6">
+            <Card className="border-2 border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800">
+              <CardContent className="pt-6">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-red-800 dark:text-red-300 mb-2">
+                      Visszaküldés javításra - Javítási megjegyzés
+                    </h3>
+                    <p className="text-red-700 dark:text-red-400 whitespace-pre-wrap">
+                      {project.revision_notes}
+                    </p>
+                    {project.sent_back_at && (
+                      <p className="text-xs text-red-600 dark:text-red-500 mt-2">
+                        Visszaküldve: {formatDate(project.sent_back_at)}
+                        {project.sent_back_by && typeof project.sent_back_by === 'object' && (
+                          <span className="ml-2">
+                            ({project.sent_back_by.email || project.sent_back_by.username})
+                          </span>
+                        )}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Revision Dialog */}
+        <Dialog open={isRevisionDialogOpen} onOpenChange={setIsRevisionDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Visszaküldés javításra</DialogTitle>
+              <DialogDescription>
+                Kérjük, adja meg a javítási megjegyzést, hogy mit kell javítani a projekten.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+              <Textarea
+                value={revisionNotes}
+                onChange={(e) => setRevisionNotes(e.target.value)}
+                placeholder="Például: A szerződés adatok hiányosak, kérjük töltse ki a hiányzó mezőket..."
+                className="min-h-[120px]"
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsRevisionDialogOpen(false);
+                  setRevisionNotes('');
+                }}
+                disabled={isUpdatingStatus}
+              >
+                Mégse
+              </Button>
+              <Button
+                onClick={handleSendBackForRevision}
+                disabled={isUpdatingStatus || !revisionNotes.trim()}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {isUpdatingStatus ? 'Feldolgozás...' : 'Visszaküldés javításra'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Tabs */}
         <div className="mb-6 border-b border-gray-200 dark:border-gray-700">

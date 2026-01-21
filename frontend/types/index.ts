@@ -66,7 +66,7 @@ export interface Project extends StrapiEntity {
   client_email?: string;
   title: string;
   area_sqm?: number;
-  status: 'pending' | 'in_progress' | 'ready_for_review' | 'approved' | 'completed' | 'archived';
+  status: 'pending' | 'in_progress' | 'ready_for_review' | 'sent_back_for_revision' | 'approved' | 'completed' | 'archived';
   insulation_option?: 'A' | 'B';
   assigned_to?: User;
   tenant?: Tenant;
@@ -78,6 +78,9 @@ export interface Project extends StrapiEntity {
   completed_at?: string;
   approved_at?: string;
   approved_by?: User;
+  revision_notes?: string; // Jegyzet a visszaküldés javításra esetén
+  sent_back_at?: string; // Dátum amikor visszaküldték javításra
+  sent_back_by?: User; // Ki küldte vissza javításra
   // Szerződés adatok
   client_street?: string; // Utca, házszám
   client_city?: string; // Város
