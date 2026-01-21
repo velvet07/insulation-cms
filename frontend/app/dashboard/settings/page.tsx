@@ -148,6 +148,11 @@ export default function SettingsPage() {
 
   const createMutation = useMutation({
     mutationFn: (data: CompanyFormValues) => {
+      // Main contractor can only create subcontractors
+      if (isMainContractor && !isAdmin && data.type === 'main_contractor') {
+        throw new Error('Nincs jogosultságod fővállalkozó létrehozásához. Csak admin felhasználók hozhatnak létre fővállalkozókat.');
+      }
+      
       const submitData: any = {
         name: data.name,
         type: data.type,
@@ -172,6 +177,11 @@ export default function SettingsPage() {
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: CompanyFormValues }) => {
+      // Main contractor can only update subcontractors
+      if (isMainContractor && !isAdmin && data.type === 'main_contractor') {
+        throw new Error('Nincs jogosultságod fővállalkozó módosításához. Csak admin felhasználók módosíthatják a fővállalkozókat.');
+      }
+      
       const submitData: any = {
         name: data.name,
         type: data.type,
@@ -276,6 +286,12 @@ export default function SettingsPage() {
   const handleEdit = (companyId: string) => {
     const company = companies.find(c => (c.documentId || c.id.toString()) === companyId);
     if (company) {
+      // Main contractor can only edit subcontractors
+      if (isMainContractor && !isAdmin && company.type === 'main_contractor') {
+        alert('Nincs jogosultságod fővállalkozó szerkesztéséhez. Csak admin felhasználók szerkeszthetik a fővállalkozókat.');
+        return;
+      }
+      
       setEditingCompany(companyId);
       form.reset({
         name: company.name,
@@ -295,8 +311,17 @@ export default function SettingsPage() {
   };
 
   const handleDelete = (companyId: string) => {
-    if (confirm('Biztosan törölni szeretnéd ezt a céget?')) {
-      deleteMutation.mutate(companyId);
+    const company = companies.find(c => (c.documentId || c.id.toString()) === companyId);
+    if (company) {
+      // Main contractor can only delete subcontractors
+      if (isMainContractor && !isAdmin && company.type === 'main_contractor') {
+        alert('Nincs jogosultságod fővállalkozó törléséhez. Csak admin felhasználók törölhetik a fővállalkozókat.');
+        return;
+      }
+      
+      if (confirm('Biztosan törölni szeretnéd ezt a céget?')) {
+        deleteMutation.mutate(companyId);
+      }
     }
   };
 
@@ -462,25 +487,27 @@ export default function SettingsPage() {
     cm15: '15 cm',
   };
 
-  if (!isAdmin || isSubContractor) {
-    return (
-      <ProtectedRoute>
-        <DashboardLayout>
-          <div className="mb-6">
-            <h2 className="text-3xl font-bold">Beállítások</h2>
-            <p className="text-gray-600 dark:text-gray-400 mt-1">
-              Kezelje a rendszer beállításait
-            </p>
-          </div>
-          <Alert>
-            <AlertDescription>
-              Nincs jogosultságod a beállítások megtekintéséhez. Csak admin felhasználók és fővállalkozók érhetik el ezt az oldalt.
-            </AlertDescription>
-          </Alert>
-        </DashboardLayout>
-      </ProtectedRoute>
-    );
-  }
+  // Determine user permissions
+  const isMainContractor = useMemo(() => {
+    if (!user) return false;
+    // Check by role
+    if (user.role && typeof user.role === 'string') {
+      const roleLower = user.role.toLowerCase();
+      if (roleLower === 'foovallalkozo' || roleLower.includes('main') || roleLower.includes('contractor')) {
+        return true;
+      }
+    }
+    // Check by company type
+    if (user.company && typeof user.company === 'object') {
+      const companyType = (user.company as any).type;
+      if (companyType === 'main_contractor') {
+        return true;
+      }
+    }
+    return false;
+  }, [user]);
+  
+  const canManageCompanies = isAdmin || isMainContractor;
 
   return (
     <ProtectedRoute>
@@ -505,19 +532,20 @@ export default function SettingsPage() {
                   Hozz létre és kezelj cégeket (Fővállalkozók és Alvállalkozók)
                 </CardDescription>
               </div>
-              <Dialog open={isDialogOpen} onOpenChange={(open) => {
-                setIsDialogOpen(open);
-                if (!open) {
-                  form.reset();
-                  setEditingCompany(null);
-                }
-              }}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Új cég
-                  </Button>
-                </DialogTrigger>
+              {canManageCompanies && (
+                <Dialog open={isDialogOpen} onOpenChange={(open) => {
+                  setIsDialogOpen(open);
+                  if (!open) {
+                    form.reset();
+                    setEditingCompany(null);
+                  }
+                }}>
+                  <DialogTrigger asChild>
+                    <Button>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Új cég
+                    </Button>
+                  </DialogTrigger>
                 <DialogContent className="max-w-2xl">
                   <DialogHeader>
                     <DialogTitle>
@@ -557,7 +585,9 @@ export default function SettingsPage() {
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                <SelectItem value="main_contractor">Fővállalkozó</SelectItem>
+                                {isAdmin && (
+                                  <SelectItem value="main_contractor">Fővállalkozó</SelectItem>
+                                )}
                                 <SelectItem value="subcontractor">Alvállalkozó</SelectItem>
                               </SelectContent>
                             </Select>
@@ -646,6 +676,7 @@ export default function SettingsPage() {
                   </Form>
                 </DialogContent>
               </Dialog>
+              )}
             </div>
           </CardHeader>
           <CardContent>
@@ -690,22 +721,27 @@ export default function SettingsPage() {
                       <TableCell>{company.tax_number || '-'}</TableCell>
                       <TableCell>{company.address || '-'}</TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEdit(company.documentId || company.id.toString())}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDelete(company.documentId || company.id.toString())}
-                          >
-                            <Trash2 className="h-4 w-4 text-red-600" />
-                          </Button>
-                        </div>
+                        {canManageCompanies && (
+                          // Main contractor can only edit/delete subcontractors
+                          (isAdmin || (isMainContractor && company.type === 'subcontractor')) && (
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEdit(company.documentId || company.id.toString())}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDelete(company.documentId || company.id.toString())}
+                              >
+                                <Trash2 className="h-4 w-4 text-red-600" />
+                              </Button>
+                            </div>
+                          )
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}

@@ -8,7 +8,7 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAuthStore } from '@/lib/store/auth';
-import { isAdminRole, isSubcontractor } from '@/lib/utils/user-role';
+import { isAdminRole, isSubcontractor, isMainContractor } from '@/lib/utils/user-role';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -74,25 +74,11 @@ export default function TemplatesPage() {
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   
-  // Only allow main contractors and admins
+  // Only allow main contractors and admins to create/edit/delete templates
   const isSubContractor = isSubcontractor(user);
-  
-  if (isSubContractor) {
-    return (
-      <ProtectedRoute>
-        <DashboardLayout>
-          <div className="p-6">
-            <Card>
-              <CardContent className="py-8 text-center">
-                <p className="text-gray-500">Nincs jogosultságod az oldal megtekintéséhez.</p>
-                <p className="text-sm text-gray-400 mt-2">Csak fővállalkozók és adminok érhetik el ezt az oldalt.</p>
-              </CardContent>
-            </Card>
-          </div>
-        </DashboardLayout>
-      </ProtectedRoute>
-    );
-  }
+  const isMainContractor = isMainContractor(user);
+  const isAdmin = isAdminRole(user);
+  const canManageTemplates = isMainContractor || isAdmin;
 
   const { data: templates = [], isLoading } = useQuery({
     queryKey: ['templates'],
@@ -263,17 +249,18 @@ export default function TemplatesPage() {
                 Dokumentum sablonok kezelése és szerkesztése
               </p>
             </div>
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button onClick={() => {
-                  setEditingTemplate(null);
-                  form.reset();
-                  setSelectedFile(null);
-                }}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Új sablon
-                </Button>
-              </DialogTrigger>
+            {canManageTemplates && (
+              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button onClick={() => {
+                    setEditingTemplate(null);
+                    form.reset();
+                    setSelectedFile(null);
+                  }}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Új sablon
+                  </Button>
+                </DialogTrigger>
               <DialogContent className="sm:max-w-[500px]">
                 <DialogHeader>
                   <DialogTitle>
@@ -411,6 +398,7 @@ export default function TemplatesPage() {
                 </Form>
               </DialogContent>
             </Dialog>
+            )}
           </div>
 
           {isLoading ? (
@@ -464,24 +452,26 @@ export default function TemplatesPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEdit(template)}
-                            title="Szerkesztés"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(template)}
-                            title="Törlés"
-                          >
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
-                        </div>
+                        {canManageTemplates && (
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleEdit(template)}
+                              title="Szerkesztés"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDelete(template)}
+                              title="Törlés"
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          </div>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
