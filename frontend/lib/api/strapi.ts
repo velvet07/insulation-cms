@@ -16,62 +16,50 @@ export const strapiApi: AxiosInstance = axios.create({
   withCredentials: true, // Enable cookies for CORS
 });
 
-// Request interceptor to add JWT token from auth store
+// Request interceptor: Use API token by default (full access, works reliably)
 strapiApi.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    // Check if this is a retry with API token (marked by _useApiToken flag)
-    if ((config as any)._useApiToken && apiToken) {
-      config.headers.Authorization = `Bearer ${apiToken}`;
-      console.log('[strapiApi] Retrying with API token for:', config.url);
-      return config;
+  (config: InternalAxiosRequestConfig & { _useJwtToken?: boolean; _retryCount?: number }) => {
+    // Check if this is a retry with JWT token (marked by _useJwtToken flag)
+    if (config._useJwtToken && typeof window !== 'undefined') {
+      try {
+        const authStorage = localStorage.getItem('auth-storage');
+        if (authStorage) {
+          const authData = JSON.parse(authStorage);
+          const jwtToken = authData?.state?.token;
+          if (jwtToken) {
+            config.headers.Authorization = `Bearer ${jwtToken}`;
+            console.log('[strapiApi] Retrying with JWT token for:', config.url);
+            return config;
+          }
+        }
+      } catch (error) {
+        console.error('[strapiApi] Error reading auth storage for retry:', error);
+      }
     }
 
-    // Only add JWT token on client side
-    if (typeof window !== 'undefined') {
+    // Use API token by default if available (full access, works reliably)
+    if (apiToken) {
+      config.headers.Authorization = `Bearer ${apiToken}`;
+      console.log('[strapiApi] Using API token for request:', config.url);
+    } else if (typeof window !== 'undefined') {
+      // Fallback to JWT token only if no API token is available
       try {
-        // Get token from localStorage (same as auth store uses)
         const authStorage = localStorage.getItem('auth-storage');
         if (authStorage) {
           const authData = JSON.parse(authStorage);
           const jwtToken = authData?.state?.token;
           
           if (jwtToken) {
-            // Add JWT token to Authorization header
-            // JWT token takes precedence over API token for user-specific endpoints
             config.headers.Authorization = `Bearer ${jwtToken}`;
-            // Debug log (always show in console for debugging)
-            console.log('[strapiApi] Using JWT token for request:', config.url);
+            console.log('[strapiApi] No API token, using JWT token for request:', config.url);
           } else {
-            // Fallback to API token if no JWT token found
-            if (apiToken) {
-              config.headers.Authorization = `Bearer ${apiToken}`;
-              console.warn('[strapiApi] No JWT token found, using API token for:', config.url);
-            } else {
-              console.error('[strapiApi] No JWT token and no API token available for:', config.url);
-            }
+            console.error('[strapiApi] No API token and no JWT token available for:', config.url);
           }
         } else {
-          // Fallback to API token if no auth storage found
-          if (apiToken) {
-            config.headers.Authorization = `Bearer ${apiToken}`;
-            console.warn('[strapiApi] No auth storage found, using API token for:', config.url);
-          } else {
-            console.error('[strapiApi] No auth storage and no API token available for:', config.url);
-          }
+          console.error('[strapiApi] No API token and no auth storage found for:', config.url);
         }
       } catch (error) {
-        // Fallback to API token on error
-        if (apiToken) {
-          config.headers.Authorization = `Bearer ${apiToken}`;
-          console.warn('[strapiApi] Error reading auth storage, using API token:', error);
-        } else {
-          console.error('[strapiApi] Error reading auth storage and no API token:', error);
-        }
-      }
-    } else {
-      // Server-side: always use API token
-      if (apiToken) {
-        config.headers.Authorization = `Bearer ${apiToken}`;
+        console.error('[strapiApi] Error reading auth storage:', error);
       }
     }
     return config;
@@ -92,7 +80,7 @@ strapiApi.interceptors.response.use(
       console.error('API 401 Error:', error.response?.data);
     }
     
-    // Log 403 errors with more details and retry with API token if available
+    // Log 403 errors with more details and retry with JWT token if API token failed
     if (error.response?.status === 403) {
       console.error('API 403 Forbidden Error:', {
         url: error.config?.url,
@@ -101,13 +89,24 @@ strapiApi.interceptors.response.use(
         response: error.response?.data,
       });
       
-      // If we got 403 with JWT token, retry with API token (if available and not already retried)
-      const config = error.config as InternalAxiosRequestConfig & { _useApiToken?: boolean; _retryCount?: number };
-      if (apiToken && !config._useApiToken && config._retryCount !== 1) {
-        config._useApiToken = true;
-        config._retryCount = (config._retryCount || 0) + 1;
-        console.log('[strapiApi] JWT token returned 403, retrying with API token for:', config.url);
-        return strapiApi.request(config);
+      // If we got 403 with API token, retry with JWT token (if available and not already retried)
+      const config = error.config as InternalAxiosRequestConfig & { _useJwtToken?: boolean; _retryCount?: number };
+      if (typeof window !== 'undefined' && !config._useJwtToken && config._retryCount !== 1) {
+        try {
+          const authStorage = localStorage.getItem('auth-storage');
+          if (authStorage) {
+            const authData = JSON.parse(authStorage);
+            const jwtToken = authData?.state?.token;
+            if (jwtToken) {
+              config._useJwtToken = true;
+              config._retryCount = (config._retryCount || 0) + 1;
+              console.log('[strapiApi] API token returned 403, retrying with JWT token for:', config.url);
+              return strapiApi.request(config);
+            }
+          }
+        } catch (error) {
+          console.error('[strapiApi] Error reading auth storage for retry:', error);
+        }
       }
     }
     
