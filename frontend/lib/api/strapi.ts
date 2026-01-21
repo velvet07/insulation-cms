@@ -32,25 +32,39 @@ strapiApi.interceptors.request.use(
             // Add JWT token to Authorization header
             // JWT token takes precedence over API token for user-specific endpoints
             config.headers.Authorization = `Bearer ${jwtToken}`;
-            // Debug log (only in development)
-            if (process.env.NODE_ENV === 'development') {
-              console.log('[strapiApi] Using JWT token for request:', config.url);
-            }
+            // Debug log (always show in console for debugging)
+            console.log('[strapiApi] Using JWT token for request:', config.url);
           } else {
-            // Debug log if no JWT token found
-            if (process.env.NODE_ENV === 'development') {
+            // Fallback to API token if no JWT token found
+            if (apiToken) {
+              config.headers.Authorization = `Bearer ${apiToken}`;
               console.warn('[strapiApi] No JWT token found, using API token for:', config.url);
+            } else {
+              console.error('[strapiApi] No JWT token and no API token available for:', config.url);
             }
           }
         } else {
-          // Debug log if no auth storage found
-          if (process.env.NODE_ENV === 'development') {
+          // Fallback to API token if no auth storage found
+          if (apiToken) {
+            config.headers.Authorization = `Bearer ${apiToken}`;
             console.warn('[strapiApi] No auth storage found, using API token for:', config.url);
+          } else {
+            console.error('[strapiApi] No auth storage and no API token available for:', config.url);
           }
         }
       } catch (error) {
-        // Silently fail if we can't read from localStorage
-        console.warn('Failed to read auth token from storage:', error);
+        // Fallback to API token on error
+        if (apiToken) {
+          config.headers.Authorization = `Bearer ${apiToken}`;
+          console.warn('[strapiApi] Error reading auth storage, using API token:', error);
+        } else {
+          console.error('[strapiApi] Error reading auth storage and no API token:', error);
+        }
+      }
+    } else {
+      // Server-side: always use API token
+      if (apiToken) {
+        config.headers.Authorization = `Bearer ${apiToken}`;
       }
     }
     return config;
