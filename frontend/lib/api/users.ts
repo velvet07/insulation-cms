@@ -150,14 +150,19 @@ export const usersApi = {
           return currentUser;
         }
       } else {
-        // First, update all fields except company
-        console.log('[usersApi.update] Sending clean data (without company):', JSON.stringify(cleanData, null, 2));
-        try {
-          let response = await strapiApi.put(`/users/${id}`, { data: cleanData });
-          
-          if (!response || !response.data) {
-            throw new Error('Invalid response from server');
-          }
+      // First, update all fields except company
+      console.log('[usersApi.update] Sending clean data (without company):', JSON.stringify(cleanData, null, 2));
+      console.log('[usersApi.update] Request URL:', `/users/${id}`);
+      console.log('[usersApi.update] Request method: PUT`);
+      
+      try {
+        let response = await strapiApi.put(`/users/${id}`, { data: cleanData });
+        
+        if (!response || !response.data) {
+          throw new Error('Invalid response from server');
+        }
+        
+        console.log('[usersApi.update] Update successful, response:', response.data);
           
           // If company needs to be updated, try updating it separately
           if (companyToUpdate !== undefined) {
