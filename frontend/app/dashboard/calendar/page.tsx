@@ -97,6 +97,7 @@ export default function CalendarPage() {
       ready_for_review: '#8b5cf6', // purple
       approved: '#10b981', // green
       completed: '#6b7280', // gray
+      archived: '#94a3b8', // slate
     };
     
     const backgroundColor = statusColors[event.project.status] || '#6b7280';
