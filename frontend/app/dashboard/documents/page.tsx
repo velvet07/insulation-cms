@@ -7,47 +7,22 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { FileText, FileEdit, ArrowRight } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth';
-import { isAdminRole } from '@/lib/utils/user-role';
-import type { Company } from '@/types';
+import { isAdminRole, isSubcontractor } from '@/lib/utils/user-role';
 
 export default function DocumentsPage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   
-  // Check if user is subcontractor - check both role and company.type
-  const getUserCompany = () => {
-    if (!user?.company) return null;
-    if (typeof user.company === 'object' && 'type' in user.company) {
-      return user.company as Company;
-    }
-    return null;
-  };
-
-  const userCompany = getUserCompany();
-  
-  // Debug: log the user object to see what we have
-  console.log('[DocumentsPage] User object:', JSON.stringify(user, null, 2));
-  console.log('[DocumentsPage] User role:', user?.role, 'type:', typeof user?.role);
-  
-  // Check by role first (more reliable), then by company type
-  const isSubContractorByRole = user?.role === 'alvallalkozo' || 
-    (typeof user?.role === 'string' && user.role.toLowerCase().includes('alvallalkozo')) ||
-    (typeof user?.role === 'string' && user.role.toLowerCase().includes('subcontractor'));
-  const isSubContractorByCompany = userCompany?.type === 'subcontractor';
-  const isSubContractor = isSubContractorByRole || isSubContractorByCompany;
+  // Use helper functions for consistent checking
+  const isSubContractor = isSubcontractor(user);
   const isAdmin = isAdminRole(user);
   
-  console.log('[DocumentsPage] Subcontractor check:', {
-    role: user?.role,
-    isSubContractorByRole,
-    isSubContractorByCompany,
-    isSubContractor,
-    isAdmin,
-    shouldBlock: isSubContractor && !isAdmin
-  });
+  // Block access if user data is incomplete (safer default)
+  const hasCompleteUserData = !!(user && (user.role || user.company));
   
   // Only allow main contractors and admins
-  if (isSubContractor && !isAdmin) {
+  // Block if user is subcontractor (and not admin) OR if user data is incomplete
+  if ((isSubContractor && !isAdmin) || !hasCompleteUserData) {
     return (
       <ProtectedRoute>
         <DashboardLayout>

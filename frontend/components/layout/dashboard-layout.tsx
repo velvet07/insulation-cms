@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/lib/store/auth';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { isAdminRole } from '@/lib/utils/user-role';
+import { isAdminRole, isSubcontractor } from '@/lib/utils/user-role';
 import type { Company } from '@/types';
 import {
   LayoutDashboard,
@@ -67,36 +67,15 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
-  const { user, clearAuth } = useAuthStore();
+  const { user, clearAuth, token } = useAuthStore();
+  const [isCheckingUser, setIsCheckingUser] = useState(true);
 
-  // Check if user is subcontractor - check both role and company.type
-  const getUserCompany = () => {
-    if (!user?.company) return null;
-    if (typeof user.company === 'object' && 'type' in user.company) {
-      return user.company as Company;
-    }
-    return null;
-  };
-
-  const userCompany = getUserCompany();
+  // Use the helper function for consistent subcontractor checking
+  const isSubContractor = isSubcontractor(user);
+  const isAdmin = isAdminRole(user);
   
-  // Debug: log the user object to see what we have
-  console.log('[DashboardLayout] User object:', JSON.stringify(user, null, 2));
-  console.log('[DashboardLayout] User role:', user?.role, 'type:', typeof user?.role);
-  
-  // Check by role first (more reliable), then by company type
-  const isSubContractorByRole = user?.role === 'alvallalkozo' || 
-    (typeof user?.role === 'string' && user.role.toLowerCase().includes('alvallalkozo')) ||
-    (typeof user?.role === 'string' && user.role.toLowerCase().includes('subcontractor'));
-  const isSubContractorByCompany = userCompany?.type === 'subcontractor';
-  const isSubContractor = isSubContractorByRole || isSubContractorByCompany;
-  
-  console.log('[DashboardLayout] Subcontractor check:', {
-    role: user?.role,
-    isSubContractorByRole,
-    isSubContractorByCompany,
-    isSubContractor
-  });
+  // Check if user data is complete - if not, we should block access to restricted items
+  const hasCompleteUserData = !!(user && (user.role || user.company));
 
   const handleLogout = () => {
     clearAuth();
@@ -140,8 +119,15 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               const Icon = item.icon;
               const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
               
-              // Hide Documents and Settings from subcontractors (materials should be visible)
-              if (isSubContractor && (item.href === '/dashboard/documents' || item.href === '/dashboard/settings')) {
+              // Hide Documents and Settings from subcontractors (but allow admins)
+              // Only show/hide if we have complete user data, otherwise show nothing (safer)
+              if (hasCompleteUserData && isSubContractor && !isAdmin && 
+                  (item.href === '/dashboard/documents' || item.href === '/dashboard/settings')) {
+                return null;
+              }
+              
+              // If user data is incomplete, also hide restricted items as a safety measure
+              if (!hasCompleteUserData && (item.href === '/dashboard/documents' || item.href === '/dashboard/settings')) {
                 return null;
               }
               

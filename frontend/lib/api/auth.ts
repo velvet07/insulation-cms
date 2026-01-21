@@ -104,59 +104,104 @@ export const authApi = {
   },
 
   getMe: async (token: string): Promise<User> => {
-    // First get user ID from /users/me (simple request)
+    // Try to get user with populate using JWT token directly
     let userResponse;
     try {
-      userResponse = await authApiClient.get<User>('/users/me', {
+      // Try with populate=* first (simplest format)
+      userResponse = await authApiClient.get<User>('/users/me?populate=*', {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
+      console.log('[getMe] Successfully fetched user with populate=*');
     } catch (error: any) {
-      console.error('[getMe] Failed to get /users/me:', error);
-      throw error;
-    }
-    
-    const basicUser = userResponse.data;
-    const userId = basicUser.documentId || basicUser.id;
-    
-    if (!userId) {
-      console.warn('[getMe] No user ID found, returning basic user');
-      return basicUser;
-    }
-    
-    // Now fetch full user data with populate using the user ID via strapiApi
-    try {
-      const { strapiApi } = await import('./strapi');
-      const fullUserResponse = await strapiApi.get<{ data: User }>(`/users/${userId}?populate=*`);
-      const fullUser = fullUserResponse.data.data || fullUserResponse.data;
-      console.log('[getMe] Full user data fetched via strapiApi:', fullUser);
-      
-      // Transform role if needed
-      if (fullUser && typeof fullUser.role === 'object' && fullUser.role !== null) {
-        const roleType = (fullUser.role as any).type;
-        const roleName = (fullUser.role as any).name?.toLowerCase() || '';
-        const roleId = (fullUser.role as any).id;
-        
-        if (roleName.includes('admin') || roleType === 'admin' || roleId === 1 || roleId === '1') {
-          (fullUser as any).role = 'admin';
-        } else if (roleName.includes('foovallalkozo') || roleName.includes('fővállalkozó')) {
-          (fullUser as any).role = 'foovallalkozo';
-        } else if (roleName.includes('alvallalkozo') || roleName.includes('alvállalkozó')) {
-          (fullUser as any).role = 'alvallalkozo';
-        } else if (roleName.includes('manager')) {
-          (fullUser as any).role = 'manager';
-        } else if (roleName.includes('worker')) {
-          (fullUser as any).role = 'worker';
-        }
+      console.warn('[getMe] populate=* failed, trying without populate:', error?.response?.status);
+      try {
+        // Fallback to simple request without populate
+        userResponse = await authApiClient.get<User>('/users/me', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        console.log('[getMe] Fetched user without populate');
+      } catch (error2: any) {
+        console.error('[getMe] Both requests failed:', error2);
+        throw error2 || error;
       }
-      
-      return fullUser;
-    } catch (error: any) {
-      console.warn('[getMe] Failed to fetch user with populate via strapiApi, using basic user:', error);
-      // Return basic user if populate fails
-      return basicUser;
     }
+    
+    let user = userResponse.data;
+    const userId = user.documentId || user.id;
+    
+    // If role is missing or is just an ID, fetch it separately
+    if (!user.role || typeof user.role === 'string' || typeof user.role === 'number') {
+      console.log('[getMe] Role missing or is ID, will try to fetch via strapiApi');
+      try {
+        const { strapiApi } = await import('./strapi');
+        const userWithRole = await strapiApi.get<{ data: User }>(`/users/${userId}?populate[role]=*&populate[company]=*&populate[company][parent_company]=*`);
+        const fullUserData = userWithRole.data.data || userWithRole.data;
+        if (fullUserData.role) {
+          user.role = fullUserData.role;
+        }
+        if (fullUserData.company) {
+          user.company = fullUserData.company;
+        }
+        console.log('[getMe] Fetched role and company via strapiApi');
+      } catch (error: any) {
+        console.warn('[getMe] Failed to fetch role/company via strapiApi:', error?.response?.status);
+        // Continue with basic user
+      }
+    }
+    
+    // Transform role if it's an object
+    if (user && typeof user.role === 'object' && user.role !== null) {
+      const roleType = (user.role as any).type;
+      const roleName = (user.role as any).name?.toLowerCase() || '';
+      const roleId = (user.role as any).id;
+      
+      if (roleName.includes('admin') || roleType === 'admin' || roleId === 1 || roleId === '1') {
+        (user as any).role = 'admin';
+      } else if (roleName.includes('foovallalkozo') || roleName.includes('fővállalkozó')) {
+        (user as any).role = 'foovallalkozo';
+      } else if (roleName.includes('alvallalkozo') || roleName.includes('alvállalkozó')) {
+        (user as any).role = 'alvallalkozo';
+      } else if (roleName.includes('manager')) {
+        (user as any).role = 'manager';
+      } else if (roleName.includes('worker')) {
+        (user as any).role = 'worker';
+      }
+    }
+    
+    // If company is just an ID, fetch it separately
+    if (user.company && (typeof user.company === 'string' || typeof user.company === 'number')) {
+      try {
+        const { companiesApi } = await import('./companies');
+        const company = await companiesApi.getOne(user.company);
+        (user as any).company = company;
+        
+        // If company has parent_company, fetch it too
+        if (company.parent_company && (typeof company.parent_company === 'string' || typeof company.parent_company === 'number')) {
+          try {
+            const parentCompany = await companiesApi.getOne(company.parent_company);
+            (user as any).company.parent_company = parentCompany;
+          } catch (error) {
+            console.warn('[getMe] Failed to fetch parent company:', error);
+          }
+        }
+        console.log('[getMe] Fetched company data separately');
+      } catch (error) {
+        console.warn('[getMe] Failed to fetch company data:', error);
+      }
+    }
+    
+    console.log('[getMe] Final user object:', { 
+      id: user.id, 
+      role: user.role, 
+      companyType: (user.company as any)?.type,
+      hasCompany: !!user.company 
+    });
+    
+    return user;
   },
   
   // Keep the old getMe implementation as fallback but simplified

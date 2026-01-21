@@ -50,7 +50,7 @@ import { photoCategoriesApi } from '@/lib/api/photo-categories';
 import { materialsApi, type Material } from '@/lib/api/materials';
 import { Building2, Plus, Trash2, Edit, FolderTree, Package } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { isAdminRole } from '@/lib/utils/user-role';
+import { isAdminRole, isSubcontractor } from '@/lib/utils/user-role';
 import type { Company } from '@/types';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2 } from 'lucide-react';
@@ -89,37 +89,12 @@ export default function SettingsPage() {
   const [materialCoverage, setMaterialCoverage] = useState('');
   const [materialRollsPerPallet, setMaterialRollsPerPallet] = useState('24');
 
-  // Check if user is subcontractor - check both role and company.type
-  const getUserCompany = () => {
-    if (!user?.company) return null;
-    if (typeof user.company === 'object' && 'type' in user.company) {
-      return user.company as Company;
-    }
-    return null;
-  };
-
-  const userCompany = getUserCompany();
-  
-  // Debug: log the user object to see what we have
-  console.log('[SettingsPage] User object:', JSON.stringify(user, null, 2));
-  console.log('[SettingsPage] User role:', user?.role, 'type:', typeof user?.role);
-  
-  // Check by role first (more reliable), then by company type
-  const isSubContractorByRole = user?.role === 'alvallalkozo' || 
-    (typeof user?.role === 'string' && user.role.toLowerCase().includes('alvallalkozo')) ||
-    (typeof user?.role === 'string' && user.role.toLowerCase().includes('subcontractor'));
-  const isSubContractorByCompany = userCompany?.type === 'subcontractor';
-  const isSubContractor = isSubContractorByRole || isSubContractorByCompany;
+  // Use helper functions for consistent checking
+  const isSubContractor = isSubcontractor(user);
   const isAdmin = useMemo(() => isAdminRole(user), [user]);
   
-  console.log('[SettingsPage] Subcontractor check:', {
-    role: user?.role,
-    isSubContractorByRole,
-    isSubContractorByCompany,
-    isSubContractor,
-    isAdmin,
-    shouldBlock: isSubContractor && !isAdmin
-  });
+  // Block access if user data is incomplete (safer default)
+  const hasCompleteUserData = !!(user && (user.role || user.company));
 
   const { data: companies = [], isLoading } = useQuery({
     queryKey: ['companies'],
@@ -506,12 +481,22 @@ export default function SettingsPage() {
   };
 
   // Determine user permissions - same way as in projects page
+  const getUserCompany = () => {
+    if (!user?.company) return null;
+    if (typeof user.company === 'object' && 'type' in user.company) {
+      return user.company as Company;
+    }
+    return null;
+  };
+  
+  const userCompany = getUserCompany();
   const isMainContractor = userCompany?.type === 'main_contractor';
   
   const canManageCompanies = isAdmin || isMainContractor;
   
   // Subcontractors cannot access settings page (except admins)
-  if (isSubContractor && !isAdmin) {
+  // Also block if user data is incomplete (safer default)
+  if ((isSubContractor && !isAdmin) || !hasCompleteUserData) {
     return (
       <ProtectedRoute>
         <DashboardLayout>
