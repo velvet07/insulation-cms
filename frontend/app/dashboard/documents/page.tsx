@@ -9,8 +9,6 @@ import { FileText, FileEdit, ArrowRight } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth';
 import { isSubcontractor } from '@/lib/utils/user-role';
 import { Card, CardContent } from '@/components/ui/card';
-import { useAuthStore } from '@/lib/store/auth';
-import { isAdminRole, isSubcontractor, isMainContractor } from '@/lib/utils/user-role';
 
 export default function DocumentsPage() {
   const router = useRouter();
