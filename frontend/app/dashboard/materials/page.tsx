@@ -40,6 +40,7 @@ import {
 import type { Project } from '@/types';
 import { Plus, AlertTriangle, CheckCircle2, TrendingDown, Package, Calendar, CalendarDays, List, Edit, Trash2 } from 'lucide-react';
 import { createAuditLogEntry, addAuditLogEntry } from '@/lib/utils/audit-log';
+import { isAdminRole } from '@/lib/utils/user-role';
 import {
   Table,
   TableBody,
@@ -561,7 +562,9 @@ export default function MaterialsPage() {
       });
 
     // 2. Kész vagy elmúlt projektek anyagigénye
-    const usedByProjects: Record<string, { pallets: number; rolls: number }> = {};
+    // Szigetelőanyagoknál: projektenként számolva, egész tekercsre kerekítve fel
+    // Fóliáknál: m²-ben számolva (nem kerekítve projektenként), majd a végén konvertáljuk tekercsre
+    const usedByProjects: Record<string, { totalRolls: number; pallets: number; rolls: number; squareMeters?: number; rollsPerPallet?: number }> = {};
     
     (projects as Project[]).forEach((p) => {
       if (!p.area_sqm) return;
@@ -577,41 +580,101 @@ export default function MaterialsPage() {
       if (!shouldDeduct) return;
       
       const area = Number(p.area_sqm);
-      const req = calculateMaterials(area, 'A'); // Alapértelmezett opció
       
-      // Szigetelő anyagigény
+      // Szigetelő anyagigény - projektenként számolva, egész tekercsre kerekítve fel
       materials.forEach((m) => {
         const materialId = String(m.documentId || m.id);
         if (!usedByProjects[materialId]) {
-          usedByProjects[materialId] = { pallets: 0, rolls: 0 };
+          usedByProjects[materialId] = { totalRolls: 0, pallets: 0, rolls: 0, squareMeters: 0, rollsPerPallet: m.rolls_per_pallet || 24 };
         }
         
         if (m.category === 'insulation') {
-          // Egyszerűsített számítás: a teljes igényt az adott vastagságú anyagra
+          // Projektenként számolva, egész tekercsre kerekítve fel
           const rollsNeeded = Math.ceil(area / (m.coverage_per_roll || 9.24));
-          usedByProjects[materialId].rolls += rollsNeeded;
-          if (m.rolls_per_pallet) {
-            usedByProjects[materialId].pallets += Math.floor(rollsNeeded / m.rolls_per_pallet);
-          }
+          usedByProjects[materialId].totalRolls += rollsNeeded;
         } else if (m.category === 'vapor_barrier') {
-          usedByProjects[materialId].rolls += req.vapor_barrier.rolls;
+          // Párazáró fólia: m²-ben számolva (nem kerekítve projektenként)
+          usedByProjects[materialId].squareMeters! += area;
         } else if (m.category === 'breathable_membrane') {
-          usedByProjects[materialId].rolls += req.breathable_membrane.rolls;
+          // Légáteresztő fólia: m²-ben számolva (nem kerekítve projektenként)
+          usedByProjects[materialId].squareMeters! += area;
         }
       });
     });
+    
+    // Szigetelőanyagoknál: konvertáljuk a tekercseket raklapokra és maradék tekercsekre
+    // Fóliáknál: konvertáljuk a m²-t tekercsekre és maradék m²-re
+    Object.keys(usedByProjects).forEach((materialId) => {
+      const material = materials.find((m) => String(m.documentId || m.id) === materialId);
+      if (material && material.category === 'insulation') {
+        const totalRolls = usedByProjects[materialId].totalRolls;
+        const rollsPerPallet = usedByProjects[materialId].rollsPerPallet || 24;
+        usedByProjects[materialId].pallets = Math.floor(totalRolls / rollsPerPallet);
+        usedByProjects[materialId].rolls = totalRolls % rollsPerPallet;
+      } else if (material && (material.category === 'vapor_barrier' || material.category === 'breathable_membrane')) {
+        // Fóliáknál: m²-ből számoljuk a tekercseket és maradék m²-t
+        const coveragePerRoll = material.category === 'vapor_barrier' ? 60 : 75;
+        const totalSquareMeters = usedByProjects[materialId].squareMeters || 0;
+        usedByProjects[materialId].rolls = Math.floor(totalSquareMeters / coveragePerRoll);
+        // A maradék m²-t megtartjuk a squareMeters-ben
+        usedByProjects[materialId].squareMeters = totalSquareMeters % coveragePerRoll;
+      }
+    });
 
-    // 3. Egyenleg számítás
-    const balance: Record<string, { pallets: number; rolls: number; name: string; category: string }> = {};
+    // 3. Egyenleg számítás - tartalmazza a felvett, felhasznált és egyenleg mennyiségeket
+    const balance: Record<string, { 
+      pickedUp: { pallets: number; rolls: number };
+      used: { pallets: number; rolls: number; squareMeters?: number };
+      balance: { pallets: number; rolls: number; squareMeters?: number };
+      name: string; 
+      category: string;
+    }> = {};
     
     Object.entries(pickedUp).forEach(([materialId, picked]) => {
-      const used = usedByProjects[materialId] || { pallets: 0, rolls: 0 };
-      balance[materialId] = {
-        pallets: picked.pallets - used.pallets,
-        rolls: picked.rolls - used.rolls,
-        name: picked.name,
-        category: picked.category,
-      };
+      const used = usedByProjects[materialId] || { pallets: 0, rolls: 0, squareMeters: 0, rollsPerPallet: 24 };
+      const material = materials.find((m) => String(m.documentId || m.id) === materialId);
+      const rollsPerPallet = material?.rolls_per_pallet || 24;
+      
+      // Szigetelőanyagnál: egyenleg = felvett - felhasznált (raklapok és tekercsek)
+      if (picked.category === 'insulation') {
+        const totalPickedRolls = picked.pallets * rollsPerPallet + picked.rolls;
+        const totalUsedRolls = used.pallets * rollsPerPallet + used.rolls;
+        const balanceRolls = totalPickedRolls - totalUsedRolls;
+        const balancePallets = Math.floor(balanceRolls / rollsPerPallet);
+        const balanceRemainingRolls = balanceRolls % rollsPerPallet;
+        
+        balance[materialId] = {
+          pickedUp: { pallets: picked.pallets, rolls: picked.rolls },
+          used: { pallets: used.pallets, rolls: used.rolls },
+          balance: { pallets: balancePallets, rolls: balanceRemainingRolls },
+          name: picked.name,
+          category: picked.category,
+        };
+      } else {
+        // Fóliáknál: egyenleg = felvett - felhasznált (m²-ben számolva, majd konvertálva tekercsre és maradék m²-re)
+        const coveragePerRoll = picked.category === 'vapor_barrier' ? 60 : 75;
+        const pickedSquareMeters = picked.rolls * coveragePerRoll;
+        // A felhasznált: tekercsek * coveragePerRoll + maradék m²
+        const usedSquareMeters = (used.rolls || 0) * coveragePerRoll + (used.squareMeters || 0);
+        const balanceSquareMeters = pickedSquareMeters - usedSquareMeters;
+        
+        // Konvertáljuk a maradék m²-t tekercsekre és maradék m²-re
+        // Ha negatív, akkor is helyesen számoljuk
+        const balanceRolls = balanceSquareMeters >= 0 
+          ? Math.floor(balanceSquareMeters / coveragePerRoll)
+          : Math.ceil(balanceSquareMeters / coveragePerRoll);
+        const balanceRemainingSquareMeters = balanceSquareMeters >= 0
+          ? balanceSquareMeters % coveragePerRoll
+          : balanceSquareMeters - (balanceRolls * coveragePerRoll);
+        
+        balance[materialId] = {
+          pickedUp: { pallets: picked.pallets, rolls: picked.rolls },
+          used: { pallets: used.pallets, rolls: used.rolls, squareMeters: used.squareMeters },
+          balance: { pallets: 0, rolls: balanceRolls, squareMeters: balanceRemainingSquareMeters },
+          name: picked.name,
+          category: picked.category,
+        };
+      }
     });
 
     // 4. Kategóriák szerinti csoportosítás
@@ -1361,9 +1424,6 @@ export default function MaterialsPage() {
               Aktuális anyagegyenleg
             </h3>
           </div>
-          <p className="text-sm text-gray-500 mb-4">
-            Felvett anyagok - (kész projektek + elmúlt ütemezésű projektek anyagigénye)
-          </p>
           
           {Object.keys(calculatedBalance.all).length === 0 ? (
             <Card>
@@ -1384,22 +1444,47 @@ export default function MaterialsPage() {
                   {calculatedBalance.insulation.length === 0 ? (
                     <p className="text-sm text-gray-500">Nincs felvett szigetelőanyag.</p>
                   ) : (
-                    <div className="space-y-3">
-                      {calculatedBalance.insulation.map(([materialId, balance]) => (
-                        <div key={materialId} className="flex justify-between items-center border-b pb-2 last:border-b-0">
-                          <span className="font-medium">{balance.name}</span>
-                          <span className={
-                            balance.rolls < 0 || balance.pallets < 0
-                              ? 'text-red-600 dark:text-red-400 font-semibold'
-                              : 'text-green-600 dark:text-green-400 font-semibold'
-                          }>
-                            {balance.pallets !== 0 && `${balance.pallets} raklap`}
-                            {balance.pallets !== 0 && balance.rolls !== 0 && ', '}
-                            {balance.rolls !== 0 && `${balance.rolls} tekercs`}
-                            {balance.pallets === 0 && balance.rolls === 0 && '0'}
-                          </span>
-                        </div>
-                      ))}
+                    <div className="space-y-4">
+                      {calculatedBalance.insulation.map(([materialId, balanceData]) => {
+                        const { pickedUp, used, balance: balanceAmount, name } = balanceData;
+                        const isNegative = balanceAmount.rolls < 0 || balanceAmount.pallets < 0;
+                        
+                        return (
+                          <div key={materialId} className="border-b pb-3 last:border-b-0 last:pb-0">
+                            <div className="font-medium mb-2">{name}</div>
+                            <div className="space-y-1 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-gray-600 dark:text-gray-400">Felvett mennyiség:</span>
+                                <span>
+                                  {pickedUp.pallets > 0 && `${pickedUp.pallets} raklap`}
+                                  {pickedUp.pallets > 0 && pickedUp.rolls > 0 && ', '}
+                                  {pickedUp.rolls > 0 && `${pickedUp.rolls} tekercs`}
+                                  {pickedUp.pallets === 0 && pickedUp.rolls === 0 && '0'}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600 dark:text-gray-400">Felhasznált mennyiség:</span>
+                                <span>
+                                  {used.pallets > 0 && `${used.pallets} raklap`}
+                                  {used.pallets > 0 && used.rolls > 0 && ', '}
+                                  {used.rolls > 0 && `${used.rolls} tekercs`}
+                                  {used.pallets === 0 && used.rolls === 0 && '0'}
+                                </span>
+                              </div>
+                              <div className="flex justify-between font-semibold pt-1 border-t">
+                                <span>Egyenleg:</span>
+                                <span className={isNegative ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>
+                                  {balanceAmount.pallets > 0 && `${balanceAmount.pallets} raklap`}
+                                  {balanceAmount.pallets > 0 && balanceAmount.rolls !== 0 && ', '}
+                                  {balanceAmount.pallets === 0 && balanceAmount.rolls !== 0 && ''}
+                                  {balanceAmount.rolls !== 0 && `${balanceAmount.rolls} tekercs`}
+                                  {balanceAmount.pallets === 0 && balanceAmount.rolls === 0 && '0'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </CardContent>
@@ -1414,19 +1499,37 @@ export default function MaterialsPage() {
                   {calculatedBalance.foils.length === 0 ? (
                     <p className="text-sm text-gray-500">Nincs felvett fólia.</p>
                   ) : (
-                    <div className="space-y-3">
-                      {calculatedBalance.foils.map(([materialId, balance]) => (
-                        <div key={materialId} className="flex justify-between items-center border-b pb-2 last:border-b-0">
-                          <span className="font-medium">{balance.name}</span>
-                          <span className={
-                            balance.rolls < 0
-                              ? 'text-red-600 dark:text-red-400 font-semibold'
-                              : 'text-green-600 dark:text-green-400 font-semibold'
-                          }>
-                            {balance.rolls} tekercs
-                          </span>
-                        </div>
-                      ))}
+                    <div className="space-y-4">
+                      {calculatedBalance.foils.map(([materialId, balanceData]) => {
+                        const { used, balance: balanceAmount, name, category } = balanceData;
+                        const isNegative = balanceAmount.rolls < 0 || (balanceAmount.rolls === 0 && (balanceAmount.squareMeters || 0) < 0);
+                        const coveragePerRoll = category === 'vapor_barrier' ? 60 : 75;
+                        // Felhasznált: tekercsek * coveragePerRoll + maradék m²
+                        const usedTotalSquareMeters = (used.rolls || 0) * coveragePerRoll + (used.squareMeters || 0);
+                        const balanceSquareMeters = balanceAmount.squareMeters || 0;
+                        
+                        return (
+                          <div key={materialId} className="border-b pb-3 last:border-b-0 last:pb-0">
+                            <div className="font-medium mb-2">{name}</div>
+                            <div className="space-y-1 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-gray-600 dark:text-gray-400">Felhasznált mennyiség:</span>
+                                <span>
+                                  {used.rolls > 0 ? `${used.rolls} tekercs` : '0 tekercs'}
+                                  {usedTotalSquareMeters > 0 && ` ${Math.round(usedTotalSquareMeters)} m²`}
+                                </span>
+                              </div>
+                              <div className="flex justify-between font-semibold pt-1 border-t">
+                                <span>Egyenleg:</span>
+                                <span className={isNegative ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>
+                                  {balanceAmount.rolls !== 0 ? `${balanceAmount.rolls} tekercs` : balanceSquareMeters !== 0 ? '0 tekercs' : '0 tekercs'}
+                                  {balanceSquareMeters !== 0 && ` ${Math.round(Math.abs(balanceSquareMeters))} m²`}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </CardContent>
@@ -1442,19 +1545,6 @@ export default function MaterialsPage() {
               <List className="mr-2 h-5 w-5" />
               Anyag mozgás napló
             </h3>
-            {materialLog.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setMaterialLog([]);
-                  localStorage.removeItem('materialMovementLog');
-                }}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                Napló törlése
-              </Button>
-            )}
           </div>
           <Card>
             <CardContent className="py-4">
