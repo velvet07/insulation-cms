@@ -102,11 +102,12 @@ export const usersApi = {
       }
       
       // For company: Strapi relation field
-      // NOTE: Strapi users-permissions plugin might require numeric ID instead of documentId
-      // Convert documentId to numeric ID by fetching the company first
+      // NOTE: The Strapi users-permissions plugin might not allow updating the company field via API
+      // We'll try to update it separately after updating other fields
+      let companyToUpdate: number | null | undefined = undefined;
       if (data.company !== undefined) {
         if (data.company === null || data.company === '') {
-          cleanData.company = null; // Explicitly set to null to clear relation
+          companyToUpdate = null; // Explicitly set to null to clear relation
         } else {
           // Determine if it's a documentId (string, not a simple numeric string) or numeric ID
           const isNumericString = typeof data.company === 'string' && /^\d+$/.test(data.company);
@@ -119,34 +120,51 @@ export const usersApi = {
               const company = await companiesApi.getOne(data.company);
               if (company && company.id) {
                 console.log('[usersApi.update] Found company numeric ID:', company.id);
-                cleanData.company = company.id;
+                companyToUpdate = company.id;
               } else {
-                console.warn('[usersApi.update] Company not found or has no numeric ID, using documentId as fallback');
-                cleanData.company = data.company;
+                console.warn('[usersApi.update] Company not found or has no numeric ID, skipping company update');
+                companyToUpdate = undefined;
               }
             } catch (companyError) {
               console.error('[usersApi.update] Error fetching company by documentId:', companyError);
-              // Fallback to documentId if company fetch fails
-              cleanData.company = data.company;
+              // Skip company update if fetch fails
+              companyToUpdate = undefined;
             }
           } else if (isNumericString) {
             // It's a numeric string, convert to number
-            cleanData.company = Number(data.company);
+            companyToUpdate = Number(data.company);
           } else if (typeof data.company === 'number') {
             // It's already a number
-            cleanData.company = data.company;
-          } else {
-            // Keep as-is (shouldn't happen, but just in case)
-            cleanData.company = data.company;
+            companyToUpdate = data.company;
           }
         }
       }
 
-      console.log('[usersApi.update] Sending clean data:', JSON.stringify(cleanData, null, 2));
-      const response = await strapiApi.put(`/users/${id}`, { data: cleanData });
+      // First, update all fields except company
+      console.log('[usersApi.update] Sending clean data (without company):', JSON.stringify(cleanData, null, 2));
+      let response = await strapiApi.put(`/users/${id}`, { data: cleanData });
       
       if (!response || !response.data) {
         throw new Error('Invalid response from server');
+      }
+      
+      // If company needs to be updated, try updating it separately
+      if (companyToUpdate !== undefined) {
+        try {
+          console.log('[usersApi.update] Updating company field separately:', companyToUpdate);
+          const companyUpdateData: any = { company: companyToUpdate };
+          response = await strapiApi.put(`/users/${id}`, { data: companyUpdateData });
+          
+          if (!response || !response.data) {
+            console.warn('[usersApi.update] Company update returned invalid response, but other fields were updated');
+          } else {
+            console.log('[usersApi.update] Company field updated successfully');
+          }
+        } catch (companyUpdateError: any) {
+          console.error('[usersApi.update] Error updating company field separately:', companyUpdateError);
+          console.warn('[usersApi.update] Company field could not be updated, but other fields were updated successfully');
+          // Don't throw error - other fields were updated successfully
+        }
       }
       
       return response.data;
