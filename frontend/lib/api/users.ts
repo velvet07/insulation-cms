@@ -100,25 +100,28 @@ export const usersApi = {
         }
       }
       
-      // For company: Strapi relation field, send documentId (string) or numeric ID
+      // For company: Strapi relation field
+      // NOTE: Strapi users-permissions plugin might require numeric ID instead of documentId
+      // Try to convert documentId to numeric ID by fetching the company first
       if (data.company !== undefined) {
         if (data.company === null || data.company === '') {
           cleanData.company = null; // Explicitly set to null to clear relation
         } else {
-          // Strapi v5 uses documentId (string UUID) for relations
-          // If it's already a string with dashes, use it as-is
-          // Otherwise try to convert to number (if it's a numeric string)
-          if (typeof data.company === 'string') {
-            if (data.company.includes('-')) {
-              // It's a documentId (UUID format)
-              cleanData.company = data.company;
-            } else {
-              // Try to parse as number, but keep as string if it's a documentId
-              // For company relations, we typically use documentId
-              cleanData.company = data.company;
-            }
-          } else {
+          // Try to use numeric ID if possible (users-permissions plugin might prefer this)
+          if (typeof data.company === 'string' && data.company.includes('-')) {
+            // It's a documentId (UUID format) - try to convert to numeric ID
+            // For now, try sending documentId as-is, but log a warning
+            console.warn('[usersApi.update] Sending company as documentId:', data.company);
+            console.warn('[usersApi.update] If this fails with 500 error, we may need to convert documentId to numeric ID');
+            cleanData.company = data.company;
+          } else if (typeof data.company === 'string' && !isNaN(Number(data.company))) {
+            // It's a numeric string, convert to number
+            cleanData.company = Number(data.company);
+          } else if (typeof data.company === 'number') {
             // It's already a number
+            cleanData.company = data.company;
+          } else {
+            // Keep as-is (string documentId)
             cleanData.company = data.company;
           }
         }
