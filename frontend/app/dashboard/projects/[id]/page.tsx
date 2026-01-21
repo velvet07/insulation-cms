@@ -434,7 +434,7 @@ export default function ProjectDetailPage() {
     } catch (error: any) {
       // Hiba esetén logoljuk a részleteket
       console.error('Hiba a státusz módosítása során:', error);
-      console.error('Update data:', cleanUpdateData);
+      console.error('Update data:', updateData);
       if (error.response) {
         console.error('Strapi API Error Response:', error.response.data);
       }
