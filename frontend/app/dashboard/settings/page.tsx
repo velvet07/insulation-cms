@@ -638,8 +638,8 @@ export default function SettingsPage() {
       updateData.password = userPassword;
     }
 
-    // Update company
-    const companyId = selectedUserCompany || null;
+    // Update company - convert empty string to null
+    const companyId = selectedUserCompany && selectedUserCompany.trim() ? selectedUserCompany.trim() : null;
     updateData.company = companyId;
 
     // Update role
