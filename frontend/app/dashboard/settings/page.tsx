@@ -48,13 +48,15 @@ import {
 import { companiesApi } from '@/lib/api/companies';
 import { photoCategoriesApi } from '@/lib/api/photo-categories';
 import { materialsApi, type Material } from '@/lib/api/materials';
-import { Building2, Plus, Trash2, Edit, FolderTree, Package } from 'lucide-react';
+import { usersApi } from '@/lib/api/users';
+import { Building2, Plus, Trash2, Edit, FolderTree, Package, UserPlus } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { isAdminRole, isSubcontractor } from '@/lib/utils/user-role';
-import type { Company } from '@/types';
+import type { Company, User } from '@/types';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2 } from 'lucide-react';
 import type { PhotoCategory } from '@/types';
+import { getRoles } from '@/lib/api/create-user';
 
 const companySchema = z.object({
   name: z.string().min(1, 'A cég neve kötelező'),
@@ -89,12 +91,33 @@ export default function SettingsPage() {
   const [materialCoverage, setMaterialCoverage] = useState('');
   const [materialRollsPerPallet, setMaterialRollsPerPallet] = useState('24');
 
+  // User management states
+  const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [userUsername, setUserUsername] = useState('');
+  const [userEmail, setUserEmail] = useState('');
+  const [userPassword, setUserPassword] = useState('');
+  const [selectedUserCompany, setSelectedUserCompany] = useState<string>('');
+  const [userRole, setUserRole] = useState<number | undefined>(undefined);
+
   // Use helper functions for consistent checking
   const isSubContractor = isSubcontractor(user);
   const isAdmin = useMemo(() => isAdminRole(user), [user]);
   
   // Block access if user data is incomplete (safer default)
   const hasCompleteUserData = !!(user && (user.role || user.company));
+
+  // Get user company (must be before useMemo that uses it)
+  const getUserCompany = () => {
+    if (!user?.company) return null;
+    if (typeof user.company === 'object' && 'type' in user.company) {
+      return user.company as Company;
+    }
+    return null;
+  };
+  
+  const userCompany = getUserCompany();
+  const isMainContractor = userCompany?.type === 'main_contractor';
 
   const { data: companies = [], isLoading } = useQuery({
     queryKey: ['companies'],
@@ -121,6 +144,57 @@ export default function SettingsPage() {
     queryFn: () => materialsApi.getAll(),
     enabled: isAdmin,
   });
+
+  // Fetch users
+  const { data: users = [], isLoading: isLoadingUsers } = useQuery({
+    queryKey: ['users'],
+    queryFn: () => usersApi.getAll(),
+    enabled: isAdmin || isMainContractor || !isSubContractor,
+  });
+
+  // Fetch roles for user creation
+  const { data: rolesData } = useQuery({
+    queryKey: ['roles'],
+    queryFn: getRoles,
+    enabled: isAdmin || isMainContractor || !isSubContractor,
+  });
+
+  const roles = rolesData?.roles || [];
+
+  // Get available companies for user assignment based on role
+  const getAvailableCompaniesForUserAssignment = useMemo(() => {
+    if (isAdmin) {
+      // Admin can assign to any company
+      return companies;
+    } else if (isMainContractor && userCompany) {
+      // Main contractor can assign to own company and own subcontractors
+      const ownCompany = userCompany.documentId || userCompany.id?.toString();
+      return companies.filter((c: Company) => {
+        const companyId = c.documentId || c.id?.toString();
+        // Own company
+        if (companyId === ownCompany) return true;
+        // Own subcontractors
+        if (c.type === 'subcontractor' && c.parent_company) {
+          let parentId: string | null = null;
+          if (typeof c.parent_company === 'object') {
+            parentId = c.parent_company.documentId || c.parent_company.id?.toString() || null;
+          } else if (typeof c.parent_company === 'string' || typeof c.parent_company === 'number') {
+            parentId = String(c.parent_company);
+          }
+          return parentId === ownCompany;
+        }
+        return false;
+      });
+    } else if (!isSubContractor && userCompany) {
+      // Subcontractor can only assign to own company
+      const ownCompany = userCompany.documentId || userCompany.id?.toString();
+      return companies.filter((c: Company) => {
+        const companyId = c.documentId || c.id?.toString();
+        return companyId === ownCompany;
+      });
+    }
+    return [];
+  }, [companies, isAdmin, isMainContractor, isSubContractor, userCompany]);
 
   const form = useForm<CompanyFormValues>({
     resolver: zodResolver(companySchema),
@@ -408,6 +482,57 @@ export default function SettingsPage() {
     },
   });
 
+  // User mutations
+  const createUserMutation = useMutation({
+    mutationFn: async (data: { username: string; email: string; password: string; company?: string | null; role?: number }) => {
+      return usersApi.create(data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      setIsUserDialogOpen(false);
+                      setEditingUser(null);
+                    setUserUsername('');
+                    setUserEmail('');
+                    setUserPassword('');
+                    setSelectedUserCompany('');
+                    setUserRole(undefined);
+    },
+    onError: (error: any) => {
+      alert(error.message || 'Hiba történt a felhasználó létrehozása során');
+    },
+  });
+
+  const updateUserMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string | number; data: { username?: string; email?: string; password?: string; company?: string | null; role?: number } }) => {
+      return usersApi.update(id, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      setIsUserDialogOpen(false);
+                      setEditingUser(null);
+                    setUserUsername('');
+                    setUserEmail('');
+                    setUserPassword('');
+                    setSelectedUserCompany('');
+                    setUserRole(undefined);
+    },
+    onError: (error: any) => {
+      alert(error.message || 'Hiba történt a felhasználó frissítése során');
+    },
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: async (id: string | number) => {
+      await usersApi.delete(id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError: (error: any) => {
+      alert(error.message || 'Hiba történt a felhasználó törlése során');
+    },
+  });
+
   // Material handlers
   const handleMaterialCreate = () => {
     if (!materialName.trim() || !materialCoverage) return;
@@ -463,6 +588,75 @@ export default function SettingsPage() {
     }
   };
 
+  // User handlers
+  const handleUserCreate = () => {
+    if (!userUsername.trim() || !userEmail.trim() || (!editingUser && !userPassword.trim())) {
+      alert('Kérjük, töltse ki az összes kötelező mezőt.');
+      return;
+    }
+
+    const companyId = selectedUserCompany || null;
+    createUserMutation.mutate({
+      username: userUsername.trim(),
+      email: userEmail.trim(),
+      password: userPassword,
+      company: companyId,
+      role: userRole,
+    });
+  };
+
+  const handleUserEdit = (user: User) => {
+    setEditingUser(user);
+    setUserUsername(user.username || '');
+    setUserEmail(user.email || '');
+    setUserPassword(''); // Don't show password when editing
+    const userCompanyId = typeof user.company === 'object' && user.company !== null
+      ? (user.company.documentId || user.company.id?.toString() || '')
+      : (user.company ? String(user.company) : '');
+    setSelectedUserCompany(userCompanyId);
+    const userRoleId = typeof user.role === 'object' && user.role !== null
+      ? (user.role.id as number)
+      : (user.role as number | undefined);
+    setUserRole(userRoleId);
+    setIsUserDialogOpen(true);
+  };
+
+  const handleUserUpdate = () => {
+    if (!editingUser || !userUsername.trim() || !userEmail.trim()) {
+      alert('Kérjük, töltse ki az összes kötelező mezőt.');
+      return;
+    }
+
+    const userId = editingUser.documentId || editingUser.id;
+    const updateData: any = {
+      username: userUsername.trim(),
+      email: userEmail.trim(),
+    };
+
+    // Only update password if provided
+    if (userPassword.trim()) {
+      updateData.password = userPassword;
+    }
+
+    // Update company
+    const companyId = selectedUserCompany || null;
+    updateData.company = companyId;
+
+    // Update role
+    if (userRole !== undefined) {
+      updateData.role = userRole;
+    }
+
+    updateUserMutation.mutate({ id: userId!, data: updateData });
+  };
+
+  const handleUserDelete = (user: User) => {
+    if (confirm(`Biztosan törölni szeretné ezt a felhasználót: ${user.username || user.email}?`)) {
+      const identifier = user.documentId || user.id;
+      deleteUserMutation.mutate(identifier!);
+    }
+  };
+
   const companyTypeLabels: Record<string, string> = {
     main_contractor: 'Fővállalkozó',
     subcontractor: 'Alvállalkozó',
@@ -480,18 +674,6 @@ export default function SettingsPage() {
     cm15: '15 cm',
   };
 
-  // Determine user permissions - same way as in projects page
-  const getUserCompany = () => {
-    if (!user?.company) return null;
-    if (typeof user.company === 'object' && 'type' in user.company) {
-      return user.company as Company;
-    }
-    return null;
-  };
-  
-  const userCompany = getUserCompany();
-  const isMainContractor = userCompany?.type === 'main_contractor';
-  
   const canManageCompanies = isAdmin || isMainContractor;
   
   // Subcontractors cannot access settings page (except admins)
@@ -757,6 +939,237 @@ export default function SettingsPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Felhasználók kezelése */}
+        {(isAdmin || isMainContractor || !isSubContractor) && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <UserPlus className="h-5 w-5" />
+                    Felhasználók kezelése
+                  </CardTitle>
+                  <CardDescription>
+                    Hozz létre és kezelj felhasználókat és rendeld őket cégekhez
+                  </CardDescription>
+                </div>
+                <Dialog open={isUserDialogOpen} onOpenChange={(open) => {
+                  setIsUserDialogOpen(open);
+                  if (!open) {
+                      setEditingUser(null);
+                    setUserUsername('');
+                    setUserEmail('');
+                    setUserPassword('');
+                    setSelectedUserCompany('');
+                    setUserRole(undefined);
+                  }
+                }}>
+                  <DialogTrigger asChild>
+                    <Button>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Új felhasználó
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                      <DialogTitle>
+                        {editingUser ? 'Felhasználó szerkesztése' : 'Új felhasználó létrehozása'}
+                      </DialogTitle>
+                      <DialogDescription>
+                        {editingUser 
+                          ? 'Módosítsd a felhasználó adatait' 
+                          : 'Töltsd ki az adatokat az új felhasználó létrehozásához'}
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div>
+                        <Label htmlFor="user-username">Felhasználónév *</Label>
+                        <Input
+                          id="user-username"
+                          value={userUsername}
+                          onChange={(e) => setUserUsername(e.target.value)}
+                          placeholder="felhasznalo"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="user-email">Email cím *</Label>
+                        <Input
+                          id="user-email"
+                          type="email"
+                          value={userEmail}
+                          onChange={(e) => setUserEmail(e.target.value)}
+                          placeholder="email@example.com"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="user-password">
+                          Jelszó {editingUser ? '(hagyd üresen a változtatás nélkül)' : '*'}
+                        </Label>
+                        <Input
+                          id="user-password"
+                          type="password"
+                          value={userPassword}
+                          onChange={(e) => setUserPassword(e.target.value)}
+                          placeholder="••••••••"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="user-company">Cég</Label>
+                          <Select value={selectedUserCompany} onValueChange={setSelectedUserCompany}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Válassz céget (opcionális)" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="">Nincs cég hozzárendelve</SelectItem>
+                            {getAvailableCompaniesForUserAssignment.map((company: Company) => {
+                              const companyId = company.documentId || company.id?.toString() || '';
+                              return (
+                                <SelectItem key={companyId} value={companyId}>
+                                  {company.name} ({company.type === 'main_contractor' ? 'Fővállalkozó' : 'Alvállalkozó'})
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="user-role">Szerepkör (opcionális)</Label>
+                        <Select 
+                          value={userRole?.toString() || ''} 
+                          onValueChange={(value) => setUserRole(value ? parseInt(value) : undefined)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Válassz szerepkört (opcionális)" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="">Nincs szerepkör (alapértelmezett)</SelectItem>
+                            {roles.map((role: any) => (
+                              <SelectItem key={role.id} value={role.id.toString()}>
+                                {role.name} {role.type && `(${role.type})`}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setIsUserDialogOpen(false);
+                      setEditingUser(null);
+                    setUserUsername('');
+                    setUserEmail('');
+                    setUserPassword('');
+                    setSelectedUserCompany('');
+                    setUserRole(undefined);
+                        }}
+                      >
+                        Mégse
+                      </Button>
+                      <Button
+                        onClick={editingUser ? handleUserUpdate : handleUserCreate}
+                        disabled={
+                          !userUsername.trim() || 
+                          !userEmail.trim() || 
+                          (!editingUser && !userPassword.trim()) ||
+                          createUserMutation.isPending || 
+                          updateUserMutation.isPending
+                        }
+                      >
+                        {createUserMutation.isPending || updateUserMutation.isPending ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Mentés...
+                          </>
+                        ) : (
+                          editingUser ? 'Mentés' : 'Létrehozás'
+                        )}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isLoadingUsers ? (
+                <p className="text-gray-500 text-center py-8">Betöltés...</p>
+              ) : users.length === 0 ? (
+                <p className="text-gray-500 text-center py-8">Még nincs felhasználó létrehozva.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Felhasználónév</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Cég</TableHead>
+                      <TableHead>Szerepkör</TableHead>
+                      <TableHead className="text-right">Műveletek</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {users.map((user: User) => {
+                      const userCompanyName = typeof user.company === 'object' && user.company !== null
+                        ? user.company.name
+                        : '-';
+                      const userRoleName = typeof user.role === 'object' && user.role !== null
+                        ? user.role.name
+                        : '-';
+
+                      // Check if current user can edit/delete this user
+                      // Admin can manage all users
+                      // Main contractor can manage users in own company and subcontractors
+                      // Subcontractor can only manage users in own company
+                      const canManageUser = isAdmin || 
+                        (isMainContractor && userCompany && (
+                          (typeof user.company === 'object' && user.company && 
+                           (user.company.documentId || user.company.id?.toString()) === (userCompany.documentId || userCompany.id?.toString())) ||
+                          (typeof user.company === 'object' && user.company && 
+                           user.company.type === 'subcontractor' && 
+                           user.company.parent_company &&
+                           (typeof user.company.parent_company === 'object' &&
+                            (user.company.parent_company.documentId || user.company.parent_company.id?.toString()) === (userCompany.documentId || userCompany.id?.toString())))
+                        )) ||
+                        (!isSubContractor && userCompany && 
+                         typeof user.company === 'object' && user.company &&
+                         (user.company.documentId || user.company.id?.toString()) === (userCompany.documentId || userCompany.id?.toString()));
+
+                      return (
+                        <TableRow key={user.documentId || user.id}>
+                          <TableCell className="font-medium">{user.username || '-'}</TableCell>
+                          <TableCell>{user.email || '-'}</TableCell>
+                          <TableCell>{userCompanyName}</TableCell>
+                          <TableCell>{userRoleName}</TableCell>
+                          <TableCell className="text-right">
+                            {canManageUser && (
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleUserEdit(user)}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleUserDelete(user)}
+                                >
+                                  <Trash2 className="h-4 w-4 text-red-600" />
+                                </Button>
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Fénykép kategóriák kezelése */}
         <Card>
