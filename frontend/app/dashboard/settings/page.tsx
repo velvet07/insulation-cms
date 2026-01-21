@@ -89,31 +89,23 @@ export default function SettingsPage() {
   const [materialCoverage, setMaterialCoverage] = useState('');
   const [materialRollsPerPallet, setMaterialRollsPerPallet] = useState('24');
 
-  // Check if user is subcontractor - same way as in projects page
+  // Check if user is subcontractor - check both role and company.type
   const getUserCompany = () => {
-    if (!user?.company) {
-      console.log('[SettingsPage] No company found for user:', user);
-      return null;
-    }
+    if (!user?.company) return null;
     if (typeof user.company === 'object' && 'type' in user.company) {
-      console.log('[SettingsPage] Company found:', user.company, 'type:', (user.company as any).type);
       return user.company as Company;
     }
-    console.log('[SettingsPage] Company is not an object with type:', typeof user.company, user.company);
     return null;
   };
 
   const userCompany = getUserCompany();
-  const isSubContractor = userCompany?.type === 'subcontractor';
+  // Check by role first (more reliable), then by company type
+  const isSubContractorByRole = user?.role === 'alvallalkozo' || 
+    (typeof user?.role === 'string' && user.role.toLowerCase().includes('alvallalkozo')) ||
+    (typeof user?.role === 'string' && user.role.toLowerCase().includes('subcontractor'));
+  const isSubContractorByCompany = userCompany?.type === 'subcontractor';
+  const isSubContractor = isSubContractorByRole || isSubContractorByCompany;
   const isAdmin = useMemo(() => isAdminRole(user), [user]);
-  
-  console.log('[SettingsPage] Access check:', {
-    userCompany,
-    companyType: userCompany?.type,
-    isSubContractor,
-    isAdmin,
-    shouldBlock: isSubContractor && !isAdmin
-  });
 
   const { data: companies = [], isLoading } = useQuery({
     queryKey: ['companies'],
