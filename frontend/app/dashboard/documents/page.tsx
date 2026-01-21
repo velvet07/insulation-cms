@@ -8,7 +8,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { FileText, FileEdit, ArrowRight } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth';
 import { isSubcontractor } from '@/lib/utils/user-role';
-import { Card, CardContent } from '@/components/ui/card';
 
 export default function DocumentsPage() {
   const router = useRouter();
