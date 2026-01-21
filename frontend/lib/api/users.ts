@@ -25,6 +25,7 @@ export const usersApi = {
   },
 
   // Get user by ID
+  // IMPORTANT: Strapi v5 Users-Permissions plugin requires numeric ID for /users endpoints
   getOne: async (id: string | number): Promise<User> => {
     const response = await strapiApi.get(`/users/${id}?populate=*`);
     return response.data;

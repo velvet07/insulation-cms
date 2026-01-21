@@ -75,7 +75,7 @@ export default function SettingsPage() {
   const queryClient = useQueryClient();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState<string | null>(null);
-  
+
   // Photo category management states
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<PhotoCategory | null>(null);
@@ -103,7 +103,7 @@ export default function SettingsPage() {
   // Use helper functions for consistent checking
   const isSubContractor = isSubcontractor(user);
   const isAdmin = useMemo(() => isAdminRole(user), [user]);
-  
+
   // Block access if user data is incomplete (safer default)
   const hasCompleteUserData = !!(user && (user.role || user.company));
 
@@ -115,7 +115,7 @@ export default function SettingsPage() {
     }
     return null;
   };
-  
+
   const userCompany = getUserCompany();
   const isMainContractor = userCompany?.type === 'main_contractor';
 
@@ -213,7 +213,7 @@ export default function SettingsPage() {
       if (isMainContractor && !isAdmin && data.type === 'main_contractor') {
         throw new Error('Nincs jogosultságod fővállalkozó létrehozásához. Csak admin felhasználók hozhatnak létre fővállalkozókat.');
       }
-      
+
       const submitData: any = {
         name: data.name,
         type: data.type,
@@ -242,7 +242,7 @@ export default function SettingsPage() {
       if (isMainContractor && !isAdmin && data.type === 'main_contractor') {
         throw new Error('Nincs jogosultságod fővállalkozó módosításához. Csak admin felhasználók módosíthatják a fővállalkozókat.');
       }
-      
+
       const submitData: any = {
         name: data.name,
         type: data.type,
@@ -285,7 +285,7 @@ export default function SettingsPage() {
         order: categories.length,
         required,
       };
-      
+
       // Generate slug on frontend as fallback (though lifecycle hook should handle it)
       if (!categoryData.slug) {
         categoryData.slug = name
@@ -295,7 +295,7 @@ export default function SettingsPage() {
           .replace(/\s+/g, '-')
           .replace(/-+/g, '-');
       }
-      
+
       const category = await photoCategoriesApi.create(categoryData);
       return category;
     },
@@ -308,9 +308,9 @@ export default function SettingsPage() {
     },
     onError: (error: any) => {
       console.error('Category creation error:', error);
-      const errorMessage = error.response?.data?.error?.message || 
-                          error.message || 
-                          'Hiba történt a kategória létrehozása során';
+      const errorMessage = error.response?.data?.error?.message ||
+        error.message ||
+        'Hiba történt a kategória létrehozása során';
       alert(errorMessage);
     },
   });
@@ -352,23 +352,23 @@ export default function SettingsPage() {
         alert('Nincs jogosultságod fővállalkozó szerkesztéséhez. Csak admin felhasználók szerkeszthetik a fővállalkozókat.');
         return;
       }
-      
+
       setEditingCompany(companyId);
       const companyType = company.type;
       // Main contractor can only edit subcontractors, so if editing, keep it as subcontractor
-      const allowedType = (isMainContractor && !isAdmin && companyType === 'main_contractor') 
-        ? 'subcontractor' 
+      const allowedType = (isMainContractor && !isAdmin && companyType === 'main_contractor')
+        ? 'subcontractor'
         : companyType;
-      
+
       form.reset({
         name: company.name,
         type: allowedType as 'main_contractor' | 'subcontractor',
         tax_number: company.tax_number || '',
         address: company.address || '',
-        parent_company: company.parent_company 
+        parent_company: company.parent_company
           ? (typeof company.parent_company === 'object' && 'documentId' in company.parent_company
-              ? company.parent_company.documentId
-              : typeof company.parent_company === 'object' && 'id' in company.parent_company
+            ? company.parent_company.documentId
+            : typeof company.parent_company === 'object' && 'id' in company.parent_company
               ? company.parent_company.id.toString()
               : undefined)
           : undefined,
@@ -385,7 +385,7 @@ export default function SettingsPage() {
         alert('Nincs jogosultságod fővállalkozó törléséhez. Csak admin felhasználók törölhetik a fővállalkozókat.');
         return;
       }
-      
+
       if (confirm('Biztosan törölni szeretnéd ezt a céget?')) {
         deleteMutation.mutate(companyId);
       }
@@ -424,7 +424,7 @@ export default function SettingsPage() {
       alert('A kötelező kategóriákat nem lehet törölni.');
       return;
     }
-    
+
     if (confirm(`Biztosan törölni szeretné ezt a kategóriát: ${category.name}?`)) {
       const identifier = category.documentId || category.id;
       deleteCategoryMutation.mutate(identifier);
@@ -490,12 +490,12 @@ export default function SettingsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       setIsUserDialogOpen(false);
-                      setEditingUser(null);
-                    setUserUsername('');
-                    setUserEmail('');
-                    setUserPassword('');
-                    setSelectedUserCompany('');
-                    setUserRole(undefined);
+      setEditingUser(null);
+      setUserUsername('');
+      setUserEmail('');
+      setUserPassword('');
+      setSelectedUserCompany('');
+      setUserRole(undefined);
     },
     onError: (error: any) => {
       alert(error.message || 'Hiba történt a felhasználó létrehozása során');
@@ -509,12 +509,12 @@ export default function SettingsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       setIsUserDialogOpen(false);
-                      setEditingUser(null);
-                    setUserUsername('');
-                    setUserEmail('');
-                    setUserPassword('');
-                    setSelectedUserCompany('');
-                    setUserRole(undefined);
+      setEditingUser(null);
+      setUserUsername('');
+      setUserEmail('');
+      setUserPassword('');
+      setSelectedUserCompany('');
+      setUserRole(undefined);
     },
     onError: (error: any) => {
       alert(error.message || 'Hiba történt a felhasználó frissítése során');
@@ -627,7 +627,8 @@ export default function SettingsPage() {
       return;
     }
 
-    const userId = editingUser.documentId || editingUser.id;
+    // IMPORTANT: Strapi v5 Users-Permissions plugin requires numeric ID, not documentId
+    const userId = editingUser.id;
     const updateData: any = {
       username: userUsername.trim(),
       email: userEmail.trim(),
@@ -650,7 +651,7 @@ export default function SettingsPage() {
       const currentRoleId = typeof editingUser.role === 'object' && editingUser.role !== null
         ? (editingUser.role.id as number)
         : (editingUser.role as number | undefined);
-      
+
       if (userRole !== currentRoleId) {
         updateData.role = userRole;
       }
@@ -661,7 +662,8 @@ export default function SettingsPage() {
 
   const handleUserDelete = (user: User) => {
     if (confirm(`Biztosan törölni szeretné ezt a felhasználót: ${user.username || user.email}?`)) {
-      const identifier = user.documentId || user.id;
+      // IMPORTANT: Strapi v5 Users-Permissions plugin requires numeric ID, not documentId
+      const identifier = user.id;
       deleteUserMutation.mutate(identifier!);
     }
   };
@@ -684,7 +686,7 @@ export default function SettingsPage() {
   };
 
   const canManageCompanies = isAdmin || isMainContractor;
-  
+
   // Subcontractors cannot access settings page (except admins)
   // Also block if user data is incomplete (safer default)
   if ((isSubContractor && !isAdmin) || !hasCompleteUserData) {
@@ -744,136 +746,136 @@ export default function SettingsPage() {
                       Új cég
                     </Button>
                   </DialogTrigger>
-                <DialogContent className="max-w-2xl">
-                  <DialogHeader>
-                    <DialogTitle>
-                      {editingCompany ? 'Cég szerkesztése' : 'Új cég létrehozása'}
-                    </DialogTitle>
-                    <DialogDescription>
-                      {editingCompany 
-                        ? 'Módosítsd a cég adatait' 
-                        : 'Töltsd ki az adatokat az új cég létrehozásához'}
-                    </DialogDescription>
-                  </DialogHeader>
-                  <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                      <FormField
-                        control={form.control}
-                        name="name"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Cég neve *</FormLabel>
-                            <FormControl>
-                              <Input placeholder="Pl. ABC Kft." {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="type"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Cég típusa *</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Válassz típust" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {isAdmin && (
-                                  <SelectItem value="main_contractor">Fővállalkozó</SelectItem>
-                                )}
-                                <SelectItem value="subcontractor">Alvállalkozó</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FormDescription>
-                              Fővállalkozók önálló cégek. Alvállalkozók egy Fővállalkozóhoz tartoznak.
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      {form.watch('type') === 'subcontractor' && (
+                  <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                      <DialogTitle>
+                        {editingCompany ? 'Cég szerkesztése' : 'Új cég létrehozása'}
+                      </DialogTitle>
+                      <DialogDescription>
+                        {editingCompany
+                          ? 'Módosítsd a cég adatait'
+                          : 'Töltsd ki az adatokat az új cég létrehozásához'}
+                      </DialogDescription>
+                    </DialogHeader>
+                    <Form {...form}>
+                      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                         <FormField
                           control={form.control}
-                          name="parent_company"
+                          name="name"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Szülő cég (Fővállalkozó)</FormLabel>
-                              <Select onValueChange={field.onChange} value={field.value}>
+                              <FormLabel>Cég neve *</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Pl. ABC Kft." {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="type"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Cég típusa *</FormLabel>
+                              <Select onValueChange={field.onChange} defaultValue={field.value}>
                                 <FormControl>
                                   <SelectTrigger>
-                                    <SelectValue placeholder="Válassz fővállalkozót" />
+                                    <SelectValue placeholder="Válassz típust" />
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  {mainContractors.map((company) => (
-                                    <SelectItem 
-                                      key={company.documentId || company.id} 
-                                      value={company.documentId || company.id.toString()}
-                                    >
-                                      {company.name}
-                                    </SelectItem>
-                                  ))}
+                                  {isAdmin && (
+                                    <SelectItem value="main_contractor">Fővállalkozó</SelectItem>
+                                  )}
+                                  <SelectItem value="subcontractor">Alvállalkozó</SelectItem>
                                 </SelectContent>
                               </Select>
                               <FormDescription>
-                                Válaszd ki, melyik Fővállalkozóhoz tartozik ez az Alvállalkozó
+                                Fővállalkozók önálló cégek. Alvállalkozók egy Fővállalkozóhoz tartoznak.
                               </FormDescription>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
-                      )}
-                      <FormField
-                        control={form.control}
-                        name="tax_number"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Adószám</FormLabel>
-                            <FormControl>
-                              <Input placeholder="Pl. 12345678-1-23" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
+                        {form.watch('type') === 'subcontractor' && (
+                          <FormField
+                            control={form.control}
+                            name="parent_company"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Szülő cég (Fővállalkozó)</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Válassz fővállalkozót" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {mainContractors.map((company) => (
+                                      <SelectItem
+                                        key={company.documentId || company.id}
+                                        value={company.documentId || company.id.toString()}
+                                      >
+                                        {company.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <FormDescription>
+                                  Válaszd ki, melyik Fővállalkozóhoz tartozik ez az Alvállalkozó
+                                </FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
                         )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="address"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Cím</FormLabel>
-                            <FormControl>
-                              <Input placeholder="Pl. 1234 Budapest, Fő utca 1." {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => {
-                            setIsDialogOpen(false);
-                            form.reset();
-                            setEditingCompany(null);
-                          }}
-                        >
-                          Mégse
-                        </Button>
-                        <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
-                          {(createMutation.isPending || updateMutation.isPending) ? 'Mentés...' : editingCompany ? 'Módosítás' : 'Létrehozás'}
-                        </Button>
-                      </div>
-                    </form>
-                  </Form>
-                </DialogContent>
-              </Dialog>
+                        <FormField
+                          control={form.control}
+                          name="tax_number"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Adószám</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Pl. 12345678-1-23" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="address"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Cím</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Pl. 1234 Budapest, Fő utca 1." {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                              setIsDialogOpen(false);
+                              form.reset();
+                              setEditingCompany(null);
+                            }}
+                          >
+                            Mégse
+                          </Button>
+                          <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
+                            {(createMutation.isPending || updateMutation.isPending) ? 'Mentés...' : editingCompany ? 'Módosítás' : 'Létrehozás'}
+                          </Button>
+                        </div>
+                      </form>
+                    </Form>
+                  </DialogContent>
+                </Dialog>
               )}
             </div>
           </CardHeader>
@@ -899,11 +901,10 @@ export default function SettingsPage() {
                     <TableRow key={company.documentId || company.id}>
                       <TableCell className="font-medium">{company.name}</TableCell>
                       <TableCell>
-                        <span className={`px-2 py-1 rounded text-xs ${
-                          company.type === 'main_contractor'
+                        <span className={`px-2 py-1 rounded text-xs ${company.type === 'main_contractor'
                             ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
                             : 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
-                        }`}>
+                          }`}>
                           {companyTypeLabels[company.type]}
                         </span>
                       </TableCell>
@@ -966,7 +967,7 @@ export default function SettingsPage() {
                 <Dialog open={isUserDialogOpen} onOpenChange={(open) => {
                   setIsUserDialogOpen(open);
                   if (!open) {
-                      setEditingUser(null);
+                    setEditingUser(null);
                     setUserUsername('');
                     setUserEmail('');
                     setUserPassword('');
@@ -986,8 +987,8 @@ export default function SettingsPage() {
                         {editingUser ? 'Felhasználó szerkesztése' : 'Új felhasználó létrehozása'}
                       </DialogTitle>
                       <DialogDescription>
-                        {editingUser 
-                          ? 'Módosítsd a felhasználó adatait' 
+                        {editingUser
+                          ? 'Módosítsd a felhasználó adatait'
                           : 'Töltsd ki az adatokat az új felhasználó létrehozásához'}
                       </DialogDescription>
                     </DialogHeader>
@@ -1025,10 +1026,10 @@ export default function SettingsPage() {
                       </div>
                       <div>
                         <Label htmlFor="user-company">Cég</Label>
-                          <Select 
-                            value={selectedUserCompany || 'none'} 
-                            onValueChange={(value) => setSelectedUserCompany(value === 'none' ? '' : value)}
-                          >
+                        <Select
+                          value={selectedUserCompany || 'none'}
+                          onValueChange={(value) => setSelectedUserCompany(value === 'none' ? '' : value)}
+                        >
                           <SelectTrigger>
                             <SelectValue placeholder="Válassz céget (opcionális)" />
                           </SelectTrigger>
@@ -1047,8 +1048,8 @@ export default function SettingsPage() {
                       </div>
                       <div>
                         <Label htmlFor="user-role">Szerepkör (opcionális)</Label>
-                        <Select 
-                          value={userRole?.toString() || 'none'} 
+                        <Select
+                          value={userRole?.toString() || 'none'}
                           onValueChange={(value) => setUserRole(value === 'none' ? undefined : parseInt(value))}
                         >
                           <SelectTrigger>
@@ -1070,12 +1071,12 @@ export default function SettingsPage() {
                         variant="outline"
                         onClick={() => {
                           setIsUserDialogOpen(false);
-                      setEditingUser(null);
-                    setUserUsername('');
-                    setUserEmail('');
-                    setUserPassword('');
-                    setSelectedUserCompany('');
-                    setUserRole(undefined);
+                          setEditingUser(null);
+                          setUserUsername('');
+                          setUserEmail('');
+                          setUserPassword('');
+                          setSelectedUserCompany('');
+                          setUserRole(undefined);
                         }}
                       >
                         Mégse
@@ -1083,10 +1084,10 @@ export default function SettingsPage() {
                       <Button
                         onClick={editingUser ? handleUserUpdate : handleUserCreate}
                         disabled={
-                          !userUsername.trim() || 
-                          !userEmail.trim() || 
+                          !userUsername.trim() ||
+                          !userEmail.trim() ||
                           (!editingUser && !userPassword.trim()) ||
-                          createUserMutation.isPending || 
+                          createUserMutation.isPending ||
                           updateUserMutation.isPending
                         }
                       >
@@ -1133,19 +1134,19 @@ export default function SettingsPage() {
                       // Admin can manage all users
                       // Main contractor can manage users in own company and subcontractors
                       // Subcontractor can only manage users in own company
-                      const canManageUser = isAdmin || 
+                      const canManageUser = isAdmin ||
                         (isMainContractor && userCompany && (
-                          (typeof user.company === 'object' && user.company && 
-                           (user.company.documentId || user.company.id?.toString()) === (userCompany.documentId || userCompany.id?.toString())) ||
-                          (typeof user.company === 'object' && user.company && 
-                           user.company.type === 'subcontractor' && 
-                           user.company.parent_company &&
-                           (typeof user.company.parent_company === 'object' &&
-                            (user.company.parent_company.documentId || user.company.parent_company.id?.toString()) === (userCompany.documentId || userCompany.id?.toString())))
+                          (typeof user.company === 'object' && user.company &&
+                            (user.company.documentId || user.company.id?.toString()) === (userCompany.documentId || userCompany.id?.toString())) ||
+                          (typeof user.company === 'object' && user.company &&
+                            user.company.type === 'subcontractor' &&
+                            user.company.parent_company &&
+                            (typeof user.company.parent_company === 'object' &&
+                              (user.company.parent_company.documentId || user.company.parent_company.id?.toString()) === (userCompany.documentId || userCompany.id?.toString())))
                         )) ||
-                        (!isSubContractor && userCompany && 
-                         typeof user.company === 'object' && user.company &&
-                         (user.company.documentId || user.company.id?.toString()) === (userCompany.documentId || userCompany.id?.toString()));
+                        (!isSubContractor && userCompany &&
+                          typeof user.company === 'object' && user.company &&
+                          (user.company.documentId || user.company.id?.toString()) === (userCompany.documentId || userCompany.id?.toString()));
 
                       return (
                         <TableRow key={user.documentId || user.id}>
@@ -1216,8 +1217,8 @@ export default function SettingsPage() {
                       {editingCategory ? 'Kategória szerkesztése' : 'Új kategória'}
                     </DialogTitle>
                     <DialogDescription>
-                      {editingCategory 
-                        ? 'Módosítsa a kategória beállításait.' 
+                      {editingCategory
+                        ? 'Módosítsa a kategória beállításait.'
                         : 'Adjon nevet az új kategóriának és állítsa be, hogy kötelező-e.'}
                     </DialogDescription>
                   </DialogHeader>
@@ -1337,7 +1338,7 @@ export default function SettingsPage() {
                           {category.required && (
                             <span className="text-xs text-gray-500">Nem szerkeszthető</span>
                           )}
-        </div>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -1383,8 +1384,8 @@ export default function SettingsPage() {
                       {editingMaterial ? 'Anyag szerkesztése' : 'Új anyag'}
                     </DialogTitle>
                     <DialogDescription>
-                      {editingMaterial 
-                        ? 'Módosítsa az anyag beállításait.' 
+                      {editingMaterial
+                        ? 'Módosítsa az anyag beállításait.'
                         : 'Adja meg az anyag típusát és paramétereit.'}
                     </DialogDescription>
                   </DialogHeader>
