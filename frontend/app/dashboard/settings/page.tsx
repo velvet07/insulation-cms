@@ -91,16 +91,29 @@ export default function SettingsPage() {
 
   // Check if user is subcontractor - same way as in projects page
   const getUserCompany = () => {
-    if (!user?.company) return null;
+    if (!user?.company) {
+      console.log('[SettingsPage] No company found for user:', user);
+      return null;
+    }
     if (typeof user.company === 'object' && 'type' in user.company) {
+      console.log('[SettingsPage] Company found:', user.company, 'type:', (user.company as any).type);
       return user.company as Company;
     }
+    console.log('[SettingsPage] Company is not an object with type:', typeof user.company, user.company);
     return null;
   };
 
   const userCompany = getUserCompany();
   const isSubContractor = userCompany?.type === 'subcontractor';
   const isAdmin = useMemo(() => isAdminRole(user), [user]);
+  
+  console.log('[SettingsPage] Access check:', {
+    userCompany,
+    companyType: userCompany?.type,
+    isSubContractor,
+    isAdmin,
+    shouldBlock: isSubContractor && !isAdmin
+  });
 
   const { data: companies = [], isLoading } = useQuery({
     queryKey: ['companies'],

@@ -71,15 +71,26 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   // Check if user is subcontractor - same way as in projects page
   const getUserCompany = () => {
-    if (!user?.company) return null;
+    if (!user?.company) {
+      console.log('[DashboardLayout] No company found for user:', user);
+      return null;
+    }
     if (typeof user.company === 'object' && 'type' in user.company) {
+      console.log('[DashboardLayout] Company found:', user.company, 'type:', (user.company as any).type);
       return user.company as Company;
     }
+    console.log('[DashboardLayout] Company is not an object with type:', typeof user.company, user.company);
     return null;
   };
 
   const userCompany = getUserCompany();
   const isSubContractor = userCompany?.type === 'subcontractor';
+  console.log('[DashboardLayout] isSubContractor check:', {
+    userCompany,
+    companyType: userCompany?.type,
+    isSubContractor,
+    user: user
+  });
 
   const handleLogout = () => {
     clearAuth();

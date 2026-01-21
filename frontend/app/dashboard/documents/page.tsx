@@ -16,16 +16,29 @@ export default function DocumentsPage() {
   
   // Check if user is subcontractor - same way as in projects page
   const getUserCompany = () => {
-    if (!user?.company) return null;
+    if (!user?.company) {
+      console.log('[DocumentsPage] No company found for user:', user);
+      return null;
+    }
     if (typeof user.company === 'object' && 'type' in user.company) {
+      console.log('[DocumentsPage] Company found:', user.company, 'type:', (user.company as any).type);
       return user.company as Company;
     }
+    console.log('[DocumentsPage] Company is not an object with type:', typeof user.company, user.company);
     return null;
   };
 
   const userCompany = getUserCompany();
   const isSubContractor = userCompany?.type === 'subcontractor';
   const isAdmin = isAdminRole(user);
+  
+  console.log('[DocumentsPage] Access check:', {
+    userCompany,
+    companyType: userCompany?.type,
+    isSubContractor,
+    isAdmin,
+    shouldBlock: isSubContractor && !isAdmin
+  });
   
   // Only allow main contractors and admins
   if (isSubContractor && !isAdmin) {
