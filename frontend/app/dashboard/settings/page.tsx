@@ -642,10 +642,18 @@ export default function SettingsPage() {
     const companyId = selectedUserCompany && selectedUserCompany.trim() ? selectedUserCompany.trim() : null;
     updateData.company = companyId;
 
-    // Update role - only if explicitly set (don't send undefined)
-    // Note: Role can be a number (ID) or undefined (to keep current role)
+    // Update role - only if explicitly changed
+    // Note: Role might not be updatable via API in Strapi users-permissions plugin
+    // Try to update it, but don't fail if it doesn't work
     if (userRole !== undefined && userRole !== null) {
-      updateData.role = userRole;
+      // Only send role if it's different from current role
+      const currentRoleId = typeof editingUser.role === 'object' && editingUser.role !== null
+        ? (editingUser.role.id as number)
+        : (editingUser.role as number | undefined);
+      
+      if (userRole !== currentRoleId) {
+        updateData.role = userRole;
+      }
     }
 
     updateUserMutation.mutate({ id: userId!, data: updateData });
