@@ -468,8 +468,11 @@ export default function ProjectDetailPage() {
       };
 
       // Relation mezőket csak akkor küldjük el, ha van értékük
-      if (user?.documentId || user?.id) {
-        updateData.sent_back_by = user?.documentId || user?.id;
+      // Strapi v5-ben a relation mezőket documentId-val kell küldeni, ha van
+      if (user?.documentId) {
+        updateData.sent_back_by = user.documentId;
+      } else if (user?.id) {
+        updateData.sent_back_by = user.id;
       }
 
       // Szűrjük ki a szerveren még nem létező mezőket és null értékeket
@@ -480,10 +483,14 @@ export default function ProjectDetailPage() {
           if (fieldsNotOnServer.includes(key)) return false;
           // Ne küldjük el null értékeket
           if (value === null) return false;
+          // Ne küldjük el undefined értékeket
+          if (value === undefined) return false;
           return true;
         })
       );
 
+      console.log('[handleSendBackForRevision] Sending update data:', JSON.stringify(cleanUpdateData, null, 2));
+      
       await projectsApi.update(projectId, cleanUpdateData);
       
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
@@ -492,8 +499,27 @@ export default function ProjectDetailPage() {
       setIsRevisionDialogOpen(false);
       setRevisionNotes('');
     } catch (error: any) {
-      console.error('Hiba a projekt visszaküldése során:', error);
-      alert('Hiba történt a projekt visszaküldése során.');
+      console.error('[handleSendBackForRevision] Hiba:', error);
+      console.error('[handleSendBackForRevision] Error response:', error.response?.data);
+      console.error('[handleSendBackForRevision] Error status:', error.response?.status);
+      console.error('[handleSendBackForRevision] Update data that was sent:', cleanUpdateData);
+      
+      // Részletesebb hibaüzenet
+      let errorMessage = 'Hiba történt a projekt visszaküldése során.';
+      if (error.response?.data?.error?.message) {
+        errorMessage = `Strapi hiba: ${error.response.data.error.message}`;
+      } else if (error.response?.data?.message) {
+        errorMessage = `Strapi hiba: ${error.response.data.message}`;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      // Ha 400-as hiba, lehet hogy a mezők még nincsenek a Strapi-ben
+      if (error.response?.status === 400) {
+        errorMessage += '\n\nLehet, hogy a Strapi szerveren még nincsenek az új mezők (revision_notes, sent_back_at, sent_back_by) vagy az új státusz (sent_back_for_revision).\nKérjük, frissítse a Strapi szervert a docs/PROJECT_SCHEMA_UPDATE.md útmutató alapján.';
+      }
+      
+      alert(errorMessage);
     } finally {
       setIsUpdatingStatus(false);
     }
