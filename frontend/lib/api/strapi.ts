@@ -19,6 +19,13 @@ export const strapiApi: AxiosInstance = axios.create({
 // Request interceptor to add JWT token from auth store
 strapiApi.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
+    // Check if this is a retry with API token (marked by _useApiToken flag)
+    if ((config as any)._useApiToken && apiToken) {
+      config.headers.Authorization = `Bearer ${apiToken}`;
+      console.log('[strapiApi] Retrying with API token for:', config.url);
+      return config;
+    }
+
     // Only add JWT token on client side
     if (typeof window !== 'undefined') {
       try {
@@ -85,7 +92,7 @@ strapiApi.interceptors.response.use(
       console.error('API 401 Error:', error.response?.data);
     }
     
-    // Log 403 errors with more details
+    // Log 403 errors with more details and retry with API token if available
     if (error.response?.status === 403) {
       console.error('API 403 Forbidden Error:', {
         url: error.config?.url,
@@ -93,6 +100,15 @@ strapiApi.interceptors.response.use(
         headers: error.config?.headers,
         response: error.response?.data,
       });
+      
+      // If we got 403 with JWT token, retry with API token (if available and not already retried)
+      const config = error.config as InternalAxiosRequestConfig & { _useApiToken?: boolean; _retryCount?: number };
+      if (apiToken && !config._useApiToken && config._retryCount !== 1) {
+        config._useApiToken = true;
+        config._retryCount = (config._retryCount || 0) + 1;
+        console.log('[strapiApi] JWT token returned 403, retrying with API token for:', config.url);
+        return strapiApi.request(config);
+      }
     }
     
     // 404-es hibákat projekt frissítéseknél csendben kezeljük
