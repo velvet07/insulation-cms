@@ -79,12 +79,24 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   };
 
   const userCompany = getUserCompany();
+  
+  // Debug: log the user object to see what we have
+  console.log('[DashboardLayout] User object:', JSON.stringify(user, null, 2));
+  console.log('[DashboardLayout] User role:', user?.role, 'type:', typeof user?.role);
+  
   // Check by role first (more reliable), then by company type
   const isSubContractorByRole = user?.role === 'alvallalkozo' || 
     (typeof user?.role === 'string' && user.role.toLowerCase().includes('alvallalkozo')) ||
     (typeof user?.role === 'string' && user.role.toLowerCase().includes('subcontractor'));
   const isSubContractorByCompany = userCompany?.type === 'subcontractor';
   const isSubContractor = isSubContractorByRole || isSubContractorByCompany;
+  
+  console.log('[DashboardLayout] Subcontractor check:', {
+    role: user?.role,
+    isSubContractorByRole,
+    isSubContractorByCompany,
+    isSubContractor
+  });
 
   const handleLogout = () => {
     clearAuth();

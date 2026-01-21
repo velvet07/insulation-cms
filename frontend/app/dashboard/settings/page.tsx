@@ -99,6 +99,11 @@ export default function SettingsPage() {
   };
 
   const userCompany = getUserCompany();
+  
+  // Debug: log the user object to see what we have
+  console.log('[SettingsPage] User object:', JSON.stringify(user, null, 2));
+  console.log('[SettingsPage] User role:', user?.role, 'type:', typeof user?.role);
+  
   // Check by role first (more reliable), then by company type
   const isSubContractorByRole = user?.role === 'alvallalkozo' || 
     (typeof user?.role === 'string' && user.role.toLowerCase().includes('alvallalkozo')) ||
@@ -106,6 +111,15 @@ export default function SettingsPage() {
   const isSubContractorByCompany = userCompany?.type === 'subcontractor';
   const isSubContractor = isSubContractorByRole || isSubContractorByCompany;
   const isAdmin = useMemo(() => isAdminRole(user), [user]);
+  
+  console.log('[SettingsPage] Subcontractor check:', {
+    role: user?.role,
+    isSubContractorByRole,
+    isSubContractorByCompany,
+    isSubContractor,
+    isAdmin,
+    shouldBlock: isSubContractor && !isAdmin
+  });
 
   const { data: companies = [], isLoading } = useQuery({
     queryKey: ['companies'],

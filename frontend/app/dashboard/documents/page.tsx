@@ -24,6 +24,11 @@ export default function DocumentsPage() {
   };
 
   const userCompany = getUserCompany();
+  
+  // Debug: log the user object to see what we have
+  console.log('[DocumentsPage] User object:', JSON.stringify(user, null, 2));
+  console.log('[DocumentsPage] User role:', user?.role, 'type:', typeof user?.role);
+  
   // Check by role first (more reliable), then by company type
   const isSubContractorByRole = user?.role === 'alvallalkozo' || 
     (typeof user?.role === 'string' && user.role.toLowerCase().includes('alvallalkozo')) ||
@@ -31,6 +36,15 @@ export default function DocumentsPage() {
   const isSubContractorByCompany = userCompany?.type === 'subcontractor';
   const isSubContractor = isSubContractorByRole || isSubContractorByCompany;
   const isAdmin = isAdminRole(user);
+  
+  console.log('[DocumentsPage] Subcontractor check:', {
+    role: user?.role,
+    isSubContractorByRole,
+    isSubContractorByCompany,
+    isSubContractor,
+    isAdmin,
+    shouldBlock: isSubContractor && !isAdmin
+  });
   
   // Only allow main contractors and admins
   if (isSubContractor && !isAdmin) {
