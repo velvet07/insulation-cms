@@ -153,7 +153,7 @@ export const usersApi = {
       // First, update all fields except company
       console.log('[usersApi.update] Sending clean data (without company):', JSON.stringify(cleanData, null, 2));
       console.log('[usersApi.update] Request URL:', `/users/${id}`);
-      console.log('[usersApi.update] Request method: PUT`);
+      console.log('[usersApi.update] Request method:', 'PUT');
       
       try {
         let response = await strapiApi.put(`/users/${id}`, { data: cleanData });
