@@ -50,7 +50,7 @@ import { photoCategoriesApi } from '@/lib/api/photo-categories';
 import { materialsApi, type Material } from '@/lib/api/materials';
 import { Building2, Plus, Trash2, Edit, FolderTree, Package } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { isAdminRole } from '@/lib/utils/user-role';
+import { isAdminRole, isSubcontractor, isMainContractor as isMainContractorHelper } from '@/lib/utils/user-role';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2 } from 'lucide-react';
 import type { PhotoCategory } from '@/types';
@@ -90,24 +90,7 @@ export default function SettingsPage() {
 
   // Memoize admin check to avoid recalculating on every render
   const isAdmin = useMemo(() => isAdminRole(user), [user]);
-  const isSubContractor = useMemo(() => {
-    if (!user) return false;
-    // Check by role
-    if (user.role && typeof user.role === 'string') {
-      const roleLower = user.role.toLowerCase();
-      if (roleLower === 'alvallalkozo' || roleLower.includes('subcontractor')) {
-        return true;
-      }
-    }
-    // Check by company type
-    if (user.company && typeof user.company === 'object') {
-      const companyType = (user.company as any).type;
-      if (companyType === 'subcontractor') {
-        return true;
-      }
-    }
-    return false;
-  }, [user]);
+  const isSubContractor = useMemo(() => isSubcontractor(user), [user]);
 
   const { data: companies = [], isLoading } = useQuery({
     queryKey: ['companies'],
@@ -494,24 +477,7 @@ export default function SettingsPage() {
   };
 
   // Determine user permissions
-  const isMainContractor = useMemo(() => {
-    if (!user) return false;
-    // Check by role
-    if (user.role && typeof user.role === 'string') {
-      const roleLower = user.role.toLowerCase();
-      if (roleLower === 'foovallalkozo' || roleLower.includes('main') || roleLower.includes('contractor')) {
-        return true;
-      }
-    }
-    // Check by company type
-    if (user.company && typeof user.company === 'object') {
-      const companyType = (user.company as any).type;
-      if (companyType === 'main_contractor') {
-        return true;
-      }
-    }
-    return false;
-  }, [user]);
+  const isMainContractor = useMemo(() => isMainContractorHelper(user), [user]);
   
   const canManageCompanies = isAdmin || isMainContractor;
   

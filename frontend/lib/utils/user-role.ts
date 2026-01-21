@@ -33,26 +33,32 @@ export function isSubcontractor(user: any): boolean {
     return false;
   }
   
-  // Check by role
+  // Check by role (string or object)
   if (user.role) {
     if (typeof user.role === 'string') {
       const roleLower = user.role.toLowerCase();
-      return roleLower === 'alvallalkozo' || roleLower.includes('subcontractor');
+      if (roleLower === 'alvallalkozo' || roleLower.includes('subcontractor')) {
+        return true;
+      }
     }
     
     if (typeof user.role === 'object' && user.role !== null) {
       const roleName = (user.role as any).name?.toLowerCase() || '';
       const roleType = (user.role as any).type?.toLowerCase() || '';
-      return roleName.includes('alvallalkozo') || roleName.includes('subcontractor') ||
-             roleType.includes('alvallalkozo') || roleType.includes('subcontractor');
+      if (roleName.includes('alvallalkozo') || roleName.includes('subcontractor') ||
+          roleType.includes('alvallalkozo') || roleType.includes('subcontractor')) {
+        return true;
+      }
     }
   }
   
-  // Check by company type
-  if (user.company && typeof user.company === 'object') {
-    const companyType = (user.company as any).type;
-    if (companyType === 'subcontractor') {
-      return true;
+  // Check by company type (most reliable)
+  if (user.company) {
+    if (typeof user.company === 'object' && user.company !== null) {
+      const companyType = (user.company as any).type;
+      if (companyType === 'subcontractor' || companyType === 'Alvállalkozó') {
+        return true;
+      }
     }
   }
   

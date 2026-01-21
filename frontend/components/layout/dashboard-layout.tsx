@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/lib/store/auth';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { isAdminRole, isSubcontractor } from '@/lib/utils/user-role';
+import { isAdminRole, isSubcontractor as isSubcontractorHelper } from '@/lib/utils/user-role';
 import {
   LayoutDashboard,
   FolderKanban,
@@ -68,6 +68,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
   const { user, clearAuth } = useAuthStore();
 
+  // Memoize subcontractor check
+  const isSubContractor = isSubcontractorHelper(user);
+
   const handleLogout = () => {
     clearAuth();
     router.push('/login');
@@ -111,7 +114,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
               
               // Hide Documents and Settings from subcontractors
-              const isSubContractor = isSubcontractor(user);
               if (isSubContractor && (item.href === '/dashboard/documents' || item.href === '/dashboard/settings')) {
                 return null;
               }
