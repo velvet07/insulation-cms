@@ -108,9 +108,12 @@ export const usersApi = {
         if (data.company === null || data.company === '') {
           cleanData.company = null; // Explicitly set to null to clear relation
         } else {
-          // Try to use numeric ID if possible (users-permissions plugin might prefer this)
-          if (typeof data.company === 'string' && data.company.includes('-')) {
-            // It's a documentId (UUID format) - convert to numeric ID
+          // Determine if it's a documentId (string, not a simple numeric string) or numeric ID
+          const isNumericString = typeof data.company === 'string' && /^\d+$/.test(data.company);
+          const isDocumentId = typeof data.company === 'string' && !isNumericString;
+          
+          if (isDocumentId) {
+            // It's a documentId (string format, not numeric) - convert to numeric ID
             try {
               console.log('[usersApi.update] Converting company documentId to numeric ID:', data.company);
               const company = await companiesApi.getOne(data.company);
@@ -126,14 +129,14 @@ export const usersApi = {
               // Fallback to documentId if company fetch fails
               cleanData.company = data.company;
             }
-          } else if (typeof data.company === 'string' && !isNaN(Number(data.company))) {
+          } else if (isNumericString) {
             // It's a numeric string, convert to number
             cleanData.company = Number(data.company);
           } else if (typeof data.company === 'number') {
             // It's already a number
             cleanData.company = data.company;
           } else {
-            // Keep as-is (string documentId)
+            // Keep as-is (shouldn't happen, but just in case)
             cleanData.company = data.company;
           }
         }
