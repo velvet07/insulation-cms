@@ -140,34 +140,87 @@ export const usersApi = {
         }
       }
 
-      // First, update all fields except company
-      console.log('[usersApi.update] Sending clean data (without company):', JSON.stringify(cleanData, null, 2));
-      let response = await strapiApi.put(`/users/${id}`, { data: cleanData });
-      
-      if (!response || !response.data) {
-        throw new Error('Invalid response from server');
-      }
-      
-      // If company needs to be updated, try updating it separately
-      if (companyToUpdate !== undefined) {
+      // Check if we have any fields to update
+      if (Object.keys(cleanData).length === 0) {
+        console.warn('[usersApi.update] No fields to update (excluding company)');
+        // If only company needs to be updated, skip the first request
+        if (companyToUpdate === undefined) {
+          // Nothing to update at all
+          const currentUser = await usersApi.getOne(id);
+          return currentUser;
+        }
+      } else {
+        // First, update all fields except company
+        console.log('[usersApi.update] Sending clean data (without company):', JSON.stringify(cleanData, null, 2));
         try {
-          console.log('[usersApi.update] Updating company field separately:', companyToUpdate);
-          const companyUpdateData: any = { company: companyToUpdate };
-          response = await strapiApi.put(`/users/${id}`, { data: companyUpdateData });
+          let response = await strapiApi.put(`/users/${id}`, { data: cleanData });
           
           if (!response || !response.data) {
-            console.warn('[usersApi.update] Company update returned invalid response, but other fields were updated');
-          } else {
-            console.log('[usersApi.update] Company field updated successfully');
+            throw new Error('Invalid response from server');
           }
-        } catch (companyUpdateError: any) {
-          console.error('[usersApi.update] Error updating company field separately:', companyUpdateError);
-          console.warn('[usersApi.update] Company field could not be updated, but other fields were updated successfully');
-          // Don't throw error - other fields were updated successfully
+          
+          // If company needs to be updated, try updating it separately
+          if (companyToUpdate !== undefined) {
+            try {
+              console.log('[usersApi.update] Updating company field separately:', companyToUpdate);
+              const companyUpdateData: any = { company: companyToUpdate };
+              response = await strapiApi.put(`/users/${id}`, { data: companyUpdateData });
+              
+              if (!response || !response.data) {
+                console.warn('[usersApi.update] Company update returned invalid response, but other fields were updated');
+              } else {
+                console.log('[usersApi.update] Company field updated successfully');
+              }
+            } catch (companyUpdateError: any) {
+              console.error('[usersApi.update] Error updating company field separately:', companyUpdateError);
+              console.warn('[usersApi.update] Company field could not be updated, but other fields were updated successfully');
+              // Don't throw error - other fields were updated successfully
+              // Re-fetch user to get updated data
+              return await usersApi.getOne(id);
+            }
+          }
+          
+          return response.data;
+        } catch (firstUpdateError: any) {
+          // If first update fails, maybe it's a permission issue
+          // Try to get more details from the error
+          console.error('[usersApi.update] Error in first update attempt:', firstUpdateError);
+          
+          // If the error is 500 and we're trying to update basic fields, it might be a permission issue
+          if (firstUpdateError.response?.status === 500) {
+            throw new Error(
+              '500-as hiba: A Strapi szerveren belső hiba történt. ' +
+              'Ez valószínűleg jogosultsági probléma. Ellenőrizd a Strapi admin felületén, ' +
+              'hogy az API token-nek van-e jogosultsága a user módosításához (Users-Permissions plugin → Roles → Public/Authenticated → User → update permission). ' +
+              'Részletek: ' + (firstUpdateError.response?.data?.error?.message || firstUpdateError.message)
+            );
+          }
+          
+          throw firstUpdateError;
         }
       }
       
-      return response.data;
+      // If only company needs to be updated and first update was skipped
+      if (companyToUpdate !== undefined) {
+        try {
+          console.log('[usersApi.update] Updating company field only:', companyToUpdate);
+          const companyUpdateData: any = { company: companyToUpdate };
+          const response = await strapiApi.put(`/users/${id}`, { data: companyUpdateData });
+          
+          if (!response || !response.data) {
+            throw new Error('Invalid response from server');
+          }
+          
+          console.log('[usersApi.update] Company field updated successfully');
+          return response.data;
+        } catch (companyUpdateError: any) {
+          console.error('[usersApi.update] Error updating company field:', companyUpdateError);
+          throw companyUpdateError;
+        }
+      }
+      
+      // Should not reach here, but just in case
+      return await usersApi.getOne(id);
     } catch (error: any) {
       console.error('[usersApi.update] Error:', error);
       console.error('[usersApi.update] Error status:', error.response?.status);
