@@ -97,9 +97,8 @@ export const authApi = {
   },
 
   getMe: async (token: string): Promise<User> => {
-    // Strapi v5 /users/me doesn't support populate parameter
-    // We need to fetch role and company separately
-    const response = await authApiClient.get<User>('/users/me?populate=*', {
+    // Strapi v5 /users/me endpoint with populate for role and company
+    const response = await authApiClient.get<User>('/users/me?populate[role]=*&populate[company]=*&populate[company][parent_company]=*', {
       headers: {
         Authorization: `Bearer ${token}`,
       },
