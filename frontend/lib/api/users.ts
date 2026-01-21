@@ -102,18 +102,29 @@ export const usersApi = {
       
       // For company: Strapi relation field
       // NOTE: Strapi users-permissions plugin might require numeric ID instead of documentId
-      // Try to convert documentId to numeric ID by fetching the company first
+      // Convert documentId to numeric ID by fetching the company first
       if (data.company !== undefined) {
         if (data.company === null || data.company === '') {
           cleanData.company = null; // Explicitly set to null to clear relation
         } else {
           // Try to use numeric ID if possible (users-permissions plugin might prefer this)
           if (typeof data.company === 'string' && data.company.includes('-')) {
-            // It's a documentId (UUID format) - try to convert to numeric ID
-            // For now, try sending documentId as-is, but log a warning
-            console.warn('[usersApi.update] Sending company as documentId:', data.company);
-            console.warn('[usersApi.update] If this fails with 500 error, we may need to convert documentId to numeric ID');
-            cleanData.company = data.company;
+            // It's a documentId (UUID format) - convert to numeric ID
+            try {
+              console.log('[usersApi.update] Converting company documentId to numeric ID:', data.company);
+              const company = await companiesApi.getOne(data.company);
+              if (company && company.id) {
+                console.log('[usersApi.update] Found company numeric ID:', company.id);
+                cleanData.company = company.id;
+              } else {
+                console.warn('[usersApi.update] Company not found or has no numeric ID, using documentId as fallback');
+                cleanData.company = data.company;
+              }
+            } catch (companyError) {
+              console.error('[usersApi.update] Error fetching company by documentId:', companyError);
+              // Fallback to documentId if company fetch fails
+              cleanData.company = data.company;
+            }
           } else if (typeof data.company === 'string' && !isNaN(Number(data.company))) {
             // It's a numeric string, convert to number
             cleanData.company = Number(data.company);
