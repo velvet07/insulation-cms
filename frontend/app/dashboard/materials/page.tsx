@@ -37,7 +37,7 @@ import {
   determineInsulationOption,
   type AvailableMaterial,
 } from '@/lib/utils/material-calculation';
-import type { Project, Company } from '@/types';
+import type { Project } from '@/types';
 import { Plus, AlertTriangle, CheckCircle2, TrendingDown, Package, Calendar, CalendarDays, List, Edit, Trash2 } from 'lucide-react';
 import { createAuditLogEntry, addAuditLogEntry } from '@/lib/utils/audit-log';
 import { isAdminRole } from '@/lib/utils/user-role';
@@ -55,37 +55,6 @@ type RequirementsPeriod = 'today' | 'tomorrow' | 'week' | 'two-weeks' | 'month' 
 export default function MaterialsPage() {
   const user = useAuthStore((state) => state.user);
   const queryClient = useQueryClient();
-  
-  // Check if user is subcontractor - same way as in projects page
-  const getUserCompany = () => {
-    if (!user?.company) return null;
-    if (typeof user.company === 'object' && 'type' in user.company) {
-      return user.company as Company;
-    }
-    return null;
-  };
-
-  const userCompany = getUserCompany();
-  const isSubContractor = userCompany?.type === 'subcontractor';
-  const isAdmin = isAdminRole(user);
-  
-  // Only allow main contractors and admins
-  if (isSubContractor && !isAdmin) {
-    return (
-      <ProtectedRoute>
-        <DashboardLayout>
-          <div className="p-6">
-            <Card>
-              <CardContent className="py-8 text-center">
-                <p className="text-gray-500">Nincs jogosultságod az oldal megtekintéséhez.</p>
-                <p className="text-sm text-gray-400 mt-2">Csak fővállalkozók és adminok érhetik el ezt az oldalt.</p>
-              </CardContent>
-            </Card>
-          </div>
-        </DashboardLayout>
-      </ProtectedRoute>
-    );
-  }
   const [isPickupDialogOpen, setIsPickupDialogOpen] = useState(false);
   const [requirementsPeriod, setRequirementsPeriod] = useState<RequirementsPeriod>('week');
   const [customStartDate, setCustomStartDate] = useState('');
