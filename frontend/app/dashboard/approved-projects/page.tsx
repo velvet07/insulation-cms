@@ -28,6 +28,13 @@ export default function ApprovedProjectsPage() {
 
   // Only show this page to main contractors or admins
   const isMainContractor = user?.role === 'foovallalkozo' || isAdminRole(user);
+
+  // Fetch approved projects - hooks must be called before any conditional returns
+  const { data: approvedProjects = [], isLoading } = useQuery({
+    queryKey: ['projects', 'approved'],
+    queryFn: () => projectsApi.getAll({ status: 'approved' }),
+    enabled: isMainContractor, // Only fetch if user is main contractor or admin
+  });
   
   if (!isMainContractor) {
     return (
@@ -45,12 +52,6 @@ export default function ApprovedProjectsPage() {
       </ProtectedRoute>
     );
   }
-
-  // Fetch approved projects
-  const { data: approvedProjects = [], isLoading } = useQuery({
-    queryKey: ['projects', 'approved'],
-    queryFn: () => projectsApi.getAll({ status: 'approved' }),
-  });
 
   // Group projects by contractor, then by subcontractor
   const projectsByContractor = useMemo(() => {
