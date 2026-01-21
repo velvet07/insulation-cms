@@ -104,22 +104,84 @@ export const authApi = {
   },
 
   getMe: async (token: string): Promise<User> => {
-    // Strapi v5 /users/me endpoint - try with populate=* first, then try individual populates
+    // First get user ID from /users/me (simple request)
+    let userResponse;
+    try {
+      userResponse = await authApiClient.get<User>('/users/me', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+    } catch (error: any) {
+      console.error('[getMe] Failed to get /users/me:', error);
+      throw error;
+    }
+    
+    const basicUser = userResponse.data;
+    const userId = basicUser.documentId || basicUser.id;
+    
+    if (!userId) {
+      console.warn('[getMe] No user ID found, returning basic user');
+      return basicUser;
+    }
+    
+    // Now fetch full user data with populate using the user ID via strapiApi
+    try {
+      const { strapiApi } = await import('./strapi');
+      const fullUserResponse = await strapiApi.get<{ data: User }>(`/users/${userId}?populate=*`);
+      const fullUser = fullUserResponse.data.data || fullUserResponse.data;
+      console.log('[getMe] Full user data fetched via strapiApi:', fullUser);
+      
+      // Transform role if needed
+      if (fullUser && typeof fullUser.role === 'object' && fullUser.role !== null) {
+        const roleType = (fullUser.role as any).type;
+        const roleName = (fullUser.role as any).name?.toLowerCase() || '';
+        const roleId = (fullUser.role as any).id;
+        
+        if (roleName.includes('admin') || roleType === 'admin' || roleId === 1 || roleId === '1') {
+          (fullUser as any).role = 'admin';
+        } else if (roleName.includes('foovallalkozo') || roleName.includes('fővállalkozó')) {
+          (fullUser as any).role = 'foovallalkozo';
+        } else if (roleName.includes('alvallalkozo') || roleName.includes('alvállalkozó')) {
+          (fullUser as any).role = 'alvallalkozo';
+        } else if (roleName.includes('manager')) {
+          (fullUser as any).role = 'manager';
+        } else if (roleName.includes('worker')) {
+          (fullUser as any).role = 'worker';
+        }
+      }
+      
+      return fullUser;
+    } catch (error: any) {
+      console.warn('[getMe] Failed to fetch user with populate via strapiApi, using basic user:', error);
+      // Return basic user if populate fails
+      return basicUser;
+    }
+  },
+  
+  // Keep the old getMe implementation as fallback but simplified
+  _getMeOld: async (token: string): Promise<User> => {
+    // Strapi v5 /users/me endpoint - try different populate formats
     let response;
     try {
+      // Try with populate=* first (most compatible)
       response = await authApiClient.get<User>('/users/me?populate=*', {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
     } catch (error: any) {
-      // If populate=* fails, try without populate and fetch separately
-      console.warn('[getMe] populate=* failed, trying without populate:', error);
-      response = await authApiClient.get<User>('/users/me', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      try {
+        // Try without populate
+        response = await authApiClient.get<User>('/users/me', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+      } catch (error2: any) {
+        console.error('[getMe] Both requests failed:', error, error2);
+        throw error2 || error;
+      }
     }
     
     // Transform role to our format if needed
