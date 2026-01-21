@@ -399,19 +399,30 @@ export default function ProjectDetailPage() {
       if (newStatus === 'approved') {
         updateData.approved_at = new Date().toISOString();
         // Strapi relation mezőket ID-val vagy documentId-val frissítjük
-        updateData.approved_by = user?.id || user?.documentId;
-        // Jóváhagyás után töröljük a revision jegyzetet
-        updateData.revision_notes = null;
-        updateData.sent_back_at = null;
-        updateData.sent_back_by = null;
+        // Strapi v5-ben a relation mezőket documentId-val kell küldeni, ha van
+        if (user?.documentId) {
+          updateData.approved_by = user.documentId;
+        } else if (user?.id) {
+          updateData.approved_by = user.id;
+        }
+        // Jóváhagyás után ne küldjük el a revision mezőket (így a Strapi megtartja az eredeti értékeket)
+        // Ha törölni akarjuk, akkor üres stringet vagy null-t kellene küldeni, de az nem működik
+        // Ezért egyszerűen nem küldjük el őket
       } else if (newStatus === 'completed') {
         updateData.completed_at = new Date().toISOString();
       }
 
       // Szűrjük ki a szerveren még nem létező mezőket (audit_log-ot egyelőre csak akkor küldjük, ha tudjuk, hogy van)
+      // És ne küldjük el null értékeket
       const fieldsNotOnServer = ['audit_log'];
       const cleanUpdateData = Object.fromEntries(
-        Object.entries(updateData).filter(([key]) => !fieldsNotOnServer.includes(key))
+        Object.entries(updateData).filter(([key, value]) => {
+          // Ne küldjük el a szerveren még nem létező mezőket
+          if (fieldsNotOnServer.includes(key)) return false;
+          // Ne küldjük el null értékeket (Strapi nem szereti)
+          if (value === null) return false;
+          return true;
+        })
       );
 
       await projectsApi.update(projectId, cleanUpdateData);
@@ -421,7 +432,15 @@ export default function ProjectDetailPage() {
       
       // Sikeres státusz módosítás - nincs felugró ablak
     } catch (error: any) {
-      // Hiba esetén csak console-ba írunk, nincs felugró ablak
+      // Hiba esetén logoljuk a részleteket
+      console.error('Hiba a státusz módosítása során:', error);
+      console.error('Update data:', cleanUpdateData);
+      if (error.response) {
+        console.error('Strapi API Error Response:', error.response.data);
+      }
+      // Hibaüzenet megjelenítése a felhasználónak
+      const errorMessage = error.message || 'Hiba történt a státusz módosítása során.';
+      alert(errorMessage);
     } finally {
       setIsUpdatingStatus(false);
     }
@@ -445,14 +464,24 @@ export default function ProjectDetailPage() {
         status: 'sent_back_for_revision',
         revision_notes: revisionNotes.trim(),
         sent_back_at: new Date().toISOString(),
-        sent_back_by: user?.id || user?.documentId,
         audit_log: addAuditLogEntry(project.audit_log, auditLogEntry),
       };
 
-      // Szűrjük ki a szerveren még nem létező mezőket
+      // Relation mezőket csak akkor küldjük el, ha van értékük
+      if (user?.documentId || user?.id) {
+        updateData.sent_back_by = user?.documentId || user?.id;
+      }
+
+      // Szűrjük ki a szerveren még nem létező mezőket és null értékeket
       const fieldsNotOnServer = ['audit_log'];
       const cleanUpdateData = Object.fromEntries(
-        Object.entries(updateData).filter(([key]) => !fieldsNotOnServer.includes(key))
+        Object.entries(updateData).filter(([key, value]) => {
+          // Ne küldjük el a szerveren még nem létező mezőket
+          if (fieldsNotOnServer.includes(key)) return false;
+          // Ne küldjük el null értékeket
+          if (value === null) return false;
+          return true;
+        })
       );
 
       await projectsApi.update(projectId, cleanUpdateData);
