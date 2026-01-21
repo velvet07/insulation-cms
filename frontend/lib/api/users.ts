@@ -1,16 +1,38 @@
-import axios from 'axios';
+import axios, { InternalAxiosRequestConfig } from 'axios';
 import type { User } from '@/types';
 import { companiesApi } from './companies';
 
 const strapiUrl = process.env.NEXT_PUBLIC_STRAPI_URL || 'https://cms.emermedia.eu';
-const apiToken = process.env.NEXT_PUBLIC_STRAPI_API_TOKEN;
 
+// Users-Permissions plugin requires JWT token (authenticated user) instead of API token
+// Create a separate axios instance that uses JWT token from localStorage
 const strapiApi = axios.create({
   baseURL: `${strapiUrl}/api`,
   headers: {
-    'Authorization': `Bearer ${apiToken}`,
     'Content-Type': 'application/json',
   },
+});
+
+// Add request interceptor to use JWT token
+strapiApi.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  if (typeof window !== 'undefined') {
+    try {
+      const authStorage = localStorage.getItem('auth-storage');
+      if (authStorage) {
+        const authData = JSON.parse(authStorage);
+        const jwtToken = authData?.state?.token;
+        if (jwtToken) {
+          config.headers.Authorization = `Bearer ${jwtToken}`;
+          console.log('[usersApi] Using JWT token for request:', config.url);
+        } else {
+          console.warn('[usersApi] No JWT token available for request:', config.url);
+        }
+      }
+    } catch (error) {
+      console.error('[usersApi] Error reading JWT token:', error);
+    }
+  }
+  return config;
 });
 
 export const usersApi = {
