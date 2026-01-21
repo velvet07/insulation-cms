@@ -89,22 +89,37 @@ export const usersApi = {
       if (data.blocked !== undefined) cleanData.blocked = data.blocked;
       
       // Handle relation fields: send only ID or null
+      // For role: Strapi users-permissions role is a relation, send as number ID
       if (data.role !== undefined) {
-        if (data.role === null || data.role === undefined) {
-          // Don't send if null/undefined
+        if (data.role === null || data.role === '') {
+          // Don't send if null/empty
         } else {
-          cleanData.role = data.role;
+          // Ensure role is a number
+          cleanData.role = typeof data.role === 'string' ? parseInt(data.role) : data.role;
         }
       }
       
+      // For company: Strapi relation field, send documentId (string) or numeric ID
       if (data.company !== undefined) {
         if (data.company === null || data.company === '') {
           cleanData.company = null; // Explicitly set to null to clear relation
         } else {
-          // Convert to string or number as needed
-          cleanData.company = typeof data.company === 'string' 
-            ? (data.company.includes('-') ? data.company : parseInt(data.company))
-            : data.company;
+          // Strapi v5 uses documentId (string UUID) for relations
+          // If it's already a string with dashes, use it as-is
+          // Otherwise try to convert to number (if it's a numeric string)
+          if (typeof data.company === 'string') {
+            if (data.company.includes('-')) {
+              // It's a documentId (UUID format)
+              cleanData.company = data.company;
+            } else {
+              // Try to parse as number, but keep as string if it's a documentId
+              // For company relations, we typically use documentId
+              cleanData.company = data.company;
+            }
+          } else {
+            // It's already a number
+            cleanData.company = data.company;
+          }
         }
       }
 

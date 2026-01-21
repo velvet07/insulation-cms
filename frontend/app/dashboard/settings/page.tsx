@@ -642,8 +642,9 @@ export default function SettingsPage() {
     const companyId = selectedUserCompany && selectedUserCompany.trim() ? selectedUserCompany.trim() : null;
     updateData.company = companyId;
 
-    // Update role
-    if (userRole !== undefined) {
+    // Update role - only if explicitly set (don't send undefined)
+    // Note: Role can be a number (ID) or undefined (to keep current role)
+    if (userRole !== undefined && userRole !== null) {
       updateData.role = userRole;
     }
 
