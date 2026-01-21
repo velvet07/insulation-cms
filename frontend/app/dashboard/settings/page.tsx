@@ -491,8 +491,8 @@ export default function SettingsPage() {
   
   const canManageCompanies = isAdmin || isMainContractor;
   
-  // Subcontractors cannot access settings page
-  if (isSubContractor) {
+  // Subcontractors cannot access settings page (except admins)
+  if (isSubContractor && !isAdmin) {
     return (
       <ProtectedRoute>
         <DashboardLayout>

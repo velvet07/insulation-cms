@@ -71,21 +71,15 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   // Check if user is subcontractor - same way as in projects page
   const getUserCompany = () => {
-    if (!user?.company) {
-      console.log('[DashboardLayout] No company found for user:', user);
-      return null;
-    }
+    if (!user?.company) return null;
     if (typeof user.company === 'object' && 'type' in user.company) {
-      console.log('[DashboardLayout] Company found:', user.company);
       return user.company as Company;
     }
-    console.log('[DashboardLayout] Company is not an object with type:', typeof user.company, user.company);
     return null;
   };
 
   const userCompany = getUserCompany();
   const isSubContractor = userCompany?.type === 'subcontractor';
-  console.log('[DashboardLayout] isSubContractor:', isSubContractor, 'userCompany:', userCompany);
 
   const handleLogout = () => {
     clearAuth();
@@ -129,8 +123,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               const Icon = item.icon;
               const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
               
-              // Hide Documents, Settings, and Materials from subcontractors
-              if (isSubContractor && (item.href === '/dashboard/documents' || item.href === '/dashboard/settings' || item.href === '/dashboard/materials')) {
+              // Hide Documents and Settings from subcontractors (materials should be visible)
+              if (isSubContractor && (item.href === '/dashboard/documents' || item.href === '/dashboard/settings')) {
                 return null;
               }
               
