@@ -293,9 +293,15 @@ export default function SettingsPage() {
       }
       
       setEditingCompany(companyId);
+      const companyType = company.type;
+      // Main contractor can only edit subcontractors, so if editing, keep it as subcontractor
+      const allowedType = (isMainContractor && !isAdmin && companyType === 'main_contractor') 
+        ? 'subcontractor' 
+        : companyType;
+      
       form.reset({
         name: company.name,
-        type: company.type,
+        type: allowedType as 'main_contractor' | 'subcontractor',
         tax_number: company.tax_number || '',
         address: company.address || '',
         parent_company: company.parent_company 
