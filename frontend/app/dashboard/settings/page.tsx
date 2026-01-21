@@ -1016,12 +1016,15 @@ export default function SettingsPage() {
                       </div>
                       <div>
                         <Label htmlFor="user-company">Cég</Label>
-                          <Select value={selectedUserCompany} onValueChange={setSelectedUserCompany}>
+                          <Select 
+                            value={selectedUserCompany || 'none'} 
+                            onValueChange={(value) => setSelectedUserCompany(value === 'none' ? '' : value)}
+                          >
                           <SelectTrigger>
                             <SelectValue placeholder="Válassz céget (opcionális)" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="">Nincs cég hozzárendelve</SelectItem>
+                            <SelectItem value="none">Nincs cég hozzárendelve</SelectItem>
                             {getAvailableCompaniesForUserAssignment.map((company: Company) => {
                               const companyId = company.documentId || company.id?.toString() || '';
                               return (
@@ -1036,14 +1039,14 @@ export default function SettingsPage() {
                       <div>
                         <Label htmlFor="user-role">Szerepkör (opcionális)</Label>
                         <Select 
-                          value={userRole?.toString() || ''} 
-                          onValueChange={(value) => setUserRole(value ? parseInt(value) : undefined)}
+                          value={userRole?.toString() || 'none'} 
+                          onValueChange={(value) => setUserRole(value === 'none' ? undefined : parseInt(value))}
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="Válassz szerepkört (opcionális)" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="">Nincs szerepkör (alapértelmezett)</SelectItem>
+                            <SelectItem value="none">Nincs szerepkör (alapértelmezett)</SelectItem>
                             {roles.map((role: any) => (
                               <SelectItem key={role.id} value={role.id.toString()}>
                                 {role.name} {role.type && `(${role.type})`}
