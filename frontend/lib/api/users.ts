@@ -123,6 +123,7 @@ export const usersApi = {
         }
       }
 
+      console.log('[usersApi.update] Sending clean data:', JSON.stringify(cleanData, null, 2));
       const response = await strapiApi.put(`/users/${id}`, { data: cleanData });
       
       if (!response || !response.data) {
@@ -132,16 +133,35 @@ export const usersApi = {
       return response.data;
     } catch (error: any) {
       console.error('[usersApi.update] Error:', error);
+      console.error('[usersApi.update] Error status:', error.response?.status);
       console.error('[usersApi.update] Error response:', error.response?.data);
-      console.error('[usersApi.update] Update data:', data);
+      console.error('[usersApi.update] Error response (full):', JSON.stringify(error.response?.data, null, 2));
+      console.error('[usersApi.update] Update data sent:', data);
+      console.error('[usersApi.update] Clean data that was sent:', cleanData);
       
       let errorMessage = 'Hiba történt a felhasználó frissítése során';
-      if (error.response?.data?.error?.message) {
-        errorMessage = error.response.data.error.message;
+      
+      // Try to get detailed error message
+      if (error.response?.data?.error) {
+        const strapiError = error.response.data.error;
+        if (strapiError.message) {
+          errorMessage = `Strapi hiba: ${strapiError.message}`;
+        }
+        if (strapiError.details) {
+          console.error('[usersApi.update] Strapi error details:', strapiError.details);
+          if (typeof strapiError.details === 'object') {
+            errorMessage += '\n' + JSON.stringify(strapiError.details, null, 2);
+          }
+        }
       } else if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
+        errorMessage = `Strapi hiba: ${error.response.data.message}`;
       } else if (error.message) {
         errorMessage = error.message;
+      }
+      
+      // If 500 error, it might be a server-side issue
+      if (error.response?.status === 500) {
+        errorMessage += '\n\n500-as hiba: A Strapi szerveren belső hiba történt. Lehet, hogy a relation mezők (role, company) módosítása nincs jogosultsághoz kötve, vagy rossz formátumú adatokat küldünk.';
       }
       
       throw new Error(errorMessage);
