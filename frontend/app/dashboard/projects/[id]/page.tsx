@@ -826,7 +826,7 @@ export default function ProjectDetailPage() {
                   onClick={() => handleStatusChange('ready_for_review')}
                   disabled={isUpdatingStatus}
                 >
-                  Ismét jóváhagyásra küldés
+                  Jóváhagyásra küldés
                 </Button>
               )}
               {project.status === 'approved' && (

@@ -399,8 +399,10 @@ export default function EditProjectPage() {
                             <SelectItem value="pending">Függőben</SelectItem>
                             <SelectItem value="in_progress">Folyamatban</SelectItem>
                             <SelectItem value="ready_for_review">Átnézésre vár</SelectItem>
+                            <SelectItem value="sent_back_for_revision">Visszaküldve javításra</SelectItem>
                             <SelectItem value="approved">Jóváhagyva</SelectItem>
                             <SelectItem value="completed">Befejezve</SelectItem>
+                            <SelectItem value="archived">Archivált</SelectItem>
                           </SelectContent>
                         </Select>
                         <FormDescription>
