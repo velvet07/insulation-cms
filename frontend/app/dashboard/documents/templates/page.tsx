@@ -6,6 +6,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ProtectedRoute } from '@/components/auth/protected-route';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { useAuthStore } from '@/lib/store/auth';
+import { isAdminRole, isSubcontractor } from '@/lib/utils/user-role';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -66,9 +69,30 @@ type TemplateFormValues = z.infer<typeof templateSchema>;
 export default function TemplatesPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const user = useAuthStore((state) => state.user);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  
+  // Only allow main contractors and admins
+  const isSubContractor = isSubcontractor(user);
+  
+  if (isSubContractor) {
+    return (
+      <ProtectedRoute>
+        <DashboardLayout>
+          <div className="p-6">
+            <Card>
+              <CardContent className="py-8 text-center">
+                <p className="text-gray-500">Nincs jogosultságod az oldal megtekintéséhez.</p>
+                <p className="text-sm text-gray-400 mt-2">Csak fővállalkozók és adminok érhetik el ezt az oldalt.</p>
+              </CardContent>
+            </Card>
+          </div>
+        </DashboardLayout>
+      </ProtectedRoute>
+    );
+  }
 
   const { data: templates = [], isLoading } = useQuery({
     queryKey: ['templates'],

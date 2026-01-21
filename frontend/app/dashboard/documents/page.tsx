@@ -6,9 +6,32 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { FileText, FileEdit, ArrowRight } from 'lucide-react';
+import { useAuthStore } from '@/lib/store/auth';
+import { isAdminRole, isSubcontractor, isMainContractor } from '@/lib/utils/user-role';
 
 export default function DocumentsPage() {
   const router = useRouter();
+  const user = useAuthStore((state) => state.user);
+  
+  // Only allow main contractors and admins
+  const isSubContractor = isSubcontractor(user);
+  
+  if (isSubContractor) {
+    return (
+      <ProtectedRoute>
+        <DashboardLayout>
+          <div className="p-6">
+            <Card>
+              <CardContent className="py-8 text-center">
+                <p className="text-gray-500">Nincs jogosultságod az oldal megtekintéséhez.</p>
+                <p className="text-sm text-gray-400 mt-2">Csak fővállalkozók és adminok érhetik el ezt az oldalt.</p>
+              </CardContent>
+            </Card>
+          </div>
+        </DashboardLayout>
+      </ProtectedRoute>
+    );
+  }
 
   return (
     <ProtectedRoute>
