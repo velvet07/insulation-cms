@@ -83,6 +83,7 @@ const statusLabels: Record<Project['status'], string> = {
   ready_for_review: 'Átnézésre vár',
   approved: 'Jóváhagyva',
   completed: 'Befejezve',
+  archived: 'Archivált',
 };
 
 const statusColors: Record<Project['status'], string> = {
@@ -91,6 +92,7 @@ const statusColors: Record<Project['status'], string> = {
   ready_for_review: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
   approved: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
   completed: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400',
+  archived: 'bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-400',
 };
 
 export default function ProjectDetailPage() {

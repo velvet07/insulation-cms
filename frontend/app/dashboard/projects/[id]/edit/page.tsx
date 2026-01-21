@@ -43,7 +43,7 @@ const projectSchema = z.object({
   client_zip: z.string().min(1, 'Az irányítószám kötelező'),
   client_phone: z.string().optional(),
   client_email: z.string().email('Érvényes email cím szükséges').optional().or(z.literal('')),
-  status: z.enum(['pending', 'in_progress', 'ready_for_review', 'approved', 'completed']),
+  status: z.enum(['pending', 'in_progress', 'ready_for_review', 'approved', 'completed', 'archived']),
   subcontractor: z.string().optional(),
 });
 

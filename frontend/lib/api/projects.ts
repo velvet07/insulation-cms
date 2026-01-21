@@ -3,6 +3,7 @@ import type { Project, StrapiResponse } from '@/types';
 
 export interface ProjectFilters {
   status?: Project['status'];
+  status_not?: Project['status']; // Exclude specific status
   assigned_to?: number | string; // Support both numeric id and documentId (Strapi v5)
   tenant?: number;
   company?: number | string;
@@ -16,6 +17,9 @@ export const projectsApi = {
     
     if (filters?.status) {
       params.append('filters[status][$eq]', filters.status);
+    }
+    if (filters?.status_not) {
+      params.append('filters[status][$ne]', filters.status_not);
     }
     if (filters?.assigned_to) {
       // Strapi v5 uses documentId, try both id and documentId

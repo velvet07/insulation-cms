@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/lib/store/auth';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { isAdminRole } from '@/lib/utils/user-role';
 import {
   LayoutDashboard,
   FolderKanban,
@@ -15,6 +16,7 @@ import {
   LogOut,
   Menu,
   X,
+  FileCheck,
 } from 'lucide-react';
 
 interface NavItem {
@@ -126,6 +128,23 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 </Button>
               );
             })}
+            {/* Approved Projects - Only for main contractors and admins */}
+            {(user?.role === 'foovallalkozo' || isAdminRole(user)) && (
+              <Button
+                variant={pathname === '/dashboard/approved-projects' ? 'secondary' : 'ghost'}
+                className={cn(
+                  'w-full justify-start',
+                  pathname === '/dashboard/approved-projects' && 'bg-gray-100 dark:bg-gray-700'
+                )}
+                onClick={() => {
+                  router.push('/dashboard/approved-projects');
+                  setSidebarOpen(false);
+                }}
+              >
+                <FileCheck className="mr-2 h-5 w-5" />
+                Jóváhagyott projektek
+              </Button>
+            )}
           </nav>
 
           {/* User info and logout */}
