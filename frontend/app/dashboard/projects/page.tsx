@@ -68,39 +68,20 @@ export default function ProjectsPage() {
 
   // If user is not admin (or role is undefined), filter by company or assigned_to
   if (!isAdminRole(user)) {
-    // First try to filter by company (higher priority)
     if (user?.company) {
-      const getUserCompanyId = () => {
-        if (typeof user.company === 'object' && user.company !== null) {
-          // If user is subcontractor, show projects from their parent company (main contractor)
-          // and projects assigned to their subcontractor company
-          if ('type' in user.company && user.company.type === 'subcontractor') {
-            // For subcontractor: show projects where company = parent_company OR subcontractor = user.company
-            // This is complex, so for now we'll filter by parent company
-            const parentCompany = (user.company as any).parent_company;
-            if (parentCompany) {
-              return parentCompany.documentId || parentCompany.id;
-            }
-          } else {
-            // For main contractor: show projects where company = user.company
-            return (user.company as any).documentId || (user.company as any).id;
-          }
-        }
-        return null;
-      };
+      const company = user.company as any;
+      const companyId = company.documentId || company.id;
 
-      const companyId = getUserCompanyId();
-      if (companyId) {
-        // If company ID is a string (documentId), use as-is
-        // If it's a number, use as-is
+      if (company.type === 'subcontractor') {
+        // For subcontractor: show only projects where they are the assigned subcontractor
+        filters.subcontractor = companyId;
+      } else {
+        // For main contractor: show projects where they are the main company
         filters.company = companyId;
       }
-    } else if (user?.id || user?.documentId) {
+    } else if (user?.id) {
       // If user has no company, show only projects assigned to this user
-      const userId = user.documentId || user.id;
-      if (userId) {
-        filters.assigned_to = userId;
-      }
+      filters.assigned_to = user.id;
     }
   }
 
@@ -113,7 +94,7 @@ export default function ProjectsPage() {
   // This prevents data leak - only show companies that have projects
   const uniqueOwners = useMemo(() => {
     const ownerMap = new Map<string, Company>();
-    
+
     allProjects.forEach((project) => {
       // Owner is subcontractor if exists, otherwise company
       const owner = project.subcontractor || project.company;
@@ -127,9 +108,9 @@ export default function ProjectsPage() {
         }
       }
     });
-    
+
     // Convert to array and sort by name
-    return Array.from(ownerMap.values()).sort((a, b) => 
+    return Array.from(ownerMap.values()).sort((a, b) =>
       (a.name || '').localeCompare(b.name || '')
     );
   }, [allProjects]);
@@ -139,13 +120,13 @@ export default function ProjectsPage() {
   const projects = ownerFilter === 'all'
     ? allProjects
     : allProjects.filter((project) => {
-        // Owner is subcontractor if exists, otherwise company
-        const ownerId = project.subcontractor?.documentId || project.subcontractor?.id || 
-                       project.company?.documentId || project.company?.id;
-        const filterId = ownerFilter;
-        // Compare both documentId and id formats (convert to string for comparison)
-        return ownerId?.toString() === filterId;
-      });
+      // Owner is subcontractor if exists, otherwise company
+      const ownerId = project.subcontractor?.documentId || project.subcontractor?.id ||
+        project.company?.documentId || project.company?.id;
+      const filterId = ownerFilter;
+      // Compare both documentId and id formats (convert to string for comparison)
+      return ownerId?.toString() === filterId;
+    });
 
   const handleView = (project: Project) => {
     // Use documentId if available (Strapi v5), otherwise use id

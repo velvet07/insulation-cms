@@ -120,9 +120,26 @@ export default function SettingsPage() {
   const isMainContractor = userCompany?.type === 'main_contractor';
 
   const { data: companies = [], isLoading } = useQuery({
-    queryKey: ['companies'],
-    queryFn: () => companiesApi.getAll(),
-    enabled: isAdmin,
+    queryKey: ['companies', user?.id],
+    queryFn: async () => {
+      if (isAdmin) {
+        return await companiesApi.getAll();
+      } else if (isMainContractor && userCompany) {
+        const ownId = userCompany.id;
+        // Fetch own company and subcontractors
+        const [own, subs] = await Promise.all([
+          companiesApi.getOne(userCompany.documentId || userCompany.id),
+          companiesApi.getAll({ parent_company: ownId })
+        ]);
+        return [own, ...subs];
+      } else if (userCompany) {
+        // Subcontractor only sees own company
+        const own = await companiesApi.getOne(userCompany.documentId || userCompany.id);
+        return [own];
+      }
+      return [];
+    },
+    enabled: !!user,
   });
 
   const { data: mainContractors = [] } = useQuery({
@@ -145,11 +162,48 @@ export default function SettingsPage() {
     enabled: isAdmin,
   });
 
-  // Fetch users
+  // Fetch users with isolation
   const { data: users = [], isLoading: isLoadingUsers } = useQuery({
-    queryKey: ['users'],
-    queryFn: () => usersApi.getAll(),
-    enabled: isAdmin || isMainContractor || !isSubContractor,
+    queryKey: ['users', user?.id, companies.length],
+    queryFn: async () => {
+      if (isAdmin) {
+        return await usersApi.getAll();
+      }
+
+      if (!userCompany) return [];
+
+      const ownCompanyId = userCompany.id;
+
+      if (isMainContractor) {
+        // Main contractor sees:
+        // 1. Users in own company
+        // 2. Users in subcontractor companies
+        // 3. Unassigned users
+        const companyIds = [ownCompanyId, ...companies.map(c => c.id)].filter((id, index, self) => self.indexOf(id) === index);
+
+        const [companyUsers, unassignedUsers] = await Promise.all([
+          usersApi.getAll({ company: companyIds }),
+          usersApi.getAll({ company: 'null' })
+        ]);
+
+        const allUsers = [...companyUsers, ...unassignedUsers];
+        const uniqueUsers = Array.from(new Map(allUsers.map(u => [u.id, u])).values());
+        return uniqueUsers;
+      } else {
+        // Subcontractor sees:
+        // 1. Users in own company
+        // 2. Unassigned users
+        const [ownUsers, unassignedUsers] = await Promise.all([
+          usersApi.getAll({ company: ownCompanyId }),
+          usersApi.getAll({ company: 'null' })
+        ]);
+
+        const allUsers = [...ownUsers, ...unassignedUsers];
+        const uniqueUsers = Array.from(new Map(allUsers.map(u => [u.id, u])).values());
+        return uniqueUsers;
+      }
+    },
+    enabled: !!user && (isAdmin || !!userCompany),
   });
 
   // Fetch roles for user creation
@@ -220,7 +274,11 @@ export default function SettingsPage() {
         tax_number: data.tax_number || undefined,
         address: data.address || undefined,
       };
-      if (data.parent_company) {
+
+      // If main contractor is creating a subcontractor, automatically set parent_company
+      if (isMainContractor && !isAdmin && userCompany) {
+        submitData.parent_company = userCompany.documentId || userCompany.id;
+      } else if (data.parent_company) {
         submitData.parent_company = data.parent_company;
       }
       return companiesApi.create(submitData);
@@ -902,8 +960,8 @@ export default function SettingsPage() {
                       <TableCell className="font-medium">{company.name}</TableCell>
                       <TableCell>
                         <span className={`px-2 py-1 rounded text-xs ${company.type === 'main_contractor'
-                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
-                            : 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
+                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+                          : 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
                           }`}>
                           {companyTypeLabels[company.type]}
                         </span>

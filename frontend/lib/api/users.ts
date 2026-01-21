@@ -18,9 +18,28 @@ const strapiApi = axios.create({
 console.log('[usersApi] Initialized with API token for user management');
 
 export const usersApi = {
-  // Get all users
-  getAll: async (): Promise<User[]> => {
-    const response = await strapiApi.get('/users?populate=*');
+  // Get all users with optional filtering
+  getAll: async (filters?: { company?: number | string | (number | string)[] | 'null'; role?: number | string }): Promise<User[]> => {
+    const params = new URLSearchParams();
+    params.append('populate', '*');
+
+    if (filters?.company) {
+      if (filters.company === 'null') {
+        params.append('filters[company][id][$null]', 'true');
+      } else if (Array.isArray(filters.company)) {
+        filters.company.forEach((id, index) => {
+          params.append(`filters[company][id][$in][${index}]`, id.toString());
+        });
+      } else {
+        params.append('filters[company][id][$eq]', filters.company.toString());
+      }
+    }
+
+    if (filters?.role) {
+      params.append('filters[role][id][$eq]', filters.role.toString());
+    }
+
+    const response = await strapiApi.get(`/users?${params.toString()}`);
     return response.data || [];
   },
 

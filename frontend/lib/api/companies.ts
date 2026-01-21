@@ -10,20 +10,24 @@ export interface CompanyFilters {
 export const companiesApi = {
   getAll: async (filters?: CompanyFilters) => {
     const params = new URLSearchParams();
-    
+
     if (filters?.type) {
       params.append('filters[type][$eq]', filters.type);
     }
     if (filters?.parent_company) {
-      params.append('filters[parent_company][id][$eq]', filters.parent_company.toString());
+      if (filters.parent_company === 'null' as any) {
+        params.append('filters[parent_company][id][$null]', 'true');
+      } else {
+        params.append('filters[parent_company][id][$eq]', filters.parent_company.toString());
+      }
     }
     if (filters?.search) {
       params.append('filters[name][$contains]', filters.search);
     }
-    
+
     params.append('populate', '*');
     params.append('sort', 'name:asc');
-    
+
     try {
       const response = await strapiApi.get<StrapiResponse<Company[]>>(`/companies?${params.toString()}`);
       if (response.data && Array.isArray(response.data.data)) {
@@ -58,9 +62,9 @@ export const companiesApi = {
     } catch (error: any) {
       if (error.response) {
         console.error('Strapi API Error:', error.response.data);
-        const errorMessage = error.response.data?.error?.message || 
-                           JSON.stringify(error.response.data) || 
-                           'Hiba történt a cég létrehozása során';
+        const errorMessage = error.response.data?.error?.message ||
+          JSON.stringify(error.response.data) ||
+          'Hiba történt a cég létrehozása során';
         throw new Error(errorMessage);
       }
       throw error;
@@ -72,15 +76,15 @@ export const companiesApi = {
       const cleanData = Object.fromEntries(
         Object.entries(data).filter(([_, value]) => value !== undefined)
       );
-      
+
       const response = await strapiApi.put<StrapiResponse<Company>>(`/companies/${id}`, { data: cleanData });
       return unwrapStrapiResponse(response);
     } catch (error: any) {
       if (error.response) {
         console.error('Strapi API Error:', error.response.data);
-        const errorMessage = error.response.data?.error?.message || 
-                           JSON.stringify(error.response.data) || 
-                           'Hiba történt a cég frissítése során';
+        const errorMessage = error.response.data?.error?.message ||
+          JSON.stringify(error.response.data) ||
+          'Hiba történt a cég frissítése során';
         throw new Error(errorMessage);
       }
       throw error;
@@ -93,8 +97,8 @@ export const companiesApi = {
     } catch (error: any) {
       if (error.response) {
         console.error('Strapi API Error:', error.response.data);
-        const errorMessage = error.response.data?.error?.message || 
-                           'Hiba történt a cég törlése során';
+        const errorMessage = error.response.data?.error?.message ||
+          'Hiba történt a cég törlése során';
         throw new Error(errorMessage);
       }
       throw error;

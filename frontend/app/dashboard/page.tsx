@@ -8,14 +8,36 @@ import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { projectsApi } from '@/lib/api/projects';
 import type { Project } from '@/types';
+import { useAuthStore } from '@/lib/store/auth';
+import { isAdminRole } from '@/lib/utils/user-role';
 import { Plus, Eye } from 'lucide-react';
 
 export default function DashboardPage() {
   const router = useRouter();
 
+  const user = useAuthStore((state) => state.user);
+  const isAdmin = isAdminRole(user);
+
+  // Build filters for data isolation
+  const filters: any = {};
+  if (!isAdmin) {
+    if (user?.company) {
+      const company = user.company as any;
+      const companyId = company.documentId || company.id;
+
+      if (company.type === 'subcontractor') {
+        filters.subcontractor = companyId;
+      } else {
+        filters.company = companyId;
+      }
+    } else if (user?.id) {
+      filters.assigned_to = user.id;
+    }
+  }
+
   const { data: projects = [], isLoading } = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => projectsApi.getAll(),
+    queryKey: ['projects', filters],
+    queryFn: () => projectsApi.getAll(filters),
   });
 
   // Számoljuk a projekteket státusz szerint
@@ -26,10 +48,10 @@ export default function DashboardPage() {
   const completedProjects = projects.filter(
     (p: Project) => p.status === 'completed'
   ).length;
-  
+
   // Legutóbbi projektek (max 5)
   const recentProjects = projects
-    .sort((a: Project, b: Project) => 
+    .sort((a: Project, b: Project) =>
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     )
     .slice(0, 5);
