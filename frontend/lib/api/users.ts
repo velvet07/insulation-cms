@@ -77,9 +77,10 @@ export const usersApi = {
     role?: number | string;
     company?: number | string | null;
   }): Promise<User> => {
+    const systemFields = ['id', 'documentId', 'createdAt', 'updatedAt', 'publishedAt'];
+    const cleanData: any = {};
+    
     try {
-      const systemFields = ['id', 'documentId', 'createdAt', 'updatedAt', 'publishedAt'];
-      const cleanData: any = {};
       
       // Handle simple fields
       if (data.username !== undefined) cleanData.username = data.username;
@@ -137,7 +138,6 @@ export const usersApi = {
       console.error('[usersApi.update] Error response:', error.response?.data);
       console.error('[usersApi.update] Error response (full):', JSON.stringify(error.response?.data, null, 2));
       console.error('[usersApi.update] Update data sent:', data);
-      console.error('[usersApi.update] Clean data that was sent:', cleanData);
       
       let errorMessage = 'Hiba történt a felhasználó frissítése során';
       
