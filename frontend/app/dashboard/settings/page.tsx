@@ -90,6 +90,24 @@ export default function SettingsPage() {
 
   // Memoize admin check to avoid recalculating on every render
   const isAdmin = useMemo(() => isAdminRole(user), [user]);
+  const isSubContractor = useMemo(() => {
+    if (!user) return false;
+    // Check by role
+    if (user.role && typeof user.role === 'string') {
+      const roleLower = user.role.toLowerCase();
+      if (roleLower === 'alvallalkozo' || roleLower.includes('subcontractor')) {
+        return true;
+      }
+    }
+    // Check by company type
+    if (user.company && typeof user.company === 'object') {
+      const companyType = (user.company as any).type;
+      if (companyType === 'subcontractor') {
+        return true;
+      }
+    }
+    return false;
+  }, [user]);
 
   const { data: companies = [], isLoading } = useQuery({
     queryKey: ['companies'],
@@ -444,7 +462,7 @@ export default function SettingsPage() {
     cm15: '15 cm',
   };
 
-  if (!isAdmin) {
+  if (!isAdmin || isSubContractor) {
     return (
       <ProtectedRoute>
         <DashboardLayout>
@@ -456,7 +474,7 @@ export default function SettingsPage() {
           </div>
           <Alert>
             <AlertDescription>
-              Nincs jogosultságod a beállítások megtekintéséhez. Csak admin felhasználók érhetik el ezt az oldalt.
+              Nincs jogosultságod a beállítások megtekintéséhez. Csak admin felhasználók és fővállalkozók érhetik el ezt az oldalt.
             </AlertDescription>
           </Alert>
         </DashboardLayout>
