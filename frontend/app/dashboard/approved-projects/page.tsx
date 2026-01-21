@@ -18,7 +18,7 @@ import {
 import { projectsApi } from '@/lib/api/projects';
 import { useAuthStore } from '@/lib/store/auth';
 import { isAdminRole } from '@/lib/utils/user-role';
-import type { Project, User } from '@/types';
+import type { Project } from '@/types';
 import { FileCheck, CheckCircle2, Loader2 } from 'lucide-react';
 
 export default function ApprovedProjectsPage() {
@@ -52,22 +52,49 @@ export default function ApprovedProjectsPage() {
     queryFn: () => projectsApi.getAll({ status: 'approved' }),
   });
 
-  // Group projects by subcontractor
-  const projectsBySubcontractor = useMemo(() => {
-    const grouped: Record<string, { subcontractor: User | null; projects: Project[] }> = {};
+  // Group projects by contractor, then by subcontractor
+  const projectsByContractor = useMemo(() => {
+    const grouped: Record<string, {
+      contractor: { id: string; name: string; } | null;
+      subcontractors: Record<string, {
+        subcontractor: { id: string; name: string; } | null;
+        projects: Project[];
+        totalArea: number;
+      }>;
+    }> = {};
     
     approvedProjects.forEach((project) => {
-      const subcontractor = project.assigned_to;
-      const key = subcontractor?.documentId || subcontractor?.id || 'no-subcontractor';
+      // Get contractor (main contractor company)
+      const contractor = project.company;
+      const contractorId = contractor?.documentId || contractor?.id || 'no-contractor';
+      const contractorName = contractor?.name || 'Nincs fővállalkozó';
       
-      if (!grouped[key]) {
-        grouped[key] = {
-          subcontractor: subcontractor || null,
-          projects: [],
+      // Get subcontractor
+      const subcontractor = project.subcontractor;
+      const subcontractorId = subcontractor?.documentId || subcontractor?.id || 'no-subcontractor';
+      const subcontractorName = subcontractor?.name || 'Nincs alvállalkozó';
+      
+      // Initialize contractor group if needed
+      if (!grouped[contractorId]) {
+        grouped[contractorId] = {
+          contractor: contractor ? { id: contractorId, name: contractorName } : null,
+          subcontractors: {},
         };
       }
       
-      grouped[key].projects.push(project);
+      // Initialize subcontractor group if needed
+      if (!grouped[contractorId].subcontractors[subcontractorId]) {
+        grouped[contractorId].subcontractors[subcontractorId] = {
+          subcontractor: subcontractor ? { id: subcontractorId, name: subcontractorName } : null,
+          projects: [],
+          totalArea: 0,
+        };
+      }
+      
+      // Add project to subcontractor group
+      const subcontractorGroup = grouped[contractorId].subcontractors[subcontractorId];
+      subcontractorGroup.projects.push(project);
+      subcontractorGroup.totalArea += project.area_sqm || 0;
     });
     
     return grouped;
@@ -190,7 +217,7 @@ export default function ApprovedProjectsPage() {
                 <p className="text-gray-500 mt-2">Betöltés...</p>
               </CardContent>
             </Card>
-          ) : Object.keys(projectsBySubcontractor).length === 0 ? (
+          ) : Object.keys(projectsByContractor).length === 0 ? (
             <Card>
               <CardContent className="py-8 text-center text-gray-500">
                 <CheckCircle2 className="mx-auto h-12 w-12 mb-2 text-gray-400" />
@@ -198,78 +225,89 @@ export default function ApprovedProjectsPage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="space-y-6">
-              {Object.entries(projectsBySubcontractor).map(([key, group]) => {
-                const allProjectIds = group.projects.map((p) => String(p.documentId || p.id));
-                const allSelected = allProjectIds.length > 0 && allProjectIds.every((id) => selectedProjects.has(id));
-                const someSelected = allProjectIds.some((id) => selectedProjects.has(id));
+            <div className="space-y-8">
+              {Object.entries(projectsByContractor).map(([contractorId, contractorGroup]) => (
+                <div key={contractorId} className="space-y-4">
+                  {/* Contractor header */}
+                  <div className="pb-2 border-b-2 border-gray-300 dark:border-gray-600">
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                      {contractorGroup.contractor?.name || 'Nincs fővállalkozó'}
+                    </h3>
+                  </div>
+                  
+                  {/* Subcontractor groups */}
+                  {Object.entries(contractorGroup.subcontractors).map(([subcontractorId, subcontractorGroup]) => {
+                    const allProjectIds = subcontractorGroup.projects.map((p) => String(p.documentId || p.id));
+                    const allSelected = allProjectIds.length > 0 && allProjectIds.every((id) => selectedProjects.has(id));
+                    const someSelected = allProjectIds.some((id) => selectedProjects.has(id));
 
-                return (
-                  <Card key={key}>
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <CardTitle>
-                          {group.subcontractor
-                            ? `${group.subcontractor.name || group.subcontractor.email} (${group.projects.length} projekt)`
-                            : `Nincs subcontractor (${group.projects.length} projekt)`}
-                        </CardTitle>
-                        <div className="flex items-center gap-2">
-                          <Checkbox
-                            checked={allSelected}
-                            onCheckedChange={() => handleSelectAll(allProjectIds)}
-                            ref={(el) => {
-                              if (el) {
-                                (el as any).indeterminate = someSelected && !allSelected;
-                              }
-                            }}
-                          />
-                          <span className="text-sm text-gray-600 dark:text-gray-400">
-                            Összes kijelölése
-                          </span>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="w-12"></TableHead>
-                            <TableHead>Ügyfél neve</TableHead>
-                            <TableHead>Cím</TableHead>
-                            <TableHead className="text-right">Terület (m²)</TableHead>
-                            <TableHead>Jóváhagyás dátuma</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {group.projects.map((project) => {
-                            const projectId = String(project.documentId || project.id);
-                            const isSelected = selectedProjects.has(projectId);
-
-                            return (
-                              <TableRow key={projectId}>
-                                <TableCell>
-                                  <Checkbox
-                                    checked={isSelected}
-                                    onCheckedChange={() => handleSelectProject(projectId)}
-                                  />
-                                </TableCell>
-                                <TableCell className="font-medium">
-                                  {project.client_name}
-                                </TableCell>
-                                <TableCell>{project.client_address}</TableCell>
-                                <TableCell className="text-right">
-                                  {project.area_sqm ? `${project.area_sqm} m²` : '-'}
-                                </TableCell>
-                                <TableCell>{formatDate(project.approved_at)}</TableCell>
+                    return (
+                      <Card key={subcontractorId}>
+                        <CardHeader>
+                          <div className="flex items-center justify-between">
+                            <CardTitle>
+                              {subcontractorGroup.subcontractor?.name || 'Nincs alvállalkozó'} 
+                              {' '}({subcontractorGroup.projects.length} projekt, összesen {subcontractorGroup.totalArea.toLocaleString('hu-HU')} m²)
+                            </CardTitle>
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                checked={allSelected}
+                                onCheckedChange={() => handleSelectAll(allProjectIds)}
+                                ref={(el) => {
+                                  if (el) {
+                                    (el as any).indeterminate = someSelected && !allSelected;
+                                  }
+                                }}
+                              />
+                              <span className="text-sm text-gray-600 dark:text-gray-400">
+                                Összes kijelölése
+                              </span>
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="w-12"></TableHead>
+                                <TableHead>Ügyfél neve</TableHead>
+                                <TableHead>Cím</TableHead>
+                                <TableHead className="text-right">Terület (m²)</TableHead>
+                                <TableHead>Jóváhagyás dátuma</TableHead>
                               </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+                            </TableHeader>
+                            <TableBody>
+                              {subcontractorGroup.projects.map((project) => {
+                                const projectId = String(project.documentId || project.id);
+                                const isSelected = selectedProjects.has(projectId);
+
+                                return (
+                                  <TableRow key={projectId}>
+                                    <TableCell>
+                                      <Checkbox
+                                        checked={isSelected}
+                                        onCheckedChange={() => handleSelectProject(projectId)}
+                                      />
+                                    </TableCell>
+                                    <TableCell className="font-medium">
+                                      {project.client_name}
+                                    </TableCell>
+                                    <TableCell>{project.client_address}</TableCell>
+                                    <TableCell className="text-right">
+                                      {project.area_sqm ? `${project.area_sqm} m²` : '-'}
+                                    </TableCell>
+                                    <TableCell>{formatDate(project.approved_at)}</TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              ))}
             </div>
           )}
         </div>
