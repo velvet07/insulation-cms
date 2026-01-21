@@ -76,7 +76,7 @@
     },
     "status": {
       "type": "enumeration",
-      "enum": ["pending", "in_progress", "ready_for_review", "approved", "completed"],
+      "enum": ["pending", "in_progress", "ready_for_review", "sent_back_for_revision", "approved", "completed", "archived"],
       "default": "pending"
     },
     "insulation_option": {
@@ -98,6 +98,17 @@
     },
     "approved_at": {
       "type": "datetime"
+    },
+    "revision_notes": {
+      "type": "text"
+    },
+    "sent_back_at": {
+      "type": "datetime"
+    },
+    "sent_back_by": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
     },
     "tenant": {
       "type": "relation",
