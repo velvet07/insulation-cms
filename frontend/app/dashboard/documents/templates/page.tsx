@@ -74,8 +74,27 @@ export default function TemplatesPage() {
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   
-  // Only allow main contractors and admins to create/edit/delete templates
+  // Only allow main contractors and admins
   const isSubContractor = isSubcontractor(user);
+  
+  if (isSubContractor) {
+    return (
+      <ProtectedRoute>
+        <DashboardLayout>
+          <div className="p-6">
+            <Card>
+              <CardContent className="py-8 text-center">
+                <p className="text-gray-500">Nincs jogosultságod az oldal megtekintéséhez.</p>
+                <p className="text-sm text-gray-400 mt-2">Csak fővállalkozók és adminok érhetik el ezt az oldalt.</p>
+              </CardContent>
+            </Card>
+          </div>
+        </DashboardLayout>
+      </ProtectedRoute>
+    );
+  }
+  
+  // Only allow main contractors and admins to create/edit/delete templates
   const isMainContractor = isMainContractor(user);
   const isAdmin = isAdminRole(user);
   const canManageTemplates = isMainContractor || isAdmin;

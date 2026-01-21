@@ -514,6 +514,27 @@ export default function SettingsPage() {
   }, [user]);
   
   const canManageCompanies = isAdmin || isMainContractor;
+  
+  // Subcontractors cannot access settings page
+  if (isSubContractor) {
+    return (
+      <ProtectedRoute>
+        <DashboardLayout>
+          <div className="mb-6">
+            <h2 className="text-3xl font-bold">Beállítások</h2>
+            <p className="text-gray-600 dark:text-gray-400 mt-1">
+              Kezelje a rendszer beállításait
+            </p>
+          </div>
+          <Alert>
+            <AlertDescription>
+              Nincs jogosultságod a beállítások megtekintéséhez. Csak admin felhasználók és fővállalkozók érhetik el ezt az oldalt.
+            </AlertDescription>
+          </Alert>
+        </DashboardLayout>
+      </ProtectedRoute>
+    );
+  }
 
   return (
     <ProtectedRoute>
