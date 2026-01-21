@@ -37,39 +37,46 @@ export const authApi = {
         loginResponse = response.data as LoginResponse;
       }
 
-      // Extract and transform role from login response
-      // The login response already contains the role, we just need to transform it
-      if (loginResponse.user && typeof loginResponse.user.role === 'object' && loginResponse.user.role !== null) {
-        const roleType = (loginResponse.user.role as any).type;
-        const roleName = (loginResponse.user.role as any).name?.toLowerCase() || '';
-        
-        // Transform role object to string
-        if (roleName.includes('admin') || roleType === 'admin') {
-          (loginResponse.user as any).role = 'admin';
-        } else if (roleName.includes('foovallalkozo') || roleName.includes('fővállalkozó')) {
-          (loginResponse.user as any).role = 'foovallalkozo';
-        } else if (roleName.includes('alvallalkozo') || roleName.includes('alvállalkozó')) {
-          (loginResponse.user as any).role = 'alvallalkozo';
-        } else if (roleName.includes('manager')) {
-          (loginResponse.user as any).role = 'manager';
-        } else if (roleName.includes('worker')) {
-          (loginResponse.user as any).role = 'worker';
+      // After login, always fetch full user data with role and company
+      try {
+        const fullUser = await authApi.getMe(loginResponse.jwt);
+        console.log('[authApi.login] Full user data fetched:', fullUser);
+        loginResponse.user = fullUser;
+      } catch (error) {
+        console.warn('[authApi.login] Failed to fetch full user data, using login response:', error);
+        // Fallback: try to transform role from login response if available
+        if (loginResponse.user && typeof loginResponse.user.role === 'object' && loginResponse.user.role !== null) {
+          const roleType = (loginResponse.user.role as any).type;
+          const roleName = (loginResponse.user.role as any).name?.toLowerCase() || '';
+          
+          // Transform role object to string
+          if (roleName.includes('admin') || roleType === 'admin') {
+            (loginResponse.user as any).role = 'admin';
+          } else if (roleName.includes('foovallalkozo') || roleName.includes('fővállalkozó')) {
+            (loginResponse.user as any).role = 'foovallalkozo';
+          } else if (roleName.includes('alvallalkozo') || roleName.includes('alvállalkozó')) {
+            (loginResponse.user as any).role = 'alvallalkozo';
+          } else if (roleName.includes('manager')) {
+            (loginResponse.user as any).role = 'manager';
+          } else if (roleName.includes('worker')) {
+            (loginResponse.user as any).role = 'worker';
+          }
         }
-      }
-      
-      // Try to populate company data if it's just an ID
-      if (loginResponse.user && loginResponse.user.company) {
-        // If company is just an ID, fetch the full company object
-        if (typeof loginResponse.user.company === 'string' || typeof loginResponse.user.company === 'number') {
-          try {
-            const companyId = loginResponse.user.company;
-            // Import companiesApi here to avoid circular dependency
-            const { companiesApi } = await import('./companies');
-            const company = await companiesApi.getOne(companyId);
-            (loginResponse.user as any).company = company;
-          } catch (error) {
-            console.warn('Failed to fetch company data after login:', error);
-            // Don't fail login if company fetch fails
+        
+        // Try to populate company data if it's just an ID
+        if (loginResponse.user && loginResponse.user.company) {
+          // If company is just an ID, fetch the full company object
+          if (typeof loginResponse.user.company === 'string' || typeof loginResponse.user.company === 'number') {
+            try {
+              const companyId = loginResponse.user.company;
+              // Import companiesApi here to avoid circular dependency
+              const { companiesApi } = await import('./companies');
+              const company = await companiesApi.getOne(companyId);
+              (loginResponse.user as any).company = company;
+            } catch (companyError) {
+              console.warn('Failed to fetch company data after login:', companyError);
+              // Don't fail login if company fetch fails
+            }
           }
         }
       }
@@ -97,12 +104,23 @@ export const authApi = {
   },
 
   getMe: async (token: string): Promise<User> => {
-    // Strapi v5 /users/me endpoint with populate for role and company
-    const response = await authApiClient.get<User>('/users/me?populate[role]=*&populate[company]=*&populate[company][parent_company]=*', {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    // Strapi v5 /users/me endpoint - try with populate=* first, then try individual populates
+    let response;
+    try {
+      response = await authApiClient.get<User>('/users/me?populate=*', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+    } catch (error: any) {
+      // If populate=* fails, try without populate and fetch separately
+      console.warn('[getMe] populate=* failed, trying without populate:', error);
+      response = await authApiClient.get<User>('/users/me', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+    }
     
     // Transform role to our format if needed
     const user = response.data;
