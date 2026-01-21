@@ -452,6 +452,7 @@ export default function ProjectDetailPage() {
     }
 
     setIsUpdatingStatus(true);
+    let cleanUpdateData: any = {}; // Declare outside try block so it's accessible in catch
     try {
       const auditLogEntry = createAuditLogEntry(
         'status_changed',
@@ -476,7 +477,7 @@ export default function ProjectDetailPage() {
 
       // Szűrjük ki a szerveren még nem létező mezőket és null értékeket
       const fieldsNotOnServer = ['audit_log'];
-      const cleanUpdateData = Object.fromEntries(
+      cleanUpdateData = Object.fromEntries(
         Object.entries(updateData).filter(([key, value]) => {
           // Ne küldjük el a szerveren még nem létező mezőket
           if (fieldsNotOnServer.includes(key)) return false;

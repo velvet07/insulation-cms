@@ -52,13 +52,15 @@ export const usersApi = {
       userPayload.company = data.company;
     }
 
-    const response = await strapiApi.post('/users', { data: userPayload });
-    
+    // NOTE: Users-Permissions plugin expects raw data, not wrapped in { data: ... }
+    const response = await strapiApi.post('/users', userPayload);
+
     // If role was specified, update it separately (Strapi sometimes requires this)
     if (data.role !== undefined && response.data?.documentId) {
       try {
+        // NOTE: Users-Permissions plugin expects raw data, not wrapped in { data: ... }
         await strapiApi.put(`/users/${response.data.documentId}`, {
-          data: { role: data.role },
+          role: data.role,
         });
       } catch (roleError) {
         console.warn('Could not set role separately:', roleError);
@@ -80,16 +82,16 @@ export const usersApi = {
   }): Promise<User> => {
     const systemFields = ['id', 'documentId', 'createdAt', 'updatedAt', 'publishedAt'];
     const cleanData: any = {};
-    
+
     try {
-      
+
       // Handle simple fields
       if (data.username !== undefined) cleanData.username = data.username;
       if (data.email !== undefined) cleanData.email = data.email;
       if (data.password !== undefined) cleanData.password = data.password;
       if (data.confirmed !== undefined) cleanData.confirmed = data.confirmed;
       if (data.blocked !== undefined) cleanData.blocked = data.blocked;
-      
+
       // Handle relation fields: send only ID or null
       // For role: Strapi users-permissions role is a relation, send as number ID
       if (data.role !== undefined) {
@@ -100,7 +102,7 @@ export const usersApi = {
           cleanData.role = typeof data.role === 'string' ? parseInt(data.role) : data.role;
         }
       }
-      
+
       // For company: Strapi relation field
       // NOTE: The Strapi users-permissions plugin might not allow updating the company field via API
       // We'll try to update it separately after updating other fields
@@ -112,7 +114,7 @@ export const usersApi = {
           // Determine if it's a documentId (string, not a simple numeric string) or numeric ID
           const isNumericString = typeof data.company === 'string' && /^\d+$/.test(data.company);
           const isDocumentId = typeof data.company === 'string' && !isNumericString;
-          
+
           if (isDocumentId) {
             // It's a documentId (string format, not numeric) - convert to numeric ID
             try {
@@ -150,27 +152,29 @@ export const usersApi = {
           return currentUser;
         }
       } else {
-      // First, update all fields except company
-      console.log('[usersApi.update] Sending clean data (without company):', JSON.stringify(cleanData, null, 2));
-      console.log('[usersApi.update] Request URL:', `/users/${id}`);
-      console.log('[usersApi.update] Request method:', 'PUT');
-      
-      try {
-        let response = await strapiApi.put(`/users/${id}`, { data: cleanData });
-        
-        if (!response || !response.data) {
-          throw new Error('Invalid response from server');
-        }
-        
-        console.log('[usersApi.update] Update successful, response:', response.data);
-          
+        // First, update all fields except company
+        console.log('[usersApi.update] Sending clean data (without company):', JSON.stringify(cleanData, null, 2));
+        console.log('[usersApi.update] Request URL:', `/users/${id}`);
+        console.log('[usersApi.update] Request method:', 'PUT');
+
+        try {
+          // NOTE: Users-Permissions plugin expects raw data, not wrapped in { data: ... }
+          let response = await strapiApi.put(`/users/${id}`, cleanData);
+
+          if (!response || !response.data) {
+            throw new Error('Invalid response from server');
+          }
+
+          console.log('[usersApi.update] Update successful, response:', response.data);
+
           // If company needs to be updated, try updating it separately
           if (companyToUpdate !== undefined) {
             try {
               console.log('[usersApi.update] Updating company field separately:', companyToUpdate);
               const companyUpdateData: any = { company: companyToUpdate };
-              response = await strapiApi.put(`/users/${id}`, { data: companyUpdateData });
-              
+              // NOTE: Users-Permissions plugin expects raw data, not wrapped in { data: ... }
+              response = await strapiApi.put(`/users/${id}`, companyUpdateData);
+
               if (!response || !response.data) {
                 console.warn('[usersApi.update] Company update returned invalid response, but other fields were updated');
               } else {
@@ -184,7 +188,7 @@ export const usersApi = {
               return await usersApi.getOne(id);
             }
           }
-          
+
           return response.data;
         } catch (firstUpdateError: any) {
           // If first update fails, maybe it's a permission issue
@@ -192,7 +196,7 @@ export const usersApi = {
           console.error('[usersApi.update] Error in first update attempt:', firstUpdateError);
           console.error('[usersApi.update] First update error status:', firstUpdateError.response?.status);
           console.error('[usersApi.update] First update error response:', firstUpdateError.response?.data);
-          
+
           // Re-throw with more context
           const errorWithContext = new Error(
             '500-as hiba: A Strapi szerveren belső hiba történt. ' +
@@ -205,18 +209,19 @@ export const usersApi = {
           throw errorWithContext;
         }
       }
-      
+
       // If only company needs to be updated and first update was skipped
       if (companyToUpdate !== undefined) {
         try {
           console.log('[usersApi.update] Updating company field only:', companyToUpdate);
           const companyUpdateData: any = { company: companyToUpdate };
-          const response = await strapiApi.put(`/users/${id}`, { data: companyUpdateData });
-          
+          // NOTE: Users-Permissions plugin expects raw data, not wrapped in { data: ... }
+          const response = await strapiApi.put(`/users/${id}`, companyUpdateData);
+
           if (!response || !response.data) {
             throw new Error('Invalid response from server');
           }
-          
+
           console.log('[usersApi.update] Company field updated successfully');
           return response.data;
         } catch (companyUpdateError: any) {
@@ -224,7 +229,7 @@ export const usersApi = {
           throw companyUpdateError;
         }
       }
-      
+
       // Should not reach here, but just in case
       return await usersApi.getOne(id);
     } catch (error: any) {
@@ -233,9 +238,9 @@ export const usersApi = {
       console.error('[usersApi.update] Error response:', error.response?.data);
       console.error('[usersApi.update] Error response (full):', JSON.stringify(error.response?.data, null, 2));
       console.error('[usersApi.update] Update data sent:', data);
-      
+
       let errorMessage = 'Hiba történt a felhasználó frissítése során';
-      
+
       // Try to get detailed error message
       if (error.response?.data?.error) {
         const strapiError = error.response.data.error;
@@ -253,12 +258,12 @@ export const usersApi = {
       } else if (error.message) {
         errorMessage = error.message;
       }
-      
+
       // If 500 error, it might be a server-side issue
       if (error.response?.status === 500) {
         errorMessage += '\n\n500-as hiba: A Strapi szerveren belső hiba történt. Lehet, hogy a relation mezők (role, company) módosítása nincs jogosultsághoz kötve, vagy rossz formátumú adatokat küldünk.';
       }
-      
+
       throw new Error(errorMessage);
     }
   },
