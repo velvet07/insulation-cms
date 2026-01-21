@@ -123,8 +123,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               const Icon = item.icon;
               const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
               
-              // Hide Documents and Settings from subcontractors
-              if (isSubContractor && (item.href === '/dashboard/documents' || item.href === '/dashboard/settings')) {
+              // Hide Documents, Settings, and Materials from subcontractors
+              if (isSubContractor && (item.href === '/dashboard/documents' || item.href === '/dashboard/settings' || item.href === '/dashboard/materials')) {
                 return null;
               }
               
