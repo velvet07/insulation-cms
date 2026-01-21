@@ -35,25 +35,8 @@ export default function ApprovedProjectsPage() {
     queryFn: () => projectsApi.getAll({ status: 'approved' }),
     enabled: isMainContractor, // Only fetch if user is main contractor or admin
   });
-  
-  if (!isMainContractor) {
-    return (
-      <ProtectedRoute>
-        <DashboardLayout>
-          <div className="p-6">
-            <Card>
-              <CardContent className="py-8 text-center">
-                <p className="text-gray-500">Nincs jogosultságod az oldal megtekintéséhez.</p>
-                <p className="text-sm text-gray-400 mt-2">Csak fővállalkozók és adminok érhetik el ezt az oldalt.</p>
-              </CardContent>
-            </Card>
-          </div>
-        </DashboardLayout>
-      </ProtectedRoute>
-    );
-  }
 
-  // Group projects by contractor, then by subcontractor
+  // Group projects by contractor, then by subcontractor - must be before conditional return
   const projectsByContractor = useMemo(() => {
     const grouped: Record<string, {
       contractor: { id: string; name: string; } | null;
@@ -101,6 +84,52 @@ export default function ApprovedProjectsPage() {
     return grouped;
   }, [approvedProjects]);
 
+  // Generate completion certificates mutation - must be before conditional return
+  const generateCertificatesMutation = useMutation({
+    mutationFn: async (projectIds: string[]) => {
+      // TODO: Implement completion certificate generation
+      // This will:
+      // 1. Generate PDF certificates for each selected project
+      // 2. Send email to subcontractor with certificate attached
+      // 3. Archive the projects
+      
+      // For now, just archive the projects
+      const archivePromises = projectIds.map((projectId) =>
+        projectsApi.update(projectId, { status: 'archived' })
+      );
+      
+      await Promise.all(archivePromises);
+      
+      return { success: true, count: projectIds.length };
+    },
+    onSuccess: (data) => {
+      alert(`Sikeres művelet: ${data.count} projekt teljesítési igazolása generálva és archiválva.`);
+      setSelectedProjects(new Set());
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+    },
+    onError: (error: any) => {
+      alert(`Hiba: ${error.message || 'Hiba történt a teljesítési igazolások generálása során.'}`);
+    },
+  });
+
+  // Early return after all hooks are called
+  if (!isMainContractor) {
+    return (
+      <ProtectedRoute>
+        <DashboardLayout>
+          <div className="p-6">
+            <Card>
+              <CardContent className="py-8 text-center">
+                <p className="text-gray-500">Nincs jogosultságod az oldal megtekintéséhez.</p>
+                <p className="text-sm text-gray-400 mt-2">Csak fővállalkozók és adminok érhetik el ezt az oldalt.</p>
+              </CardContent>
+            </Card>
+          </div>
+        </DashboardLayout>
+      </ProtectedRoute>
+    );
+  }
+
   const handleSelectProject = (projectId: string) => {
     setSelectedProjects((prev) => {
       const newSet = new Set(prev);
@@ -129,34 +158,6 @@ export default function ApprovedProjectsPage() {
       return newSet;
     });
   };
-
-  // Generate completion certificates mutation
-  const generateCertificatesMutation = useMutation({
-    mutationFn: async (projectIds: string[]) => {
-      // TODO: Implement completion certificate generation
-      // This will:
-      // 1. Generate PDF certificates for each selected project
-      // 2. Send email to subcontractor with certificate attached
-      // 3. Archive the projects
-      
-      // For now, just archive the projects
-      const archivePromises = projectIds.map((projectId) =>
-        projectsApi.update(projectId, { status: 'archived' })
-      );
-      
-      await Promise.all(archivePromises);
-      
-      return { success: true, count: projectIds.length };
-    },
-    onSuccess: (data) => {
-      alert(`Sikeres művelet: ${data.count} projekt teljesítési igazolása generálva és archiválva.`);
-      setSelectedProjects(new Set());
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
-    },
-    onError: (error: any) => {
-      alert(`Hiba: ${error.message || 'Hiba történt a teljesítési igazolások generálása során.'}`);
-    },
-  });
 
   const handleGenerateCertificates = () => {
     if (selectedProjects.size === 0) {
