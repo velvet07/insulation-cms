@@ -185,18 +185,19 @@ export const usersApi = {
           // If first update fails, maybe it's a permission issue
           // Try to get more details from the error
           console.error('[usersApi.update] Error in first update attempt:', firstUpdateError);
+          console.error('[usersApi.update] First update error status:', firstUpdateError.response?.status);
+          console.error('[usersApi.update] First update error response:', firstUpdateError.response?.data);
           
-          // If the error is 500 and we're trying to update basic fields, it might be a permission issue
-          if (firstUpdateError.response?.status === 500) {
-            throw new Error(
-              '500-as hiba: A Strapi szerveren belső hiba történt. ' +
-              'Ez valószínűleg jogosultsági probléma. Ellenőrizd a Strapi admin felületén, ' +
-              'hogy az API token-nek van-e jogosultsága a user módosításához (Users-Permissions plugin → Roles → Public/Authenticated → User → update permission). ' +
-              'Részletek: ' + (firstUpdateError.response?.data?.error?.message || firstUpdateError.message)
-            );
-          }
-          
-          throw firstUpdateError;
+          // Re-throw with more context
+          const errorWithContext = new Error(
+            '500-as hiba: A Strapi szerveren belső hiba történt. ' +
+            'Ez valószínűleg jogosultsági probléma. Ellenőrizd a Strapi admin felületén, ' +
+            'hogy az API token-nek van-e jogosultsága a user módosításához (Users-Permissions plugin → Roles → Public/Authenticated → User → update permission). ' +
+            'Részletek: ' + (firstUpdateError.response?.data?.error?.message || firstUpdateError.message)
+          );
+          // Preserve the original error response
+          (errorWithContext as any).response = firstUpdateError.response;
+          throw errorWithContext;
         }
       }
       
