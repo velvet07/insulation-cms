@@ -77,20 +77,60 @@ export const usersApi = {
     role?: number | string;
     company?: number | string | null;
   }): Promise<User> => {
-    const cleanData: any = {};
-    
-    if (data.username !== undefined) cleanData.username = data.username;
-    if (data.email !== undefined) cleanData.email = data.email;
-    if (data.password !== undefined) cleanData.password = data.password;
-    if (data.confirmed !== undefined) cleanData.confirmed = data.confirmed;
-    if (data.blocked !== undefined) cleanData.blocked = data.blocked;
-    if (data.role !== undefined) cleanData.role = data.role;
-    if (data.company !== undefined) {
-      cleanData.company = data.company; // null to remove, ID to set
-    }
+    try {
+      const systemFields = ['id', 'documentId', 'createdAt', 'updatedAt', 'publishedAt'];
+      const cleanData: any = {};
+      
+      // Handle simple fields
+      if (data.username !== undefined) cleanData.username = data.username;
+      if (data.email !== undefined) cleanData.email = data.email;
+      if (data.password !== undefined) cleanData.password = data.password;
+      if (data.confirmed !== undefined) cleanData.confirmed = data.confirmed;
+      if (data.blocked !== undefined) cleanData.blocked = data.blocked;
+      
+      // Handle relation fields: send only ID or null
+      if (data.role !== undefined) {
+        if (data.role === null || data.role === undefined) {
+          // Don't send if null/undefined
+        } else {
+          cleanData.role = data.role;
+        }
+      }
+      
+      if (data.company !== undefined) {
+        if (data.company === null || data.company === '') {
+          cleanData.company = null; // Explicitly set to null to clear relation
+        } else {
+          // Convert to string or number as needed
+          cleanData.company = typeof data.company === 'string' 
+            ? (data.company.includes('-') ? data.company : parseInt(data.company))
+            : data.company;
+        }
+      }
 
-    const response = await strapiApi.put(`/users/${id}`, { data: cleanData });
-    return response.data;
+      const response = await strapiApi.put(`/users/${id}`, { data: cleanData });
+      
+      if (!response || !response.data) {
+        throw new Error('Invalid response from server');
+      }
+      
+      return response.data;
+    } catch (error: any) {
+      console.error('[usersApi.update] Error:', error);
+      console.error('[usersApi.update] Error response:', error.response?.data);
+      console.error('[usersApi.update] Update data:', data);
+      
+      let errorMessage = 'Hiba történt a felhasználó frissítése során';
+      if (error.response?.data?.error?.message) {
+        errorMessage = error.response.data.error.message;
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      throw new Error(errorMessage);
+    }
   },
 
   // Delete user
