@@ -691,7 +691,7 @@ export default function ProjectDetailPage() {
                   Átnézésre küldés
                 </Button>
               )}
-              {project.status === 'ready_for_review' && (
+              {project.status === 'ready_for_review' && (isMainContractor || isAdmin) && (
                 <>
                   <Button 
                     size="sm" 
@@ -831,7 +831,7 @@ export default function ProjectDetailPage() {
                   </div>
                 </div>
 
-                {canBeSentForReview && (
+                {canBeSentForReview && !isMainContractor && !isAdmin && (
                   <div className="mt-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <CheckCircle2 className="h-5 w-5 text-green-600" />
