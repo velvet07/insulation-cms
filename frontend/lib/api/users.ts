@@ -1,5 +1,6 @@
 import axios from 'axios';
 import type { User } from '@/types';
+import { companiesApi } from './companies';
 
 const strapiUrl = process.env.NEXT_PUBLIC_STRAPI_URL || 'https://cms.emermedia.eu';
 const apiToken = process.env.NEXT_PUBLIC_STRAPI_API_TOKEN;
