@@ -163,7 +163,8 @@ export const materialTransactionsApi = {
       },
     ];
 
-    for (const attempt of attempts) {
+    for (let i = 0; i < attempts.length; i++) {
+      const attempt = attempts[i];
       try {
         const apiUrl = attempt();
         if (!apiUrl) continue; // Skip null attempts
@@ -176,23 +177,42 @@ export const materialTransactionsApi = {
           items = response.data;
         }
         
-        // If we got data, return it (client-side filtering will handle company matching)
-        if (items.length > 0 || attempt === attempts[0]) {
+        // If we got data, check if relations are populated
+        // If first attempt (no params) worked but relations might be missing, try populate=* too
+        if (items.length > 0) {
+          const hasRelations = items.some((item: any) => 
+            item.user || item.material || item.company
+          );
+          
+          // If no relations and this was the first attempt, try populate=* next
+          if (!hasRelations && i === 0 && attempts.length > 1) {
+            continue; // Try next attempt with populate=*
+          }
+          
+          // Return data if we have it (with or without relations)
           return items;
         }
+        
+        // If no data but this was the first attempt, try next
+        if (i === 0 && attempts.length > 1) {
+          continue;
+        }
+        
+        // No data and not first attempt, return empty
+        return [];
       } catch (error) {
         const err: any = error;
         const status = err?.response?.status;
         // If it's not a 400, or if this is the last attempt, return empty
         if (status !== 400) {
           // Non-400 error (401, 403, 500, etc.) - don't retry
-          if (attempt === attempts[attempts.length - 1]) {
+          if (i === attempts.length - 1) {
             return [];
           }
           continue;
         }
         // 400 error - try next attempt
-        if (attempt === attempts[attempts.length - 1]) {
+        if (i === attempts.length - 1) {
           // Last attempt failed - return empty to avoid console spam
           return [];
         }
