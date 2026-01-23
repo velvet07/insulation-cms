@@ -681,21 +681,26 @@ export default function MaterialsPage() {
     return subcontractors
       .map((sub) => {
         const key = getCompanyKey(sub);
+        const subId = sub.id?.toString();
+        const subDocId = sub.documentId?.toString();
 
         const txForSub = pickupTx.filter((t) => {
+          // Try company first (direct or via user.company)
           const c = (t as any)?.company ?? (t as any)?.user?.company;
           if (matchesCompany(c, key)) return true;
-          // If company is missing, try to infer from user if user.company is not populated
-          // This is a fallback for cases where backend doesn't populate user.company
+          
+          // Fallback: if company is missing, try to match by user.id if user belongs to this subcontractor
+          // This handles cases where backend doesn't populate company or user.company
           if (!c && (t as any)?.user) {
             const tUser = (t as any).user;
-            // If user is just an ID, we can't match - skip it
+            // If user is just an ID, we can't match by company - skip it
             if (typeof tUser === 'string' || typeof tUser === 'number') {
               return false;
             }
             // If user.company exists but wasn't matched, it's a different company
             if (tUser?.company) {
-              return false;
+              const userCompanyKey = getCompanyKey(tUser.company);
+              return userCompanyKey === key;
             }
             // If user.company is missing, we can't reliably match - skip for now
             return false;
@@ -1761,6 +1766,11 @@ export default function MaterialsPage() {
             <h3 className="text-xl font-semibold flex items-center">
               <Package className="mr-2 h-5 w-5" />
               Aktuális anyagegyenleg
+              {isMainContractorUser && selectedCompanyKey !== 'self' && (
+                <span className="ml-2 text-sm font-normal text-gray-600 dark:text-gray-400">
+                  ({selectedCompanyLabel})
+                </span>
+              )}
             </h3>
           </div>
 
