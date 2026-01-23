@@ -222,14 +222,6 @@ export const materialTransactionsApi = {
 
     // If all attempts failed, return empty array
     return [];
-
-      console.error('Error fetching material transactions:', {
-        status,
-        url: `/material-transactions?${baseParams.toString()}`,
-        details,
-      });
-      throw error;
-    }
   },
 
   getOne: async (id: number | string) => {
