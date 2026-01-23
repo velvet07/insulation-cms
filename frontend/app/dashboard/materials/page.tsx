@@ -1224,6 +1224,133 @@ export default function MaterialsPage() {
           </div>
         )}
 
+        {/* Aktuális anyagegyenleg - számított */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-semibold flex items-center">
+              <Package className="mr-2 h-5 w-5" />
+              Aktuális anyagegyenleg
+              {isMainContractorUser && selectedCompanyKey !== 'self' && (
+                <span className="ml-2 text-sm font-normal text-gray-600 dark:text-gray-400">
+                  ({selectedCompanyLabel})
+                </span>
+              )}
+            </h3>
+          </div>
+
+          {Object.keys(calculatedBalance.all).length === 0 ? (
+            <Card>
+              <CardContent className="py-8 text-center text-gray-500">
+                <Package className="mx-auto h-12 w-12 mb-2 text-gray-400" />
+                <p className="text-sm">Még nincs anyagegyenleg adat.</p>
+                <p className="text-xs text-gray-400 mt-1">Az anyagfelvétel után itt jelenik meg az egyenleg.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {/* Szigetelőanyagok */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Szigetelőanyagok</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {calculatedBalance.insulation.length === 0 ? (
+                    <p className="text-sm text-gray-500">Nincs felvett szigetelőanyag.</p>
+                  ) : (
+                    <div className="space-y-4">
+                      {calculatedBalance.insulation.map(([materialId, balanceData]) => {
+                        const { pickedUp, used, balance: balanceAmount, name } = balanceData;
+                        const isNegative = balanceAmount.rolls < 0 || balanceAmount.pallets < 0;
+
+                        return (
+                          <div key={materialId} className="border-b pb-3 last:border-b-0 last:pb-0">
+                            <div className="font-medium mb-2">{name}</div>
+                            <div className="space-y-1 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-gray-600 dark:text-gray-400">Felvett mennyiség:</span>
+                                <span>
+                                  {pickedUp.pallets > 0 && `${pickedUp.pallets} raklap`}
+                                  {pickedUp.pallets > 0 && pickedUp.rolls > 0 && ', '}
+                                  {pickedUp.rolls > 0 && `${pickedUp.rolls} tekercs`}
+                                  {pickedUp.pallets === 0 && pickedUp.rolls === 0 && '0'}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600 dark:text-gray-400">Felhasznált mennyiség:</span>
+                                <span>
+                                  {used.pallets > 0 && `${used.pallets} raklap`}
+                                  {used.pallets > 0 && used.rolls > 0 && ', '}
+                                  {used.rolls > 0 && `${used.rolls} tekercs`}
+                                  {used.pallets === 0 && used.rolls === 0 && '0'}
+                                </span>
+                              </div>
+                              <div className="flex justify-between font-semibold pt-1 border-t">
+                                <span>Egyenleg:</span>
+                                <span className={isNegative ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>
+                                  {balanceAmount.pallets > 0 && `${balanceAmount.pallets} raklap`}
+                                  {balanceAmount.pallets > 0 && balanceAmount.rolls !== 0 && ', '}
+                                  {balanceAmount.pallets === 0 && balanceAmount.rolls !== 0 && ''}
+                                  {balanceAmount.rolls !== 0 && `${balanceAmount.rolls} tekercs`}
+                                  {balanceAmount.pallets === 0 && balanceAmount.rolls === 0 && '0'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Fóliák */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Fóliák</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {calculatedBalance.foils.length === 0 ? (
+                    <p className="text-sm text-gray-500">Nincs felvett fólia.</p>
+                  ) : (
+                    <div className="space-y-4">
+                      {calculatedBalance.foils.map(([materialId, balanceData]) => {
+                        const { used, balance: balanceAmount, name, category } = balanceData;
+                        const isNegative = balanceAmount.rolls < 0 || (balanceAmount.rolls === 0 && (balanceAmount.squareMeters || 0) < 0);
+                        const coveragePerRoll = category === 'vapor_barrier' ? 60 : 75;
+                        // Felhasznált: tekercsek * coveragePerRoll + maradék m²
+                        const usedTotalSquareMeters = (used.rolls || 0) * coveragePerRoll + (used.squareMeters || 0);
+                        const balanceSquareMeters = balanceAmount.squareMeters || 0;
+
+                        return (
+                          <div key={materialId} className="border-b pb-3 last:border-b-0 last:pb-0">
+                            <div className="font-medium mb-2">{name}</div>
+                            <div className="space-y-1 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-gray-600 dark:text-gray-400">Felhasznált mennyiség:</span>
+                                <span>
+                                  {used.rolls > 0 ? `${used.rolls} tekercs` : '0 tekercs'}
+                                  {usedTotalSquareMeters > 0 && ` ${Math.round(usedTotalSquareMeters)} m²`}
+                                </span>
+                              </div>
+                              <div className="flex justify-between font-semibold pt-1 border-t">
+                                <span>Egyenleg:</span>
+                                <span className={isNegative ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>
+                                  {balanceAmount.rolls !== 0 ? `${balanceAmount.rolls} tekercs` : balanceSquareMeters !== 0 ? '0 tekercs' : '0 tekercs'}
+                                  {balanceSquareMeters !== 0 && ` ${Math.round(Math.abs(balanceSquareMeters))} m²`}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </div>
+
         {/* Riasztások */}
         {deficits.length > 0 && (
           <Card className="mb-6 border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900/20">
@@ -1759,133 +1886,6 @@ export default function MaterialsPage() {
             </form>
           </DialogContent>
         </Dialog>
-
-        {/* Aktuális anyagegyenleg - számított */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-semibold flex items-center">
-              <Package className="mr-2 h-5 w-5" />
-              Aktuális anyagegyenleg
-              {isMainContractorUser && selectedCompanyKey !== 'self' && (
-                <span className="ml-2 text-sm font-normal text-gray-600 dark:text-gray-400">
-                  ({selectedCompanyLabel})
-                </span>
-              )}
-            </h3>
-          </div>
-
-          {Object.keys(calculatedBalance.all).length === 0 ? (
-            <Card>
-              <CardContent className="py-8 text-center text-gray-500">
-                <Package className="mx-auto h-12 w-12 mb-2 text-gray-400" />
-                <p className="text-sm">Még nincs anyagegyenleg adat.</p>
-                <p className="text-xs text-gray-400 mt-1">Az anyagfelvétel után itt jelenik meg az egyenleg.</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2">
-              {/* Szigetelőanyagok */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Szigetelőanyagok</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {calculatedBalance.insulation.length === 0 ? (
-                    <p className="text-sm text-gray-500">Nincs felvett szigetelőanyag.</p>
-                  ) : (
-                    <div className="space-y-4">
-                      {calculatedBalance.insulation.map(([materialId, balanceData]) => {
-                        const { pickedUp, used, balance: balanceAmount, name } = balanceData;
-                        const isNegative = balanceAmount.rolls < 0 || balanceAmount.pallets < 0;
-
-                        return (
-                          <div key={materialId} className="border-b pb-3 last:border-b-0 last:pb-0">
-                            <div className="font-medium mb-2">{name}</div>
-                            <div className="space-y-1 text-sm">
-                              <div className="flex justify-between">
-                                <span className="text-gray-600 dark:text-gray-400">Felvett mennyiség:</span>
-                                <span>
-                                  {pickedUp.pallets > 0 && `${pickedUp.pallets} raklap`}
-                                  {pickedUp.pallets > 0 && pickedUp.rolls > 0 && ', '}
-                                  {pickedUp.rolls > 0 && `${pickedUp.rolls} tekercs`}
-                                  {pickedUp.pallets === 0 && pickedUp.rolls === 0 && '0'}
-                                </span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-gray-600 dark:text-gray-400">Felhasznált mennyiség:</span>
-                                <span>
-                                  {used.pallets > 0 && `${used.pallets} raklap`}
-                                  {used.pallets > 0 && used.rolls > 0 && ', '}
-                                  {used.rolls > 0 && `${used.rolls} tekercs`}
-                                  {used.pallets === 0 && used.rolls === 0 && '0'}
-                                </span>
-                              </div>
-                              <div className="flex justify-between font-semibold pt-1 border-t">
-                                <span>Egyenleg:</span>
-                                <span className={isNegative ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>
-                                  {balanceAmount.pallets > 0 && `${balanceAmount.pallets} raklap`}
-                                  {balanceAmount.pallets > 0 && balanceAmount.rolls !== 0 && ', '}
-                                  {balanceAmount.pallets === 0 && balanceAmount.rolls !== 0 && ''}
-                                  {balanceAmount.rolls !== 0 && `${balanceAmount.rolls} tekercs`}
-                                  {balanceAmount.pallets === 0 && balanceAmount.rolls === 0 && '0'}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Fóliák */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Fóliák</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {calculatedBalance.foils.length === 0 ? (
-                    <p className="text-sm text-gray-500">Nincs felvett fólia.</p>
-                  ) : (
-                    <div className="space-y-4">
-                      {calculatedBalance.foils.map(([materialId, balanceData]) => {
-                        const { used, balance: balanceAmount, name, category } = balanceData;
-                        const isNegative = balanceAmount.rolls < 0 || (balanceAmount.rolls === 0 && (balanceAmount.squareMeters || 0) < 0);
-                        const coveragePerRoll = category === 'vapor_barrier' ? 60 : 75;
-                        // Felhasznált: tekercsek * coveragePerRoll + maradék m²
-                        const usedTotalSquareMeters = (used.rolls || 0) * coveragePerRoll + (used.squareMeters || 0);
-                        const balanceSquareMeters = balanceAmount.squareMeters || 0;
-
-                        return (
-                          <div key={materialId} className="border-b pb-3 last:border-b-0 last:pb-0">
-                            <div className="font-medium mb-2">{name}</div>
-                            <div className="space-y-1 text-sm">
-                              <div className="flex justify-between">
-                                <span className="text-gray-600 dark:text-gray-400">Felhasznált mennyiség:</span>
-                                <span>
-                                  {used.rolls > 0 ? `${used.rolls} tekercs` : '0 tekercs'}
-                                  {usedTotalSquareMeters > 0 && ` ${Math.round(usedTotalSquareMeters)} m²`}
-                                </span>
-                              </div>
-                              <div className="flex justify-between font-semibold pt-1 border-t">
-                                <span>Egyenleg:</span>
-                                <span className={isNegative ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>
-                                  {balanceAmount.rolls !== 0 ? `${balanceAmount.rolls} tekercs` : balanceSquareMeters !== 0 ? '0 tekercs' : '0 tekercs'}
-                                  {balanceSquareMeters !== 0 && ` ${Math.round(Math.abs(balanceSquareMeters))} m²`}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          )}
-        </div>
 
         {/* Anyag mozgás log */}
         <div className="mb-6">
