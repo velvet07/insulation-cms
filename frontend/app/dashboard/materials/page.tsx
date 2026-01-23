@@ -29,9 +29,9 @@ import { materialsApi } from '@/lib/api/materials';
 import { materialBalancesApi, type MaterialBalance } from '@/lib/api/material-balances';
 import { materialTransactionsApi } from '@/lib/api/material-transactions';
 import { projectsApi } from '@/lib/api/projects';
-import { 
-  calculateMaterials, 
-  formatInsulationQuantity, 
+import {
+  calculateMaterials,
+  formatInsulationQuantity,
   formatFoilQuantity,
   calculateAvailableMaterials,
   determineInsulationOption,
@@ -40,7 +40,9 @@ import {
 import type { Project } from '@/types';
 import { Plus, AlertTriangle, CheckCircle2, TrendingDown, Package, Calendar, CalendarDays, List, Edit, Trash2 } from 'lucide-react';
 import { createAuditLogEntry, addAuditLogEntry } from '@/lib/utils/audit-log';
-import { isAdminRole } from '@/lib/utils/user-role';
+import { isAdminRole, isSubcontractor } from '@/lib/utils/user-role';
+import { usePermission } from '@/lib/contexts/permission-context';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Table,
   TableBody,
@@ -69,7 +71,7 @@ export default function MaterialsPage() {
   // Tranzakció szerkesztés/törlés
   const [editingTransaction, setEditingTransaction] = useState<{ date: string; materialId: string } | null>(null);
   const [editTransactionData, setEditTransactionData] = useState<{ pallets: string; rolls: string } | null>(null);
-  
+
   // Helyi log a törlések és módosítások tárolásához (localStorage-ban perzisztálva)
   type MaterialLogEntry = {
     id: string;
@@ -87,7 +89,7 @@ export default function MaterialsPage() {
     }
     return [];
   });
-  
+
   const addLogEntry = (entry: Omit<MaterialLogEntry, 'id' | 'timestamp'>) => {
     const newEntry: MaterialLogEntry = {
       ...entry,
@@ -103,17 +105,24 @@ export default function MaterialsPage() {
 
   const userId = user?.documentId || user?.id;
 
+  // Get company ID from user
+  const userCompanyId = useMemo(() => {
+    if (!user?.company) return null;
+    if (typeof user.company === 'object') return user.company.documentId || user.company.id;
+    return user.company;
+  }, [user]);
+
   // Anyagok lekérése
   const { data: materials = [] } = useQuery({
     queryKey: ['materials'],
     queryFn: () => materialsApi.getAll(),
   });
 
-  // Anyagegyenlegek lekérése (jelenlegi felhasználó)
+  // Anyagegyenlegek lekérése (cég alapú - minden felhasználó látja a cég készletét)
   const { data: balances = [] } = useQuery({
-    queryKey: ['material-balances', userId],
-    queryFn: () => materialBalancesApi.getByUser(userId!),
-    enabled: !!userId,
+    queryKey: ['material-balances', userCompanyId],
+    queryFn: () => materialBalancesApi.getByCompany(userCompanyId!),
+    enabled: !!userCompanyId,
   });
 
   // Projektek lekérése (anyagigény számításhoz)
@@ -122,11 +131,11 @@ export default function MaterialsPage() {
     queryFn: () => projectsApi.getAll(),
   });
 
-  // Material Transactions lekérése (elérhető anyagok számításhoz)
+  // Material Transactions lekérése (cég alapú - elérhető anyagok számításhoz)
   const { data: transactions = [] } = useQuery({
-    queryKey: ['material-transactions', userId],
-    queryFn: () => materialTransactionsApi.getAll({ user: userId }),
-    enabled: !!userId,
+    queryKey: ['material-transactions', userCompanyId],
+    queryFn: () => materialTransactionsApi.getByCompany(userCompanyId!),
+    enabled: !!userCompanyId,
   });
 
   // Dátum tartomány számítása
@@ -134,7 +143,7 @@ export default function MaterialsPage() {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
     const today = new Date(now);
-    
+
     let startDate: Date;
     let endDate: Date;
 
@@ -249,7 +258,7 @@ export default function MaterialsPage() {
 
     // Elérhető anyagok számítása dátum alapján
     // Csak a kiválasztott anyagokat számoljuk
-    const availabilityDate = availabilityEndDate 
+    const availabilityDate = availabilityEndDate
       ? new Date(availabilityEndDate)
       : new Date(); // Ha nincs beállítva, akkor mai dátumig
     availabilityDate.setHours(23, 59, 59, 999);
@@ -280,18 +289,18 @@ export default function MaterialsPage() {
     relevantProjects.forEach((p: Project) => {
       // Csak azokat a projekteket számoljuk, amelyeknek van area_sqm értéke
       if (!p.area_sqm) return;
-      
+
       projectsWithData++;
       const area = Number(p.area_sqm);
       totalArea += area;
 
       // Insulation option meghatározása elérhető anyagokból
       const insulationOptions = determineInsulationOption(availableMaterials, area);
-      
+
       // Számoljuk az anyagigényt mindkét opcióhoz (függetlenül attól, hogy van-e elég anyag)
       const reqA = calculateMaterials(area, 'A');
       const reqB = calculateMaterials(area, 'B');
-      
+
       // 10cm + 15cm számítás
       if (insulationOptions.optionA?.available) {
         projectsOptionA++;
@@ -366,6 +375,7 @@ export default function MaterialsPage() {
             quantity_pallets: item.quantity_pallets || 0,
             quantity_rolls: item.quantity_rolls || 0,
             user: userId,
+            company: userCompanyId,
           })
         )
       );
@@ -387,19 +397,19 @@ export default function MaterialsPage() {
             console.warn('Projekt ID hiányzik, audit log frissítés kihagyva');
             return Promise.resolve();
           }
-          
+
           const updatedAuditLog = addAuditLogEntry(project.audit_log, auditLogEntry);
           return projectsApi.update(projectId, {
             audit_log: updatedAuditLog,
           }).catch((error: any) => {
             // Ha nincs audit_log mező, csak logoljuk
-            if (error?.message?.includes('Invalid key audit_log') || 
-                error?.response?.data?.error?.message?.includes('Invalid key audit_log')) {
+            if (error?.message?.includes('Invalid key audit_log') ||
+              error?.response?.data?.error?.message?.includes('Invalid key audit_log')) {
               console.warn('audit_log mező nem létezik a projektben, audit log frissítés kihagyva');
-            } else if (error?.response?.status === 404 || 
-                       error?.message?.includes('404') || 
-                       error?.message?.includes('nem található') ||
-                       error?.message?.includes('Not Found')) {
+            } else if (error?.response?.status === 404 ||
+              error?.message?.includes('404') ||
+              error?.message?.includes('nem található') ||
+              error?.message?.includes('Not Found')) {
               // Projekt nem található (lehet, hogy törölve lett) - csendben kihagyjuk
               // Nem logoljuk, mert ez normális esemény lehet
             } else {
@@ -425,7 +435,7 @@ export default function MaterialsPage() {
           user: user?.username || user?.email || 'Ismeretlen',
         });
       });
-      
+
       queryClient.invalidateQueries({ queryKey: ['material-balances'] });
       queryClient.invalidateQueries({ queryKey: ['material-transactions'] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
@@ -440,7 +450,7 @@ export default function MaterialsPage() {
 
   const handlePickupSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Szűrjük az elérhető anyagokat
     const availableMaterials = materials.filter(
       (m) => availableMaterialsIds.length === 0 || availableMaterialsIds.includes(String(m.documentId || m.id))
@@ -504,24 +514,24 @@ export default function MaterialsPage() {
   // Felvett anyagok összesítése anyagtípusra és dátumra
   const pickupTransactionsGrouped = useMemo(() => {
     const pickupTransactions = (transactions as any[]).filter((t) => t.type === 'pickup');
-    
+
     // Csoportosítás dátumra és anyagra
     const grouped: Record<string, Record<string, { pallets: number; rolls: number; transactions: any[]; materialName: string }>> = {};
-    
+
     pickupTransactions.forEach((transaction) => {
-      const date = transaction.pickup_date 
+      const date = transaction.pickup_date
         ? new Date(transaction.pickup_date).toISOString().split('T')[0]
         : transaction.createdAt
-        ? new Date(transaction.createdAt).toISOString().split('T')[0]
-        : 'unknown';
-      
+          ? new Date(transaction.createdAt).toISOString().split('T')[0]
+          : 'unknown';
+
       const materialId = String(transaction.material?.documentId || transaction.material?.id || 'unknown');
       const materialName = transaction.material?.name || 'Ismeretlen anyag';
-      
+
       if (!grouped[date]) {
         grouped[date] = {};
       }
-      
+
       if (!grouped[date][materialId]) {
         grouped[date][materialId] = {
           pallets: 0,
@@ -530,12 +540,12 @@ export default function MaterialsPage() {
           materialName,
         };
       }
-      
+
       grouped[date][materialId].pallets += transaction.quantity_pallets || 0;
       grouped[date][materialId].rolls += transaction.quantity_rolls || 0;
       grouped[date][materialId].transactions.push(transaction);
     });
-    
+
     return grouped;
   }, [transactions]);
 
@@ -546,14 +556,14 @@ export default function MaterialsPage() {
 
     // 1. Felvett anyagok összesítése anyagtípusonként
     const pickedUp: Record<string, { pallets: number; rolls: number; name: string; category: string }> = {};
-    
+
     (transactions as any[])
       .filter((t) => t.type === 'pickup')
       .forEach((t) => {
         const materialId = String(t.material?.documentId || t.material?.id || 'unknown');
         const materialName = t.material?.name || 'Ismeretlen anyag';
         const category = t.material?.category || 'unknown';
-        
+
         if (!pickedUp[materialId]) {
           pickedUp[materialId] = { pallets: 0, rolls: 0, name: materialName, category };
         }
@@ -565,29 +575,29 @@ export default function MaterialsPage() {
     // Szigetelőanyagoknál: projektenként számolva, egész tekercsre kerekítve fel
     // Fóliáknál: m²-ben számolva (nem kerekítve projektenként), majd a végén konvertáljuk tekercsre
     const usedByProjects: Record<string, { totalRolls: number; pallets: number; rolls: number; squareMeters?: number; rollsPerPallet?: number }> = {};
-    
+
     (projects as Project[]).forEach((p) => {
       if (!p.area_sqm) return;
-      
+
       const scheduledDate = p.scheduled_date ? new Date(p.scheduled_date) : null;
       if (scheduledDate) scheduledDate.setHours(0, 0, 0, 0);
-      
+
       // Levonás, ha:
       // 1. A projekt státusza "completed"
       // 2. VAGY az ütemezett dátum a múltban van (és nem completed)
       const shouldDeduct = p.status === 'completed' || (scheduledDate && scheduledDate < today);
-      
+
       if (!shouldDeduct) return;
-      
+
       const area = Number(p.area_sqm);
-      
+
       // Szigetelő anyagigény - projektenként számolva, egész tekercsre kerekítve fel
       materials.forEach((m) => {
         const materialId = String(m.documentId || m.id);
         if (!usedByProjects[materialId]) {
           usedByProjects[materialId] = { totalRolls: 0, pallets: 0, rolls: 0, squareMeters: 0, rollsPerPallet: m.rolls_per_pallet || 24 };
         }
-        
+
         if (m.category === 'insulation') {
           // Projektenként számolva, egész tekercsre kerekítve fel
           const rollsNeeded = Math.ceil(area / (m.coverage_per_roll || 9.24));
@@ -601,7 +611,7 @@ export default function MaterialsPage() {
         }
       });
     });
-    
+
     // Szigetelőanyagoknál: konvertáljuk a tekercseket raklapokra és maradék tekercsekre
     // Fóliáknál: konvertáljuk a m²-t tekercsekre és maradék m²-re
     Object.keys(usedByProjects).forEach((materialId) => {
@@ -622,19 +632,19 @@ export default function MaterialsPage() {
     });
 
     // 3. Egyenleg számítás - tartalmazza a felvett, felhasznált és egyenleg mennyiségeket
-    const balance: Record<string, { 
+    const balance: Record<string, {
       pickedUp: { pallets: number; rolls: number };
       used: { pallets: number; rolls: number; squareMeters?: number };
       balance: { pallets: number; rolls: number; squareMeters?: number };
-      name: string; 
+      name: string;
       category: string;
     }> = {};
-    
+
     Object.entries(pickedUp).forEach(([materialId, picked]) => {
       const used = usedByProjects[materialId] || { pallets: 0, rolls: 0, squareMeters: 0, rollsPerPallet: 24 };
       const material = materials.find((m) => String(m.documentId || m.id) === materialId);
       const rollsPerPallet = material?.rolls_per_pallet || 24;
-      
+
       // Szigetelőanyagnál: egyenleg = felvett - felhasznált (raklapok és tekercsek)
       if (picked.category === 'insulation') {
         const totalPickedRolls = picked.pallets * rollsPerPallet + picked.rolls;
@@ -642,7 +652,7 @@ export default function MaterialsPage() {
         const balanceRolls = totalPickedRolls - totalUsedRolls;
         const balancePallets = Math.floor(balanceRolls / rollsPerPallet);
         const balanceRemainingRolls = balanceRolls % rollsPerPallet;
-        
+
         balance[materialId] = {
           pickedUp: { pallets: picked.pallets, rolls: picked.rolls },
           used: { pallets: used.pallets, rolls: used.rolls },
@@ -657,16 +667,16 @@ export default function MaterialsPage() {
         // A felhasznált: tekercsek * coveragePerRoll + maradék m²
         const usedSquareMeters = (used.rolls || 0) * coveragePerRoll + (used.squareMeters || 0);
         const balanceSquareMeters = pickedSquareMeters - usedSquareMeters;
-        
+
         // Konvertáljuk a maradék m²-t tekercsekre és maradék m²-re
         // Ha negatív, akkor is helyesen számoljuk
-        const balanceRolls = balanceSquareMeters >= 0 
+        const balanceRolls = balanceSquareMeters >= 0
           ? Math.floor(balanceSquareMeters / coveragePerRoll)
           : Math.ceil(balanceSquareMeters / coveragePerRoll);
         const balanceRemainingSquareMeters = balanceSquareMeters >= 0
           ? balanceSquareMeters % coveragePerRoll
           : balanceSquareMeters - (balanceRolls * coveragePerRoll);
-        
+
         balance[materialId] = {
           pickedUp: { pallets: picked.pallets, rolls: picked.rolls },
           used: { pallets: used.pallets, rolls: used.rolls, squareMeters: used.squareMeters },
@@ -681,7 +691,7 @@ export default function MaterialsPage() {
     const insulation = Object.entries(balance)
       .filter(([, b]) => b.category === 'insulation')
       .sort(([, a], [, b]) => a.name.localeCompare(b.name));
-    
+
     const foils = Object.entries(balance)
       .filter(([, b]) => b.category === 'vapor_barrier' || b.category === 'breathable_membrane')
       .sort(([, a], [, b]) => a.name.localeCompare(b.name));
@@ -694,16 +704,16 @@ export default function MaterialsPage() {
     mutationFn: async ({ id, transaction }: { id: string | number; transaction: any }) => {
       // A tranzakció adatai már rendelkezésre állnak, nem kell újra lekérni
       const deleted = await materialTransactionsApi.delete(id);
-      
+
       // Audit log hozzáadása minden projekthez
       try {
         const allProjects = await projectsApi.getAll();
         const materialName = transaction.material?.name || 'Ismeretlen anyag';
-        const pickupDate = transaction.pickup_date 
+        const pickupDate = transaction.pickup_date
           ? new Date(transaction.pickup_date).toLocaleDateString('hu-HU')
           : transaction.createdAt
-          ? new Date(transaction.createdAt).toLocaleDateString('hu-HU')
-          : 'ismeretlen dátum';
+            ? new Date(transaction.createdAt).toLocaleDateString('hu-HU')
+            : 'ismeretlen dátum';
         const auditLogEntry = createAuditLogEntry(
           'material_removed',
           user,
@@ -717,19 +727,19 @@ export default function MaterialsPage() {
             console.warn('Projekt ID hiányzik, audit log frissítés kihagyva');
             return Promise.resolve();
           }
-          
+
           const updatedAuditLog = addAuditLogEntry(project.audit_log, auditLogEntry);
           return projectsApi.update(projectId, {
             audit_log: updatedAuditLog,
           }).catch((error: any) => {
             // Ha nincs audit_log mező, csak logoljuk
-            if (error?.message?.includes('Invalid key audit_log') || 
-                error?.response?.data?.error?.message?.includes('Invalid key audit_log')) {
+            if (error?.message?.includes('Invalid key audit_log') ||
+              error?.response?.data?.error?.message?.includes('Invalid key audit_log')) {
               console.warn('audit_log mező nem létezik a projektben, audit log frissítés kihagyva');
-            } else if (error?.response?.status === 404 || 
-                       error?.message?.includes('404') || 
-                       error?.message?.includes('nem található') ||
-                       error?.message?.includes('Not Found')) {
+            } else if (error?.response?.status === 404 ||
+              error?.message?.includes('404') ||
+              error?.message?.includes('nem található') ||
+              error?.message?.includes('Not Found')) {
               // Projekt nem található (lehet, hogy törölve lett) - csendben kihagyjuk
               // Nem logoljuk, mert ez normális esemény lehet
             } else {
@@ -750,13 +760,13 @@ export default function MaterialsPage() {
       addLogEntry({
         action: 'deleted',
         materialName: variables.transaction?.material?.name || 'Ismeretlen anyag',
-        quantity: { 
-          pallets: variables.transaction?.quantity_pallets || 0, 
-          rolls: variables.transaction?.quantity_rolls || 0 
+        quantity: {
+          pallets: variables.transaction?.quantity_pallets || 0,
+          rolls: variables.transaction?.quantity_rolls || 0
         },
         user: user?.username || user?.email || 'Ismeretlen',
       });
-      
+
       queryClient.invalidateQueries({ queryKey: ['material-balances'] });
       queryClient.invalidateQueries({ queryKey: ['material-transactions'] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
@@ -771,7 +781,7 @@ export default function MaterialsPage() {
   const updateTransactionMutation = useMutation({
     mutationFn: async ({ id, data, oldTransaction }: { id: string | number; data: Partial<any>; oldTransaction: any }) => {
       const updated = await materialTransactionsApi.update(id, data);
-      
+
       // Audit log hozzáadása minden projekthez
       try {
         const allProjects = await projectsApi.getAll();
@@ -793,19 +803,19 @@ export default function MaterialsPage() {
             console.warn('Projekt ID hiányzik, audit log frissítés kihagyva');
             return Promise.resolve();
           }
-          
+
           const updatedAuditLog = addAuditLogEntry(project.audit_log, auditLogEntry);
           return projectsApi.update(projectId, {
             audit_log: updatedAuditLog,
           }).catch((error: any) => {
             // Ha nincs audit_log mező, csak logoljuk
-            if (error?.message?.includes('Invalid key audit_log') || 
-                error?.response?.data?.error?.message?.includes('Invalid key audit_log')) {
+            if (error?.message?.includes('Invalid key audit_log') ||
+              error?.response?.data?.error?.message?.includes('Invalid key audit_log')) {
               console.warn('audit_log mező nem létezik a projektben, audit log frissítés kihagyva');
-            } else if (error?.response?.status === 404 || 
-                       error?.message?.includes('404') || 
-                       error?.message?.includes('nem található') ||
-                       error?.message?.includes('Not Found')) {
+            } else if (error?.response?.status === 404 ||
+              error?.message?.includes('404') ||
+              error?.message?.includes('nem található') ||
+              error?.message?.includes('Not Found')) {
               // Projekt nem található (lehet, hogy törölve lett) - csendben kihagyjuk
               // Nem logoljuk, mert ez normális esemény lehet
             } else {
@@ -826,9 +836,9 @@ export default function MaterialsPage() {
       addLogEntry({
         action: 'modified',
         materialName: variables.oldTransaction?.material?.name || 'Ismeretlen anyag',
-        quantity: { 
-          pallets: variables.data.quantity_pallets || 0, 
-          rolls: variables.data.quantity_rolls || 0 
+        quantity: {
+          pallets: variables.data.quantity_pallets || 0,
+          rolls: variables.data.quantity_rolls || 0
         },
         oldQuantity: {
           pallets: variables.oldTransaction?.quantity_pallets || 0,
@@ -836,7 +846,7 @@ export default function MaterialsPage() {
         },
         user: user?.username || user?.email || 'Ismeretlen',
       });
-      
+
       queryClient.invalidateQueries({ queryKey: ['material-balances'] });
       queryClient.invalidateQueries({ queryKey: ['material-transactions'] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
@@ -868,21 +878,41 @@ export default function MaterialsPage() {
     }
   };
 
+  const { can } = usePermission();
+
+  if (!can('materials', 'view_list')) {
+    return (
+      <ProtectedRoute>
+        <DashboardLayout>
+          <div className="p-6">
+            <Alert variant="destructive">
+              <AlertDescription>
+                Nincs jogosultságod az anyagok oldal megtekintéséhez.
+              </AlertDescription>
+            </Alert>
+          </div>
+        </DashboardLayout>
+      </ProtectedRoute>
+    );
+  }
+
   return (
     <ProtectedRoute>
       <DashboardLayout>
         <div className="mb-6">
           <div className="flex items-center justify-between mb-2">
             <div>
-          <h2 className="text-3xl font-bold">Anyagok</h2>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Kezelje a szigetelőanyagokat és készleteket
-          </p>
-        </div>
-            <Button onClick={() => setIsPickupDialogOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Anyag felvétel
-            </Button>
+              <h2 className="text-3xl font-bold">Anyagok</h2>
+              <p className="text-gray-600 dark:text-gray-400 mt-1">
+                Kezelje a szigetelőanyagokat és készleteket
+              </p>
+            </div>
+            {can('materials', 'pickup') && (
+              <Button onClick={() => setIsPickupDialogOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Anyag felvétel
+              </Button>
+            )}
           </div>
         </div>
 
@@ -929,9 +959,9 @@ export default function MaterialsPage() {
                     .map(([date, materialsByDate]) => (
                       <div key={date} className="border-b last:border-b-0 pb-4 last:pb-0">
                         <div className="font-semibold text-lg mb-3 text-gray-700 dark:text-gray-300">
-                          {new Date(date).toLocaleDateString('hu-HU', { 
-                            year: 'numeric', 
-                            month: 'long', 
+                          {new Date(date).toLocaleDateString('hu-HU', {
+                            year: 'numeric',
+                            month: 'long',
                             day: 'numeric',
                             weekday: 'long'
                           })}
@@ -959,38 +989,42 @@ export default function MaterialsPage() {
                                 </TableCell>
                                 <TableCell className="text-right">
                                   <div className="flex justify-end gap-2">
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => {
-                                        setEditingTransaction({ date, materialId });
-                                        setEditTransactionData({
-                                          pallets: String(summary.pallets),
-                                          rolls: String(summary.rolls),
-                                        });
-                                      }}
-                                    >
-                                      <Edit className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => {
-                                        // Törlés megerősítés nélkül (audit log miatt)
-                                        // A tranzakció adatai már rendelkezésre állnak, nem kell újra lekérni
-                                        summary.transactions.forEach((t: any) => {
-                                          deleteTransactionMutation.mutate({
-                                            id: t.documentId || t.id,
-                                            transaction: t, // A tranzakció adatai már itt vannak
+                                    {can('materials', 'edit_transaction') && (
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                          setEditingTransaction({ date, materialId });
+                                          setEditTransactionData({
+                                            pallets: String(summary.pallets),
+                                            rolls: String(summary.rolls),
                                           });
-                                        });
-                                      }}
-                                      className="text-red-600 hover:text-red-700"
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
+                                        }}
+                                      >
+                                        <Edit className="h-4 w-4" />
+                                      </Button>
+                                    )}
+                                    {can('materials', 'delete_transaction') && (
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                          // Törlés megerősítés nélkül (audit log miatt)
+                                          // A tranzakció adatai már rendelkezésre állnak, nem kell újra lekérni
+                                          summary.transactions.forEach((t: any) => {
+                                            deleteTransactionMutation.mutate({
+                                              id: t.documentId || t.id,
+                                              transaction: t, // A tranzakció adatai már itt vannak
+                                            });
+                                          });
+                                        }}
+                                        className="text-red-600 hover:text-red-700"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    )}
                                   </div>
                                 </TableCell>
                               </TableRow>
@@ -1068,7 +1102,7 @@ export default function MaterialsPage() {
                       const rollsPerTransaction = Math.floor(totalRolls / transactions.length);
                       const remainingPallets = totalPallets % transactions.length;
                       const remainingRolls = totalRolls % transactions.length;
-                      
+
                       transactions.forEach((t: any, index: number) => {
                         const pallets = palletsPerTransaction + (index < remainingPallets ? 1 : 0);
                         const rolls = rollsPerTransaction + (index < remainingRolls ? 1 : 0);
@@ -1142,15 +1176,17 @@ export default function MaterialsPage() {
             <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
               <div className="flex items-center justify-between mb-3">
                 <Label className="text-sm font-medium">Elérhető anyagok beállítása:</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsAvailableMaterialsDialogOpen(true)}
-                >
-                  <Package className="mr-2 h-4 w-4" />
-                  {availableMaterialsIds.length > 0 ? `${availableMaterialsIds.length} anyag kiválasztva` : 'Anyagok kiválasztása'}
-                </Button>
+                {can('materials', 'manage_settings') && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsAvailableMaterialsDialogOpen(true)}
+                  >
+                    <Package className="mr-2 h-4 w-4" />
+                    {availableMaterialsIds.length > 0 ? `${availableMaterialsIds.length} anyag kiválasztva` : 'Anyagok kiválasztása'}
+                  </Button>
+                )}
               </div>
               <div className="mb-3">
                 <Label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">Számítás dátumig:</Label>
@@ -1206,7 +1242,7 @@ export default function MaterialsPage() {
                           <div key={String(mat.materialId)} className="flex justify-between">
                             <span>{mat.materialName}</span>
                             <span>
-                              {mat.category === 'insulation' 
+                              {mat.category === 'insulation'
                                 ? formatInsulationQuantity(mat.availablePallets, mat.availableRolls)
                                 : formatFoilQuantity(mat.totalRolls)}
                             </span>
@@ -1215,13 +1251,13 @@ export default function MaterialsPage() {
                       </div>
                     </div>
                   )}
-                  
+
                   {materialRequirements.projectsNoOption > 0 && (
                     <div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-2 rounded">
                       <span className="font-medium">❌ Hiány:</span> {materialRequirements.projectsNoOption} projekt nem készíthető el, mert nincs elég anyag sem a 10cm+15cm, sem a 12.5cm+12.5cm kombinációhoz.
                     </div>
                   )}
-                  
+
                   {materialRequirements.projectsOptionA > 0 && materialRequirements.projectsOptionB > 0 && (
                     <div className="text-sm text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 p-2 rounded">
                       <span className="font-medium">ℹ️ Info:</span> {materialRequirements.projectsOptionA} projekt 10cm+15cm kombinációval, {materialRequirements.projectsOptionB} projekt 12.5cm+12.5cm kombinációval készíthető el.
@@ -1237,13 +1273,13 @@ export default function MaterialsPage() {
                       <span className="font-medium">ℹ️ Info:</span> {materialRequirements.projectsOptionB} projekt 12.5cm+12.5cm kombinációval készíthető el.
                     </div>
                   )}
-                  
+
                   {materialRequirements.projectsWithoutData > 0 && (
                     <div className="text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 p-2 rounded">
                       <span className="font-medium">⚠️ Figyelmeztetés:</span> {materialRequirements.projectsWithoutData} projekt nem számolható bele az anyagigénybe, mert hiányzik a terület (area_sqm) adata.
                     </div>
                   )}
-                  
+
                   <div className="text-sm">
                     <span className="font-medium">Projektek száma:</span> {materialRequirements.projectCount}
                     {materialRequirements.totalProjects > materialRequirements.projectCount && (
@@ -1312,7 +1348,7 @@ export default function MaterialsPage() {
                     required
                   />
                 </div>
-                
+
                 {/* Táblázatos anyagfelvétel */}
                 <div>
                   <Label className="mb-2 block">Anyagok és mennyiségek:</Label>
@@ -1332,7 +1368,7 @@ export default function MaterialsPage() {
                             const materialId = String(material.documentId || material.id);
                             const isInsulation = material.category === 'insulation';
                             const quantities = pickupQuantities[materialId] || { pallets: '', rolls: '' };
-                            
+
                             return (
                               <TableRow key={materialId}>
                                 <TableCell className="font-medium">
@@ -1397,7 +1433,7 @@ export default function MaterialsPage() {
                     </Table>
                   </div>
                 </div>
-                
+
                 <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                   <p className="text-xs text-blue-700 dark:text-blue-300">
                     <strong>ℹ️ Tájékoztatás:</strong> A szállítólevelet a projekt <strong>Képek</strong> menüpontjában, az <strong>"Egyéb"</strong> kategóriába töltse fel!
@@ -1424,7 +1460,7 @@ export default function MaterialsPage() {
               Aktuális anyagegyenleg
             </h3>
           </div>
-          
+
           {Object.keys(calculatedBalance.all).length === 0 ? (
             <Card>
               <CardContent className="py-8 text-center text-gray-500">
@@ -1448,7 +1484,7 @@ export default function MaterialsPage() {
                       {calculatedBalance.insulation.map(([materialId, balanceData]) => {
                         const { pickedUp, used, balance: balanceAmount, name } = balanceData;
                         const isNegative = balanceAmount.rolls < 0 || balanceAmount.pallets < 0;
-                        
+
                         return (
                           <div key={materialId} className="border-b pb-3 last:border-b-0 last:pb-0">
                             <div className="font-medium mb-2">{name}</div>
@@ -1507,7 +1543,7 @@ export default function MaterialsPage() {
                         // Felhasznált: tekercsek * coveragePerRoll + maradék m²
                         const usedTotalSquareMeters = (used.rolls || 0) * coveragePerRoll + (used.squareMeters || 0);
                         const balanceSquareMeters = balanceAmount.squareMeters || 0;
-                        
+
                         return (
                           <div key={materialId} className="border-b pb-3 last:border-b-0 last:pb-0">
                             <div className="font-medium mb-2">{name}</div>
@@ -1577,7 +1613,7 @@ export default function MaterialsPage() {
                         modified: 'text-amber-600 dark:text-amber-400',
                         deleted: 'text-red-600 dark:text-red-400',
                       };
-                      
+
                       return (
                         <TableRow key={entry.id}>
                           <TableCell className="text-sm text-gray-600 dark:text-gray-400">
@@ -1644,7 +1680,7 @@ export default function MaterialsPage() {
                   materials.map((material) => {
                     const materialId = String(material.documentId || material.id);
                     const isChecked = availableMaterialsIds.includes(materialId);
-                    
+
                     return (
                       <div key={materialId} className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">
                         <Checkbox
@@ -1688,7 +1724,7 @@ export default function MaterialsPage() {
                   ⚠️ Ha nem választ ki anyagot, az összes anyag elérhetőnek számít.
                 </p>
               )}
-        </div>
+            </div>
             <DialogFooter>
               <Button
                 type="button"

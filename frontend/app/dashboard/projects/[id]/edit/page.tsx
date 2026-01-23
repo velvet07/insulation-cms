@@ -33,6 +33,7 @@ import { formatPhoneNumber, cleanPhoneNumber } from '@/lib/utils';
 import { useAuthStore } from '@/lib/store/auth';
 import { createAuditLogEntry, addAuditLogEntry } from '@/lib/utils/audit-log';
 import { isAdminRole } from '@/lib/utils/user-role';
+import { usePermission } from '@/lib/contexts/permission-context';
 import type { Company } from '@/types';
 import { ArrowLeft } from 'lucide-react';
 
@@ -54,7 +55,15 @@ export default function EditProjectPage() {
   const params = useParams();
   const projectId = params.id as string;
   const queryClient = useQueryClient();
+  const { can } = usePermission();
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Check permission - redirect if user cannot edit projects
+  useEffect(() => {
+    if (!can('projects', 'edit')) {
+      router.push('/dashboard/projects');
+    }
+  }, [can, router]);
 
   const { data: project, isLoading } = useQuery({
     queryKey: ['project', projectId],
@@ -76,23 +85,30 @@ export default function EditProjectPage() {
   const userCompany = getUserCompany();
   const isMainContractor = userCompany?.type === 'main_contractor';
   const isAdmin = isAdminRole(user);
-  
+
   // Check if project belongs to main contractor (for subcontractor editing)
-  const projectIsMainContractor = project && 
-    project.company && 
-    typeof project.company === 'object' && 
-    'type' in project.company && 
+  const projectIsMainContractor = project &&
+    project.company &&
+    typeof project.company === 'object' &&
+    'type' in project.company &&
     (project.company as Company).type === 'main_contractor';
-  
+
   // Admin can edit subcontractor for ALL projects (main contractor or not)
-  // Main contractor can edit subcontractor only for main contractor projects
-  const canEditSubcontractor = isAdmin || (projectIsMainContractor && isMainContractor);
+  // Main contractor can edit subcontractor for projects assigned to them or their subcontractors
+  // Note: Visibility is already restricted by the projects list page, so if they can see it here, they should be able to edit it
+  const canEditSubcontractor = isAdmin || isMainContractor;
 
   // Fetch available subcontractors
   const { data: subcontractors = [], isLoading: isLoadingSubcontractors } = useQuery({
     queryKey: ['companies', 'subcontractors'],
     queryFn: async () => {
-      return await companiesApi.getAll({ type: 'subcontractor' });
+      const filters: any = { type: 'subcontractor' };
+      // If main contractor, only show their own subcontractors
+      if (isMainContractor && userCompany) {
+        const companyId = (userCompany as any).documentId || userCompany.id;
+        filters.parent_company = companyId;
+      }
+      return await companiesApi.getAll(filters);
     },
     enabled: !!canEditSubcontractor,
   });
@@ -150,16 +166,16 @@ export default function EditProjectPage() {
       });
     }
   }, [project, form]);
-  
+
   const mutation = useMutation({
     mutationFn: async (data: ProjectFormValues) => {
       // Összeállítjuk a client_address mezőt a kompatibilitás miatt (ha még használjuk)
       const client_address = `${data.client_street}, ${data.client_city}, ${data.client_zip}`;
-      
+
       // Note: audit_log frissítés ideiglenesen kikapcsolva, amíg a Strapi szerver
       // nem lett újraindítva az audit_log mezőt tartalmazó schema-val
       // TODO: Engedélyezni az audit_log frissítést, miután a Strapi szerver újraindult
-      
+
       const updateData: any = {
         ...data,
         client_address, // Kompatibilitás miatt
@@ -175,7 +191,7 @@ export default function EditProjectPage() {
         if (data.subcontractor && data.subcontractor !== 'none' && data.subcontractor !== '' && data.subcontractor !== null) {
           // Strapi v5: accept both documentId (string) and numeric id
           const subcontractorStr = data.subcontractor.toString();
-          
+
           // Strapi v5 documentIds can be strings with or without hyphens
           // If it's a long string (likely documentId), use as-is
           // If it's a short numeric string, try to parse as number
@@ -198,7 +214,7 @@ export default function EditProjectPage() {
           updateData.subcontractor = null;
         }
       }
-      
+
       return projectsApi.update(projectId, updateData);
     },
     onSuccess: () => {

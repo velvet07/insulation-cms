@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ProtectedRoute } from '@/components/auth/protected-route';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
@@ -17,23 +18,28 @@ import {
 } from '@/components/ui/table';
 import { projectsApi } from '@/lib/api/projects';
 import { useAuthStore } from '@/lib/store/auth';
-import { isAdminRole } from '@/lib/utils/user-role';
+import { usePermission } from '@/lib/contexts/permission-context';
 import type { Project } from '@/types';
 import { FileCheck, CheckCircle2, Loader2 } from 'lucide-react';
 
 export default function ApprovedProjectsPage() {
   const user = useAuthStore((state) => state.user);
+  const { can } = usePermission();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [selectedProjects, setSelectedProjects] = useState<Set<string>>(new Set());
 
-  // Only show this page to main contractors or admins
-  const isMainContractor = user?.role === 'foovallalkozo' || isAdminRole(user);
+  useEffect(() => {
+    if (!can('approved_projects', 'view_list')) {
+      router.push('/dashboard');
+    }
+  }, [can, router]);
 
   // Fetch approved projects - hooks must be called before any conditional returns
   const { data: approvedProjects = [], isLoading } = useQuery({
     queryKey: ['projects', 'approved'],
     queryFn: () => projectsApi.getAll({ status: 'approved' }),
-    enabled: isMainContractor, // Only fetch if user is main contractor or admin
+    enabled: can('approved_projects', 'view_list'),
   });
 
   // Group projects by subcontractor only - must be before conditional return
@@ -43,14 +49,14 @@ export default function ApprovedProjectsPage() {
       projects: Project[];
       totalArea: number;
     }> = {};
-    
+
     approvedProjects.forEach((project) => {
       // Get subcontractor - a projekt vagy subcontractornál van, vagy közvetlenül a main contractornál
       // Ha nincs subcontractor, akkor a projekt közvetlenül a main contractornál van
       const subcontractor = project.subcontractor;
       const subcontractorId = subcontractor?.documentId || subcontractor?.id || 'no-subcontractor';
       const subcontractorName = subcontractor?.name || 'Nincs alvállalkozó';
-      
+
       // Initialize subcontractor group if needed
       if (!grouped[subcontractorId]) {
         grouped[subcontractorId] = {
@@ -59,13 +65,13 @@ export default function ApprovedProjectsPage() {
           totalArea: 0,
         };
       }
-      
+
       // Add project to subcontractor group
       const subcontractorGroup = grouped[subcontractorId];
       subcontractorGroup.projects.push(project);
       subcontractorGroup.totalArea += project.area_sqm || 0;
     });
-    
+
     return grouped;
   }, [approvedProjects]);
 
@@ -77,14 +83,14 @@ export default function ApprovedProjectsPage() {
       // 1. Generate PDF certificates for each selected project
       // 2. Send email to subcontractor with certificate attached
       // 3. Archive the projects
-      
+
       // For now, just archive the projects
       const archivePromises = projectIds.map((projectId) =>
         projectsApi.update(projectId, { status: 'archived' })
       );
-      
+
       await Promise.all(archivePromises);
-      
+
       return { success: true, count: projectIds.length };
     },
     onSuccess: (data) => {
@@ -97,23 +103,7 @@ export default function ApprovedProjectsPage() {
     },
   });
 
-  // Early return after all hooks are called
-  if (!isMainContractor) {
-    return (
-      <ProtectedRoute>
-        <DashboardLayout>
-          <div className="p-6">
-            <Card>
-              <CardContent className="py-8 text-center">
-                <p className="text-gray-500">Nincs jogosultságod az oldal megtekintéséhez.</p>
-                <p className="text-sm text-gray-400 mt-2">Csak fővállalkozók és adminok érhetik el ezt az oldalt.</p>
-              </CardContent>
-            </Card>
-          </div>
-        </DashboardLayout>
-      </ProtectedRoute>
-    );
-  }
+
 
   const handleSelectProject = (projectId: string) => {
     setSelectedProjects((prev) => {
@@ -131,7 +121,7 @@ export default function ApprovedProjectsPage() {
     setSelectedProjects((prev) => {
       const newSet = new Set(prev);
       const allSelected = projectIds.every((id) => newSet.has(id));
-      
+
       if (allSelected) {
         // Deselect all
         projectIds.forEach((id) => newSet.delete(id));
@@ -139,7 +129,7 @@ export default function ApprovedProjectsPage() {
         // Select all
         projectIds.forEach((id) => newSet.add(id));
       }
-      
+
       return newSet;
     });
   };
@@ -223,7 +213,7 @@ export default function ApprovedProjectsPage() {
                     <CardHeader>
                       <div className="flex items-center justify-between">
                         <CardTitle>
-                          {subcontractorGroup.subcontractor?.name || 'Nincs alvállalkozó'} 
+                          {subcontractorGroup.subcontractor?.name || 'Nincs alvállalkozó'}
                           {' '}({subcontractorGroup.projects.length} projekt, összesen {subcontractorGroup.totalArea.toLocaleString('hu-HU')} m²)
                         </CardTitle>
                         <div className="flex items-center gap-2">

@@ -1,5 +1,7 @@
 'use client';
 
+import { useMemo } from 'react';
+
 import { ProtectedRoute } from '@/components/auth/protected-route';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,36 +11,78 @@ import { useQuery } from '@tanstack/react-query';
 import { projectsApi } from '@/lib/api/projects';
 import type { Project } from '@/types';
 import { useAuthStore } from '@/lib/store/auth';
-import { isAdminRole } from '@/lib/utils/user-role';
+import { isAdminRole, isMainContractor } from '@/lib/utils/user-role';
+import { usePermission } from '@/lib/contexts/permission-context';
+import { companiesApi } from '@/lib/api/companies';
 import { Plus, Eye } from 'lucide-react';
 
 export default function DashboardPage() {
   const router = useRouter();
 
   const user = useAuthStore((state) => state.user);
+  const { can } = usePermission();
   const isAdmin = isAdminRole(user);
 
   // Build filters for data isolation
   const filters: any = {};
-  if (!isAdmin) {
-    if (user?.company) {
-      const company = user.company as any;
-      const companyId = company.documentId || company.id;
 
-      if (company.type === 'subcontractor') {
-        filters.subcontractor = companyId;
-      } else {
-        filters.company = companyId;
-      }
-    } else if (user?.id) {
+  const userCompany = user?.company as any;
+  const userCompanyId = useMemo(() => {
+    if (!user?.company) return null;
+    if (typeof user.company === 'object') return (user.company as any).documentId || (user.company as any).id;
+    return user.company;
+  }, [user]);
+
+  const isSubcontractorCompany = userCompany?.type === 'subcontractor' || userCompany?.type === 'Alvállalkozó';
+
+  if (!isAdmin) {
+    if (isSubcontractorCompany && userCompanyId) {
+      filters.subcontractor = userCompanyId;
+    } else if (!userCompanyId && user?.id) {
       filters.assigned_to = user.id;
     }
+    // Main contractor: NO backend filter
   }
 
-  const { data: projects = [], isLoading } = useQuery({
+  const { data: allProjects = [], isLoading } = useQuery({
     queryKey: ['projects', filters],
     queryFn: () => projectsApi.getAll(filters),
   });
+
+  // Fetch user's company details to get subcontractors list (for Main Contractor visibility)
+  const { data: userCompanyDetails } = useQuery({
+    queryKey: ['company', userCompanyId, 'with-subs'],
+    queryFn: () => companiesApi.getOne(userCompanyId!, 'subcontractors'),
+    enabled: !!userCompanyId && isMainContractor(user),
+  });
+
+  // Frontend filtering for main contractors
+  const projects = useMemo(() => {
+    if (isAdmin || !userCompanyId || isSubcontractorCompany) {
+      return allProjects;
+    }
+
+    // Main contractor: filter to show projects where they are company OR subcontractor OR project subcontractor is theirs
+    return allProjects.filter((project: Project) => {
+      const projCompanyId = project.company?.documentId || project.company?.id;
+      const projSubcontractorId = project.subcontractor?.documentId || project.subcontractor?.id;
+
+      // Direct assignment
+      if (projCompanyId?.toString() === userCompanyId.toString() ||
+        projSubcontractorId?.toString() === userCompanyId.toString()) {
+        return true;
+      }
+
+      // Check if project subcontractor is one of my subcontractors
+      if (userCompanyDetails?.subcontractors && projSubcontractorId) {
+        return userCompanyDetails.subcontractors.some((sub: any) =>
+          (sub.documentId || sub.id)?.toString() === projSubcontractorId.toString()
+        );
+      }
+
+      return false;
+    });
+  }, [allProjects, user, isAdmin, userCompanyId, isSubcontractorCompany, userCompanyDetails]);
 
   // Számoljuk a projekteket státusz szerint
   const totalProjects = projects.length;
@@ -67,10 +111,12 @@ export default function DashboardPage() {
                 Áttekintés a projektekről és statisztikákról
               </p>
             </div>
-            <Button onClick={() => router.push('/dashboard/projects/new')}>
-              <Plus className="mr-2 h-4 w-4" />
-              Új projekt
-            </Button>
+            {can('projects', 'create') && (
+              <Button onClick={() => router.push('/dashboard/projects/new')}>
+                <Plus className="mr-2 h-4 w-4" />
+                Új projekt
+              </Button>
+            )}
           </div>
         </div>
 

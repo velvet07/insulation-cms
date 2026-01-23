@@ -7,37 +7,20 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { FileText, FileEdit, ArrowRight } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth';
-import { isAdminRole, isSubcontractor } from '@/lib/utils/user-role';
+import { useEffect } from 'react';
+import { usePermission } from '@/lib/contexts/permission-context';
 
 export default function DocumentsPage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
-  
-  // Use helper functions for consistent checking
-  const isSubContractor = isSubcontractor(user);
-  const isAdmin = isAdminRole(user);
-  
-  // Block access if user data is incomplete (safer default)
-  const hasCompleteUserData = !!(user && (user.role || user.company));
-  
-  // Only allow main contractors and admins
-  // Block if user is subcontractor (and not admin) OR if user data is incomplete
-  if ((isSubContractor && !isAdmin) || !hasCompleteUserData) {
-    return (
-      <ProtectedRoute>
-        <DashboardLayout>
-          <div className="p-6">
-            <Card>
-              <CardContent className="py-8 text-center">
-                <p className="text-gray-500">Nincs jogosultságod az oldal megtekintéséhez.</p>
-                <p className="text-sm text-gray-400 mt-2">Csak fővállalkozók és adminok érhetik el ezt az oldalt.</p>
-              </CardContent>
-            </Card>
-          </div>
-        </DashboardLayout>
-      </ProtectedRoute>
-    );
-  }
+
+  const { can } = usePermission();
+
+  useEffect(() => {
+    if (!can('documents', 'view_list')) {
+      router.push('/dashboard');
+    }
+  }, [can, router]);
 
   return (
     <ProtectedRoute>

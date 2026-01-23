@@ -30,7 +30,9 @@ import {
 import { projectsApi } from '@/lib/api/projects';
 import { useAuthStore } from '@/lib/store/auth';
 import { createAuditLogEntry } from '@/lib/utils/audit-log';
+import { usePermission } from '@/lib/contexts/permission-context';
 import { ArrowLeft } from 'lucide-react';
+import { useEffect } from 'react';
 
 const projectSchema = z.object({
   client_name: z.string().min(1, 'Az ügyfél neve kötelező'),
@@ -47,7 +49,15 @@ export default function NewProjectPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
+  const { can } = usePermission();
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Check permission - redirect if user cannot create projects
+  useEffect(() => {
+    if (!can('projects', 'create')) {
+      router.push('/dashboard/projects');
+    }
+  }, [can, router]);
 
   const form = useForm<ProjectFormValues>({
     resolver: zodResolver(projectSchema),
@@ -70,7 +80,7 @@ export default function NewProjectPage() {
         `Projekt létrehozva: ${data.title}`
       );
       auditLogEntry.module = 'Projekt';
-      
+
       // Get user's company safely
       const getUserCompany = () => {
         if (!user?.company) return null;
@@ -85,7 +95,7 @@ export default function NewProjectPage() {
       };
 
       const userCompany = getUserCompany();
-      
+
       // Set company and subcontractor based on user's company
       const projectData: any = {
         ...data,
@@ -121,7 +131,7 @@ export default function NewProjectPage() {
           // - project.subcontractor = user.company (subcontractor)
           const parentCompany = userCompany.parent_company;
           const subcontractorId = userCompany.documentId || userCompany.id;
-          
+
           if (parentCompany) {
             const parentId = parentCompany.documentId || parentCompany.id;
             if (parentId) {
@@ -135,7 +145,7 @@ export default function NewProjectPage() {
               }
             }
           }
-          
+
           if (subcontractorId) {
             // Strapi v5: use documentId if it's a string, otherwise numeric id
             if (typeof subcontractorId === 'string') {
@@ -151,7 +161,7 @@ export default function NewProjectPage() {
         console.warn('User company not found or not properly populated. User:', user);
         console.warn('User company type:', typeof user?.company);
         console.warn('User company value:', user?.company);
-        
+
         // If user has no company, assign the project to this user
         // This ensures the user can see their own projects even without a company
         const userId = user?.documentId || user?.id;
@@ -160,9 +170,9 @@ export default function NewProjectPage() {
           console.log('Setting assigned_to to user (no company):', userId);
         }
       }
-      
+
       console.log('Final project data before creation:', JSON.stringify(projectData, null, 2));
-      
+
       return projectsApi.create(projectData);
     },
     onSuccess: () => {

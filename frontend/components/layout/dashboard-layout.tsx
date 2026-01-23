@@ -19,11 +19,14 @@ import {
   X,
   FileCheck,
 } from 'lucide-react';
+import { usePermission, type PermissionModule } from '@/lib/contexts/permission-context';
 
 interface NavItem {
   title: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
+  module?: PermissionModule;
+  action?: string;
 }
 
 const navItems: NavItem[] = [
@@ -36,44 +39,54 @@ const navItems: NavItem[] = [
     title: 'Projektek',
     href: '/dashboard/projects',
     icon: FolderKanban,
+    module: 'projects',
+    action: 'view_list',
   },
   {
     title: 'Dokumentumok',
     href: '/dashboard/documents',
     icon: FileText,
+    module: 'documents',
+    action: 'view_list',
   },
   {
     title: 'Naptár',
     href: '/dashboard/calendar',
     icon: Calendar,
+    module: 'calendar',
+    action: 'view_calendar',
   },
   {
     title: 'Anyagok',
     href: '/dashboard/materials',
     icon: Package,
+    module: 'materials',
+    action: 'view_list',
   },
   {
     title: 'Beállítások',
     href: '/dashboard/settings',
     icon: Settings,
+    module: 'settings',
+    action: 'view_list',
   },
 ];
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
 }
-
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
   const { user, clearAuth, token } = useAuthStore();
+  const { can } = usePermission();
   const [isCheckingUser, setIsCheckingUser] = useState(true);
 
   // Use the helper function for consistent subcontractor checking
   const isSubContractor = isSubcontractor(user);
   const isAdmin = isAdminRole(user);
-  
+
   // Check if user data is complete - if not, we should block access to restricted items
   const hasCompleteUserData = !!(user && (user.role || user.company));
 
@@ -118,19 +131,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
-              
-              // Hide Documents and Settings from subcontractors (but allow admins)
-              // Only show/hide if we have complete user data, otherwise show nothing (safer)
-              if (hasCompleteUserData && isSubContractor && !isAdmin && 
-                  (item.href === '/dashboard/documents' || item.href === '/dashboard/settings')) {
+
+              // Check permissions
+              if (item.module && item.action && !can(item.module, item.action)) {
                 return null;
               }
-              
-              // If user data is incomplete, also hide restricted items as a safety measure
-              if (!hasCompleteUserData && (item.href === '/dashboard/documents' || item.href === '/dashboard/settings')) {
-                return null;
-              }
-              
+
               return (
                 <Button
                   key={item.href}
@@ -149,23 +155,23 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 </Button>
               );
             })}
-            {/* Approved Projects - Only for main contractors and admins */}
-            {(user?.role === 'foovallalkozo' || isAdminRole(user)) && (
-              <Button
-                variant={pathname === '/dashboard/approved-projects' ? 'secondary' : 'ghost'}
-                className={cn(
-                  'w-full justify-start',
-                  pathname === '/dashboard/approved-projects' && 'bg-gray-100 dark:bg-gray-700'
-                )}
-                onClick={() => {
-                  router.push('/dashboard/approved-projects');
-                  setSidebarOpen(false);
-                }}
-              >
-                <FileCheck className="mr-2 h-5 w-5" />
-                Jóváhagyott projektek
-              </Button>
-            )}
+            {/* Approved Projects - Only for main contractors and admins */
+              can('approved_projects', 'view_list') && (
+                <Button
+                  variant={pathname === '/dashboard/approved-projects' ? 'secondary' : 'ghost'}
+                  className={cn(
+                    'w-full justify-start',
+                    pathname === '/dashboard/approved-projects' && 'bg-gray-100 dark:bg-gray-700'
+                  )}
+                  onClick={() => {
+                    router.push('/dashboard/approved-projects');
+                    setSidebarOpen(false);
+                  }}
+                >
+                  <FileCheck className="mr-2 h-5 w-5" />
+                  Jóváhagyott projektek
+                </Button>
+              )}
           </nav>
 
           {/* User info and logout */}

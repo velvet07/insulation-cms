@@ -4,8 +4,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { useQuery } from '@tanstack/react-query';
-import { createStrapiUser, getRoles } from '@/lib/api/create-user';
+import { createStrapiUser } from '@/lib/api/create-user';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -17,13 +16,7 @@ import {
   FormMessage,
   FormDescription,
 } from '@/components/ui/form';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+
 import {
   Card,
   CardContent,
@@ -36,7 +29,6 @@ const createUserSchema = z.object({
   username: z.string().min(3, 'A felhasználónév legalább 3 karakter hosszú kell legyen'),
   email: z.string().email('Érvényes email cím szükséges'),
   password: z.string().min(6, 'A jelszó legalább 6 karakter hosszú kell legyen'),
-  role: z.number().optional(),
 });
 
 type CreateUserFormValues = z.infer<typeof createUserSchema>;
@@ -46,13 +38,7 @@ export default function CreateUserPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  // Fetch available roles
-  const { data: rolesData, isLoading: rolesLoading } = useQuery({
-    queryKey: ['roles'],
-    queryFn: getRoles,
-  });
 
-  const roles = rolesData?.roles || [];
 
   const form = useForm<CreateUserFormValues>({
     resolver: zodResolver(createUserSchema),
@@ -60,7 +46,6 @@ export default function CreateUserPage() {
       username: '',
       email: '',
       password: '',
-      role: undefined,
     },
   });
 
@@ -76,14 +61,14 @@ export default function CreateUserPage() {
         password: values.password,
         confirmed: true,
         blocked: false,
-        role: values.role,
+        role: 1, // Authenticated role (default in Strapi)
       });
       setSuccess(true);
       form.reset();
     } catch (err: any) {
       console.error('Create user error:', err);
       let errorMessage = 'Hiba történt a felhasználó létrehozása során.';
-      
+
       if (err.response?.data?.error?.message) {
         errorMessage = err.response.data.error.message;
       } else if (err.response?.data?.message) {
@@ -91,7 +76,7 @@ export default function CreateUserPage() {
       } else if (err.message) {
         errorMessage = err.message;
       }
-      
+
       setError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -184,44 +169,10 @@ export default function CreateUserPage() {
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="role"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Szerepkör (opcionális)</FormLabel>
-                    <Select
-                      onValueChange={(value) => field.onChange(value ? parseInt(value) : undefined)}
-                      value={field.value?.toString()}
-                      disabled={isLoading || rolesLoading}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Válassz szerepkört (opcionális)" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="">Nincs szerepkör (alapértelmezett)</SelectItem>
-                        {roles.map((role: any) => (
-                          <SelectItem key={role.id} value={role.id.toString()}>
-                            {role.name} {role.type && `(${role.type})`}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormDescription>
-                      Ha nincs kiválasztva szerepkör, a felhasználó az alapértelmezett szerepkört kapja.
-                      Az admin szerepkört később a Strapi admin felületen is be lehet állítani.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
               <Button
                 type="submit"
                 className="w-full"
-                disabled={isLoading || rolesLoading}
+                disabled={isLoading}
               >
                 {isLoading ? 'Létrehozás...' : 'Felhasználó létrehozása'}
               </Button>

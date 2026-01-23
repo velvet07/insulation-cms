@@ -32,6 +32,7 @@ import {
   generateCalendarEventFromProject,
 } from '@/lib/utils/calendar-export';
 import { useAuthStore } from '@/lib/store/auth';
+import { usePermission } from '@/lib/contexts/permission-context';
 import { DocumentsTab } from './documents-tab';
 import { PhotosTab } from './photos-tab';
 import { photosApi } from '@/lib/api/photos';
@@ -104,6 +105,7 @@ export default function ProjectDetailPage() {
   const projectId = params.id as string;
   const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
+  const { can } = usePermission();
   const [activeTab, setActiveTab] = useState<'info' | 'contract' | 'documents' | 'photos'>('info');
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isSubcontractorDialogOpen, setIsSubcontractorDialogOpen] = useState(false);
@@ -132,7 +134,7 @@ export default function ProjectDetailPage() {
         const month = String(scheduledDate.getMonth() + 1).padStart(2, '0');
         const day = String(scheduledDate.getDate()).padStart(2, '0');
         setScheduleDate(`${year}-${month}-${day}`);
-        
+
         // Alapértelmezett időtartam: 8:00-16:00
         // Ha a dátum tartalmaz időt (nem csak dátum), akkor azt használjuk
         const hours = scheduledDate.getHours();
@@ -183,12 +185,12 @@ export default function ProjectDetailPage() {
   const isMainContractor = userCompany?.type === 'main_contractor';
   const isAdmin = isAdminRole(user);
   // Admin vagy main contractor szerkesztheti a subcontractor-t
-  const canEditSubcontractor = (isAdmin || isMainContractor) && project && 
-    project.company && 
-    typeof project.company === 'object' && 
-    'type' in project.company && 
+  const canEditSubcontractor = (isAdmin || isMainContractor) && project &&
+    project.company &&
+    typeof project.company === 'object' &&
+    'type' in project.company &&
     project.company.type === 'main_contractor';
-  
+
   // Fetch available subcontractors (only if user is main contractor and can edit)
   const { data: subcontractors = [] } = useQuery({
     queryKey: ['companies', 'subcontractors'],
@@ -201,8 +203,8 @@ export default function ProjectDetailPage() {
     mutationFn: async (subcontractorId: string | null) => {
       // In Strapi v5, relations are updated by sending the documentId or id
       const updateData: any = {
-        subcontractor: subcontractorId 
-          ? (subcontractorId.includes('-') ? subcontractorId : parseInt(subcontractorId)) 
+        subcontractor: subcontractorId
+          ? (subcontractorId.includes('-') ? subcontractorId : parseInt(subcontractorId))
           : null,
       };
       return projectsApi.update(projectId, updateData);
@@ -256,21 +258,21 @@ export default function ProjectDetailPage() {
     mutationFn: async (data: ContractDataFormValues) => {
       // Lekérjük a jelenlegi projektet, hogy megtartsuk a meglévő mezőket
       const currentProject = await projectsApi.getOne(projectId);
-      
+
       // Strapi belső mezők, amiket nem szabad elküldeni az update során
       const strapiInternalFields = ['id', 'documentId', 'createdAt', 'updatedAt', 'publishedAt'];
-      
+
       // Relation mezők, amiket külön kezelünk (csak ID-t küldünk, ha szükséges)
       const relationFields = ['company', 'subcontractor', 'assigned_to', 'approved_by', 'tenant', 'documents', 'photos'];
-      
+
       // Szűrjük ki a Strapi belső mezőket ÉS a relation mezőket a jelenlegi projektből
       // (relation mezőket külön kezeljük, ha szükséges)
       const cleanCurrentProject = Object.fromEntries(
-        Object.entries(currentProject).filter(([key]) => 
+        Object.entries(currentProject).filter(([key]) =>
           !strapiInternalFields.includes(key) && !relationFields.includes(key)
         )
       ) as Partial<Project>;
-      
+
       // Helper függvény: üres stringeket undefined-ra konvertál
       const normalizeValue = (value: any): any => {
         if (value === null || value === '') {
@@ -312,17 +314,17 @@ export default function ProjectDetailPage() {
       updateData.scheduled_date = normalizeValue(data.scheduled_date); // Üres string -> undefined (Strapi date mező nem fogad el üres stringet)
 
       // Ellenőrizzük, hogy volt-e már szerződés adat (az első mentés vagy módosítás)
-      const hasExistingContractData = currentProject.client_birth_place || 
-                                      currentProject.client_birth_date || 
-                                      currentProject.client_tax_id;
-      
+      const hasExistingContractData = currentProject.client_birth_place ||
+        currentProject.client_birth_date ||
+        currentProject.client_tax_id;
+
       // Audit log bejegyzés hozzáadása - Szerződés adatok modul
       const auditLogEntry = createAuditLogEntry(
         hasExistingContractData ? 'contract_data_modified' : 'contract_data_filled',
         user,
         'Szerződés adatok modul'
       );
-      
+
       // Hozzáadjuk az audit log bejegyzést a meglévő audit log-hoz
       updateData.audit_log = addAuditLogEntry(currentProject.audit_log, auditLogEntry);
 
@@ -331,7 +333,7 @@ export default function ProjectDetailPage() {
       // Note: floor_material_extra már hozzá lett adva a schema-hoz, de még a listában van - később eltávolíthatjuk
       const fieldsNotOnServer = ['audit_log'];
       const systemFields = ['id', 'documentId', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy'];
-      
+
       // Szűrjük ki az undefined értékeket ÉS a szerveren még nem létező mezőket ÉS a rendszer mezőket
       const cleanUpdateData = Object.fromEntries(
         Object.entries(updateData).filter(([key, value]) => {
@@ -344,7 +346,7 @@ export default function ProjectDetailPage() {
           return true;
         })
       ) as Partial<Project>;
-      
+
       // Ha floor_material !== 'other', akkor ne küldjük el a floor_material_extra-t
       if (data.floor_material !== 'other') {
         delete cleanUpdateData.floor_material_extra;
@@ -381,7 +383,7 @@ export default function ProjectDetailPage() {
 
   const handleStatusChange = async (newStatus: Project['status']) => {
     if (!project) return;
-    
+
     setIsUpdatingStatus(true);
     try {
       const auditLogEntry = createAuditLogEntry(
@@ -426,10 +428,10 @@ export default function ProjectDetailPage() {
       );
 
       await projectsApi.update(projectId, cleanUpdateData);
-      
+
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
-      
+
       // Sikeres státusz módosítás - nincs felugró ablak
     } catch (error: any) {
       // Hiba esetén logoljuk a részleteket
@@ -490,12 +492,12 @@ export default function ProjectDetailPage() {
       );
 
       console.log('[handleSendBackForRevision] Sending update data:', JSON.stringify(cleanUpdateData, null, 2));
-      
+
       await projectsApi.update(projectId, cleanUpdateData);
-      
+
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
-      
+
       setIsRevisionDialogOpen(false);
       setRevisionNotes('');
     } catch (error: any) {
@@ -503,7 +505,7 @@ export default function ProjectDetailPage() {
       console.error('[handleSendBackForRevision] Error response:', error.response?.data);
       console.error('[handleSendBackForRevision] Error status:', error.response?.status);
       console.error('[handleSendBackForRevision] Update data that was sent:', cleanUpdateData);
-      
+
       // Részletesebb hibaüzenet
       let errorMessage = 'Hiba történt a projekt visszaküldése során.';
       if (error.response?.data?.error?.message) {
@@ -513,12 +515,12 @@ export default function ProjectDetailPage() {
       } else if (error.message) {
         errorMessage = error.message;
       }
-      
+
       // Ha 400-as hiba, lehet hogy a mezők még nincsenek a Strapi-ben
       if (error.response?.status === 400) {
         errorMessage += '\n\nLehet, hogy a Strapi szerveren még nincsenek az új mezők (revision_notes, sent_back_at, sent_back_by) vagy az új státusz (sent_back_for_revision).\nKérjük, frissítse a Strapi szervert a docs/PROJECT_SCHEMA_UPDATE.md útmutató alapján.';
       }
-      
+
       alert(errorMessage);
     } finally {
       setIsUpdatingStatus(false);
@@ -535,7 +537,7 @@ export default function ProjectDetailPage() {
       // Dátum és idő kombinálása
       const [startHour, startMinute] = scheduleStartTime.split(':').map(Number);
       const scheduledDateTime = new Date(`${scheduleDate}T${scheduleStartTime}:00`);
-      
+
       const auditLogEntry = createAuditLogEntry(
         project?.scheduled_date ? 'scheduled_date_modified' : 'scheduled_date_set',
         user,
@@ -579,18 +581,18 @@ export default function ProjectDetailPage() {
   // Calendar export funkciók
   const handleGoogleCalendarExport = () => {
     if (!project) return;
-    
+
     // Ha nincs scheduled_date, nincs mit exportálni
     if (!project.scheduled_date && !scheduleDate) {
       return;
     }
-    
+
     // Ha van scheduleDate a form-ban, azt használjuk, különben a project.scheduled_date-et
     const dateToUse = scheduleDate || project.scheduled_date;
     const tempProject = { ...project, scheduled_date: dateToUse };
-    
+
     const calendarData = generateCalendarEventFromProject(tempProject);
-    
+
     // Ha van idő beállítva a form-ban, azt használjuk
     if (scheduleDate && scheduleStartTime && scheduleEndTime) {
       const [startHour, startMinute] = scheduleStartTime.split(':').map(Number);
@@ -600,23 +602,23 @@ export default function ProjectDetailPage() {
       calendarData.startDate = startDate;
       calendarData.endDate = endDate;
     }
-    
+
     const googleUrl = generateGoogleCalendarUrl(calendarData);
     window.open(googleUrl, '_blank');
   };
 
   const handleAppleCalendarExport = () => {
     if (!project) return;
-    
+
     if (!project.scheduled_date && !scheduleDate) {
       return;
     }
-    
+
     const dateToUse = scheduleDate || project.scheduled_date;
     const tempProject = { ...project, scheduled_date: dateToUse };
-    
+
     const calendarData = generateCalendarEventFromProject(tempProject);
-    
+
     // Ha van idő beállítva a form-ban, azt használjuk
     if (scheduleDate && scheduleStartTime && scheduleEndTime) {
       const startDate = new Date(`${scheduleDate}T${scheduleStartTime}:00`);
@@ -624,7 +626,7 @@ export default function ProjectDetailPage() {
       calendarData.startDate = startDate;
       calendarData.endDate = endDate;
     }
-    
+
     const filename = `${project.title || 'event'}_${formatDate(dateToUse).replace(/-/g, '')}.ics`;
     downloadAppleCalendarFile(calendarData, filename);
   };
@@ -676,7 +678,7 @@ export default function ProjectDetailPage() {
 
   // Számítások az állapot összesítőhöz
   // Ellenőrizzük, hogy minden kötelező szerződés adat megvan-e és nem üres
-  
+
   // Helper függvény: ellenőrzi, hogy a mező létezik-e és nem üres
   const isFieldFilled = (value: any): boolean => {
     if (value === null || value === undefined) return false;
@@ -696,14 +698,14 @@ export default function ProjectDetailPage() {
   // Ha property_address_same === true, akkor az ingatlan cím mezőket automatikusan kitöltöttnek tekintjük
   // Ha property_address_same === false vagy undefined, akkor a property mezőket kell ellenőrizni
   const propertyAddressSame = project.property_address_same === true;
-  const hasClientAddress = isFieldFilled(project.client_street) && 
-                           isFieldFilled(project.client_city) && 
-                           isFieldFilled(project.client_zip);
+  const hasClientAddress = isFieldFilled(project.client_street) &&
+    isFieldFilled(project.client_city) &&
+    isFieldFilled(project.client_zip);
   const hasPropertyAddress = propertyAddressSame
     ? hasClientAddress // Ha megegyezik, akkor a client cím mezők alapján ellenőrizünk
-    : (isFieldFilled(project.property_street) && 
-       isFieldFilled(project.property_city) && 
-       isFieldFilled(project.property_zip));
+    : (isFieldFilled(project.property_street) &&
+      isFieldFilled(project.property_city) &&
+      isFieldFilled(project.property_zip));
 
   // A szerződő cím mindig kötelező az összesítőben
   const contractFilled = !!(
@@ -726,14 +728,14 @@ export default function ProjectDetailPage() {
     const catId = (cat.documentId || cat.id).toString();
     return photos.some(p => (p.category?.documentId || p.category?.id?.toString()) === catId);
   });
-  
-  const photosReady = requiredCategories.length > 0 && 
-                     categoriesWithPhotos.length === requiredCategories.length;
 
-  const canBeSentForReview = project.status === 'in_progress' && 
-                            contractFilled && 
-                            docsReady && 
-                            photosReady;
+  const photosReady = requiredCategories.length > 0 &&
+    categoriesWithPhotos.length === requiredCategories.length;
+
+  const canBeSentForReview = project.status === 'in_progress' &&
+    contractFilled &&
+    docsReady &&
+    photosReady;
 
   return (
     <ProtectedRoute>
@@ -756,17 +758,21 @@ export default function ProjectDetailPage() {
               </p>
             </div>
             <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={() => router.push(`/dashboard/projects/${projectId}/edit`)}
-              >
-                <Edit className="mr-2 h-4 w-4" />
-                Szerkesztés
-              </Button>
-              <Button variant="outline" onClick={handleDelete}>
-                <Trash2 className="mr-2 h-4 w-4" />
-                Törlés
-              </Button>
+              {can('projects', 'edit') && (
+                <Button
+                  variant="outline"
+                  onClick={() => router.push(`/dashboard/projects/${projectId}/edit`)}
+                >
+                  <Edit className="mr-2 h-4 w-4" />
+                  Szerkesztés
+                </Button>
+              )}
+              {can('projects', 'delete') && (
+                <Button variant="outline" onClick={handleDelete}>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Törlés
+                </Button>
+              )}
             </div>
           </div>
 
@@ -779,18 +785,18 @@ export default function ProjectDetailPage() {
             </span>
 
             <div className="flex gap-2">
-              {project.status === 'pending' && (
-                <Button 
-                  size="sm" 
+              {project.status === 'pending' && can('projects', 'edit') && (
+                <Button
+                  size="sm"
                   onClick={() => handleStatusChange('in_progress')}
                   disabled={isUpdatingStatus}
                 >
                   Munka megkezdése
                 </Button>
               )}
-              {project.status === 'in_progress' && (
-                <Button 
-                  size="sm" 
+              {project.status === 'in_progress' && can('projects', 'edit') && (
+                <Button
+                  size="sm"
                   variant="secondary"
                   onClick={() => handleStatusChange('ready_for_review')}
                   disabled={isUpdatingStatus}
@@ -798,10 +804,10 @@ export default function ProjectDetailPage() {
                   Átnézésre küldés
                 </Button>
               )}
-              {project.status === 'ready_for_review' && (isMainContractor || isAdmin) && (
+              {project.status === 'ready_for_review' && (isMainContractor || isAdmin) && can('projects', 'approve') && (
                 <>
-                  <Button 
-                    size="sm" 
+                  <Button
+                    size="sm"
                     variant="outline"
                     className="text-red-600 border-red-200 hover:bg-red-50"
                     onClick={() => setIsRevisionDialogOpen(true)}
@@ -809,8 +815,8 @@ export default function ProjectDetailPage() {
                   >
                     Visszaküldés javításra
                   </Button>
-                  <Button 
-                    size="sm" 
+                  <Button
+                    size="sm"
                     className="bg-green-600 hover:bg-green-700"
                     onClick={() => handleStatusChange('approved')}
                     disabled={isUpdatingStatus}
@@ -819,9 +825,9 @@ export default function ProjectDetailPage() {
                   </Button>
                 </>
               )}
-              {project.status === 'sent_back_for_revision' && !isMainContractor && !isAdmin && (
-                <Button 
-                  size="sm" 
+              {project.status === 'sent_back_for_revision' && !isMainContractor && !isAdmin && can('projects', 'edit') && (
+                <Button
+                  size="sm"
                   variant="secondary"
                   onClick={() => handleStatusChange('ready_for_review')}
                   disabled={isUpdatingStatus}
@@ -829,9 +835,9 @@ export default function ProjectDetailPage() {
                   Jóváhagyásra küldés
                 </Button>
               )}
-              {project.status === 'approved' && (
-                <Button 
-                  size="sm" 
+              {project.status === 'approved' && can('projects', 'edit') && (
+                <Button
+                  size="sm"
                   variant="default"
                   onClick={() => handleStatusChange('completed')}
                   disabled={isUpdatingStatus}
@@ -847,36 +853,36 @@ export default function ProjectDetailPage() {
         </div>
 
         {/* Revision Notes Alert - csak sent_back_for_revision vagy ready_for_review státuszban */}
-        {(project.status === 'sent_back_for_revision' || project.status === 'ready_for_review') && 
-         project.revision_notes && (
-          <div className="mb-6">
-            <Card className="border-2 border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800">
-              <CardContent className="pt-6">
-                <div className="flex items-start gap-3">
-                  <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-red-800 dark:text-red-300 mb-2">
-                      Visszaküldés javításra - Javítási megjegyzés
-                    </h3>
-                    <p className="text-red-700 dark:text-red-400 whitespace-pre-wrap">
-                      {project.revision_notes}
-                    </p>
-                    {project.sent_back_at && (
-                      <p className="text-xs text-red-600 dark:text-red-500 mt-2">
-                        Visszaküldve: {formatDate(project.sent_back_at)}
-                        {project.sent_back_by && typeof project.sent_back_by === 'object' && (
-                          <span className="ml-2">
-                            ({project.sent_back_by.email || project.sent_back_by.username})
-                          </span>
-                        )}
+        {(project.status === 'sent_back_for_revision' || project.status === 'ready_for_review') &&
+          project.revision_notes && (
+            <div className="mb-6">
+              <Card className="border-2 border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800">
+                <CardContent className="pt-6">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-red-800 dark:text-red-300 mb-2">
+                        Visszaküldés javításra - Javítási megjegyzés
+                      </h3>
+                      <p className="text-red-700 dark:text-red-400 whitespace-pre-wrap">
+                        {project.revision_notes}
                       </p>
-                    )}
+                      {project.sent_back_at && (
+                        <p className="text-xs text-red-600 dark:text-red-500 mt-2">
+                          Visszaküldve: {formatDate(project.sent_back_at)}
+                          {project.sent_back_by && typeof project.sent_back_by === 'object' && (
+                            <span className="ml-2">
+                              ({project.sent_back_by.email || project.sent_back_by.username})
+                            </span>
+                          )}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
         {/* Revision Dialog */}
         <Dialog open={isRevisionDialogOpen} onOpenChange={setIsRevisionDialogOpen}>
@@ -922,41 +928,37 @@ export default function ProjectDetailPage() {
           <div className="flex gap-4">
             <button
               onClick={() => setActiveTab('info')}
-              className={`pb-3 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'info'
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
-              }`}
+              className={`pb-3 px-1 border-b-2 font-medium text-sm ${activeTab === 'info'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
             >
               Információk
             </button>
             <button
               onClick={() => setActiveTab('contract')}
-              className={`pb-3 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'contract'
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
-              }`}
+              className={`pb-3 px-1 border-b-2 font-medium text-sm ${activeTab === 'contract'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
             >
               Szerződés adatok
             </button>
             <button
               onClick={() => setActiveTab('documents')}
-              className={`pb-3 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'documents'
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
-              }`}
+              className={`pb-3 px-1 border-b-2 font-medium text-sm ${activeTab === 'documents'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
             >
               Dokumentumok
             </button>
             <button
               onClick={() => setActiveTab('photos')}
-              className={`pb-3 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'photos'
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
-              }`}
+              className={`pb-3 px-1 border-b-2 font-medium text-sm ${activeTab === 'photos'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
             >
               Fényképek
             </button>
@@ -1027,8 +1029,8 @@ export default function ProjectDetailPage() {
                         Minden kötelező elem megvan. A projekt küldhető jóváhagyásra!
                       </p>
                     </div>
-                    <Button 
-                      size="sm" 
+                    <Button
+                      size="sm"
                       className="bg-green-600 hover:bg-green-700 text-white"
                       onClick={() => handleStatusChange('ready_for_review')}
                       disabled={isUpdatingStatus}
@@ -1123,11 +1125,11 @@ export default function ProjectDetailPage() {
                         <p className="font-medium">
                           {project.property_address_same === true || (!project.property_street && !project.property_city && !project.property_zip)
                             ? (project.client_street && project.client_city && project.client_zip
-                                ? `${project.client_zip} ${project.client_city}, ${project.client_street}`
-                                : project.client_address || '-')
+                              ? `${project.client_zip} ${project.client_city}, ${project.client_street}`
+                              : project.client_address || '-')
                             : (project.property_zip && project.property_city && project.property_street
-                                ? `${project.property_zip} ${project.property_city}, ${project.property_street}`
-                                : '-')}
+                              ? `${project.property_zip} ${project.property_city}, ${project.property_street}`
+                              : '-')}
                         </p>
                       </div>
                     </div>
@@ -1207,8 +1209,8 @@ export default function ProjectDetailPage() {
                                     {subcontractors.map((subcontractor) => {
                                       const subId = subcontractor.documentId || subcontractor.id?.toString() || '';
                                       return (
-                                        <SelectItem 
-                                          key={subId} 
+                                        <SelectItem
+                                          key={subId}
                                           value={subId}
                                         >
                                           {subcontractor.name}
@@ -1277,7 +1279,7 @@ export default function ProjectDetailPage() {
                     />
                   </div>
                 </div>
-                
+
                 <div className="flex items-center gap-3 pt-2 border-t">
                   <Button
                     onClick={handleSaveSchedule}
@@ -1287,7 +1289,7 @@ export default function ProjectDetailPage() {
                     <Save className="mr-2 h-4 w-4" />
                     Mentés
                   </Button>
-                  
+
                   {(project?.scheduled_date || scheduleDate) && (
                     <>
                       <Button
@@ -1311,7 +1313,7 @@ export default function ProjectDetailPage() {
                     </>
                   )}
                 </div>
-                
+
                 {project?.scheduled_date && (
                   <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                     <Calendar className="h-4 w-4" />
@@ -1344,7 +1346,7 @@ export default function ProjectDetailPage() {
                     </span>
                   </div>
                 </div>
-                
+
                 {/* Audit Log */}
                 {project.audit_log && project.audit_log.length > 0 && (
                   <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
@@ -1379,7 +1381,7 @@ export default function ProjectDetailPage() {
                             'scheduled_date_set': 'Ütemezett dátum beállítva',
                             'scheduled_date_modified': 'Ütemezett dátum módosítva',
                           };
-                          
+
                           const actionLabel = actionLabels[entry.action] || entry.action;
                           const timestamp = new Date(entry.timestamp);
                           const formattedDate = timestamp.toLocaleDateString('hu-HU', {
@@ -1389,7 +1391,7 @@ export default function ProjectDetailPage() {
                             hour: '2-digit',
                             minute: '2-digit',
                           });
-                          
+
                           return (
                             <div key={index} className="flex items-start gap-2 text-xs border-b border-gray-200 dark:border-gray-700 pb-2 last:border-b-0">
                               <div className="flex-1">

@@ -18,7 +18,10 @@
     },
     "type": {
       "type": "enumeration",
-      "enum": ["main_contractor", "subcontractor"],
+      "enum": [
+        "main_contractor",
+        "subcontractor"
+      ],
       "required": true,
       "default": "subcontractor"
     },
@@ -50,6 +53,24 @@
       "type": "relation",
       "relation": "oneToMany",
       "target": "api::project.project",
+      "mappedBy": "company"
+    },
+    "material_transactions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::material-transaction.material-transaction",
+      "mappedBy": "company"
+    },
+    "material_balances": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::material-balance.material-balance",
+      "mappedBy": "company"
+    },
+    "documents": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::document.document",
       "mappedBy": "company"
     }
   }

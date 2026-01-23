@@ -14,7 +14,10 @@
   "attributes": {
     "type": {
       "type": "enumeration",
-      "enum": ["pickup", "usage"],
+      "enum": [
+        "pickup",
+        "usage"
+      ],
       "required": true
     },
     "pickup_date": {
@@ -44,6 +47,12 @@
       "type": "relation",
       "relation": "manyToOne",
       "target": "plugin::users-permissions.user"
+    },
+    "company": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::company.company",
+      "inversedBy": "material_transactions"
     },
     "material": {
       "type": "relation",

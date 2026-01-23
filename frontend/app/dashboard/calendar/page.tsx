@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/dialog';
 import { Calendar as CalendarIcon, ExternalLink, Download, Save, Clock } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { usePermission } from '@/lib/contexts/permission-context';
 import { formatDate, formatPhoneNumber } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -45,8 +46,15 @@ interface ProjectEvent extends Event {
 
 export default function CalendarPage() {
   const router = useRouter();
+  const { can } = usePermission();
   const queryClient = useQueryClient();
   const [view, setView] = useState<View>('month');
+
+  useEffect(() => {
+    if (!can('calendar', 'view_calendar')) {
+      router.push('/dashboard');
+    }
+  }, [can, router]);
   const [date, setDate] = useState(new Date());
   const [selectedEvent, setSelectedEvent] = useState<ProjectEvent | null>(null);
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
@@ -67,17 +75,17 @@ export default function CalendarPage() {
       .filter((project: Project) => project.scheduled_date)
       .map((project: Project) => {
         const scheduledDate = new Date(project.scheduled_date!);
-        
+
         // Alapértelmezett időtartam: 8:00-16:00
         const start = new Date(scheduledDate);
         start.setHours(8, 0, 0, 0);
-        
+
         const end = new Date(scheduledDate);
         end.setHours(16, 0, 0, 0);
-        
+
         // Esemény cím összeállítása
         const title = project.title || `Projekt: ${project.client_name || 'Névtelen'}`;
-        
+
         return {
           id: project.documentId || project.id,
           title,
@@ -100,9 +108,9 @@ export default function CalendarPage() {
       completed: '#6b7280', // gray
       archived: '#94a3b8', // slate
     };
-    
+
     const backgroundColor = statusColors[event.project.status] || '#6b7280';
-    
+
     return {
       style: {
         backgroundColor,
@@ -118,7 +126,7 @@ export default function CalendarPage() {
   // Esemény kattintás kezelése
   const handleSelectEvent = (event: ProjectEvent) => {
     setSelectedEvent(event);
-    
+
     // Betöltjük a jelenlegi dátumot és időt
     if (event.start) {
       const startDate = new Date(event.start);
@@ -126,26 +134,26 @@ export default function CalendarPage() {
       const month = String(startDate.getMonth() + 1).padStart(2, '0');
       const day = String(startDate.getDate()).padStart(2, '0');
       setScheduleDate(`${year}-${month}-${day}`);
-      
+
       const hours = startDate.getHours();
       const minutes = startDate.getMinutes();
       setScheduleStartTime(`${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`);
     }
-    
+
     if (event.end) {
       const endDate = new Date(event.end);
       const endHours = endDate.getHours();
       const endMinutes = endDate.getMinutes();
       setScheduleEndTime(`${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`);
     }
-    
+
     setIsExportDialogOpen(true);
   };
 
   // Navigálás a projekt részletekhez
   const handleNavigateToProject = () => {
     if (!selectedEvent) return;
-    
+
     const projectId = selectedEvent.project.documentId || selectedEvent.project.id;
     router.push(`/dashboard/projects/${projectId}`);
     setIsExportDialogOpen(false);
@@ -154,15 +162,15 @@ export default function CalendarPage() {
   // Google Calendar export
   const handleGoogleCalendarExport = () => {
     if (!selectedEvent) return;
-    
+
     const calendarData = generateCalendarEventFromProject(selectedEvent.project);
-    
+
     // Ha van scheduled_date, az időt is beállítjuk az esemény alapján
     if (selectedEvent.start && selectedEvent.end) {
       calendarData.startDate = selectedEvent.start;
       calendarData.endDate = selectedEvent.end;
     }
-    
+
     const googleUrl = generateGoogleCalendarUrl(calendarData);
     window.open(googleUrl, '_blank');
     setIsExportDialogOpen(false);
@@ -171,15 +179,15 @@ export default function CalendarPage() {
   // Apple Calendar export
   const handleAppleCalendarExport = () => {
     if (!selectedEvent) return;
-    
+
     const calendarData = generateCalendarEventFromProject(selectedEvent.project);
-    
+
     // Ha van scheduled_date, az időt is beállítjuk az esemény alapján
     if (selectedEvent.start && selectedEvent.end) {
       calendarData.startDate = selectedEvent.start;
       calendarData.endDate = selectedEvent.end;
     }
-    
+
     const filename = `${selectedEvent.project.title || 'event'}_${formatDate(selectedEvent.start).replace(/-/g, '')}.ics`;
     downloadAppleCalendarFile(calendarData, filename);
     setIsExportDialogOpen(false);
@@ -193,7 +201,7 @@ export default function CalendarPage() {
       }
 
       const projectId = selectedEvent.project.documentId || selectedEvent.project.id;
-      
+
       // Dátum és idő kombinálása - az időt is eltároljuk a scheduled_date-ben
       // A Strapi date mező fogadja el a datetime formátumot is, de csak a dátum részt használja
       // Az időt a frontend-en kezeljük
@@ -202,7 +210,7 @@ export default function CalendarPage() {
       };
 
       await projectsApi.update(projectId, updateData);
-      
+
       // A dátum és idő változását a naptárban azonnal frissítjük az events-ben
       // a queryClient.invalidateQueries miatt újratöltődik
     },
@@ -219,7 +227,7 @@ export default function CalendarPage() {
 
   const handleSaveSchedule = async () => {
     if (!scheduleDate) return;
-    
+
     setIsSavingSchedule(true);
     try {
       await saveScheduleMutation.mutateAsync();
@@ -320,7 +328,7 @@ export default function CalendarPage() {
                 Módosítsa az ütemezést vagy exportálja az eseményt a külső naptárba.
               </DialogDescription>
             </DialogHeader>
-            
+
             {selectedEvent && (
               <div className="space-y-4 py-4">
                 {/* Ütemezés módosítása */}
@@ -367,15 +375,17 @@ export default function CalendarPage() {
                       />
                     </div>
                   </div>
-                  <Button
-                    onClick={handleSaveSchedule}
-                    disabled={isSavingSchedule || !scheduleDate}
-                    size="sm"
-                    className="w-full sm:w-auto flex items-center justify-center"
-                  >
-                    <Save className="mr-2 h-4 w-4 shrink-0" />
-                    <span>{isSavingSchedule ? 'Mentés...' : 'Ütemezés mentése'}</span>
-                  </Button>
+                  {can('calendar', 'manage_schedule') && (
+                    <Button
+                      onClick={handleSaveSchedule}
+                      disabled={isSavingSchedule || !scheduleDate}
+                      size="sm"
+                      className="w-full sm:w-auto flex items-center justify-center"
+                    >
+                      <Save className="mr-2 h-4 w-4 shrink-0" />
+                      <span>{isSavingSchedule ? 'Mentés...' : 'Ütemezés mentése'}</span>
+                    </Button>
+                  )}
                 </div>
 
                 {/* Projekt információk */}
@@ -405,7 +415,7 @@ export default function CalendarPage() {
                 </div>
               </div>
             )}
-            
+
             <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-2 mt-4 px-0">
               <Button
                 variant="outline"

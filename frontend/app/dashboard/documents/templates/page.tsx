@@ -8,7 +8,7 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAuthStore } from '@/lib/store/auth';
-import { isAdminRole } from '@/lib/utils/user-role';
+import { usePermission } from '@/lib/contexts/permission-context';
 import type { Company } from '@/types';
 import { Input } from '@/components/ui/input';
 import {
@@ -71,25 +71,13 @@ export default function TemplatesPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
+  const { can } = usePermission();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  
-  // Check if user is subcontractor - same way as in projects page
-  const getUserCompany = () => {
-    if (!user?.company) return null;
-    if (typeof user.company === 'object' && 'type' in user.company) {
-      return user.company as Company;
-    }
-    return null;
-  };
 
-  const userCompany = getUserCompany();
-  const isSubContractor = userCompany?.type === 'subcontractor';
-  const isAdmin = isAdminRole(user);
-  
-  // Only allow main contractors and admins
-  if (isSubContractor && !isAdmin) {
+  // Check permission - redirect if user cannot view templates
+  if (!can('documents', 'view_list')) {
     return (
       <ProtectedRoute>
         <DashboardLayout>
@@ -97,7 +85,6 @@ export default function TemplatesPage() {
             <Card>
               <CardContent className="py-8 text-center">
                 <p className="text-gray-500">Nincs jogosultságod az oldal megtekintéséhez.</p>
-                <p className="text-sm text-gray-400 mt-2">Csak fővállalkozók és adminok érhetik el ezt az oldalt.</p>
               </CardContent>
             </Card>
           </div>
@@ -105,10 +92,9 @@ export default function TemplatesPage() {
       </ProtectedRoute>
     );
   }
-  
-  // Only allow main contractors and admins to create/edit/delete templates
-  const isMainContractor = userCompany?.type === 'main_contractor';
-  const canManageTemplates = isMainContractor || isAdmin;
+
+  // Check if user can manage templates
+  const canManageTemplates = can('documents', 'manage_templates');
 
   const { data: templates = [], isLoading } = useQuery({
     queryKey: ['templates'],
@@ -139,11 +125,11 @@ export default function TemplatesPage() {
     },
     onError: (error: any) => {
       console.error('Error creating template:', error);
-      
+
       // Ellenőrizzük, hogy a hiba a type enum értékekkel kapcsolatos-e
       const errorMessage = error?.message || '';
-      if (errorMessage.includes('type must be one of the following values') || 
-          errorMessage.includes('contract, worksheet, invoice')) {
+      if (errorMessage.includes('type must be one of the following values') ||
+        errorMessage.includes('contract, worksheet, invoice')) {
         alert(
           'HIBA: A Strapi szerveren a dokumentum típusok sémája még nem frissült.\n\n' +
           'Kérjük, frissítse a Strapi admin felületen:\n' +
@@ -173,11 +159,11 @@ export default function TemplatesPage() {
     },
     onError: (error: any) => {
       console.error('Error updating template:', error);
-      
+
       // Ellenőrizzük, hogy a hiba a type enum értékekkel kapcsolatos-e
       const errorMessage = error?.message || '';
-      if (errorMessage.includes('type must be one of the following values') || 
-          errorMessage.includes('contract, worksheet, invoice')) {
+      if (errorMessage.includes('type must be one of the following values') ||
+        errorMessage.includes('contract, worksheet, invoice')) {
         alert(
           'HIBA: A Strapi szerveren a dokumentum típusok sémája még nem frissült.\n\n' +
           'Kérjük, frissítse a Strapi admin felületen:\n' +
@@ -268,143 +254,143 @@ export default function TemplatesPage() {
                     Új sablon
                   </Button>
                 </DialogTrigger>
-              <DialogContent className="sm:max-w-[500px]">
-                <DialogHeader>
-                  <DialogTitle>
-                    {editingTemplate ? 'Sablon szerkesztése' : 'Új sablon létrehozása'}
-                  </DialogTitle>
-                  <DialogDescription>
-                    {editingTemplate
-                      ? 'Módosítsa a sablon adatait vagy cserélje le a sablon fájlt.'
-                      : 'Hozzon létre egy új dokumentum sablont.'}
-                  </DialogDescription>
-                </DialogHeader>
-                <Form {...form}>
-                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                    <FormField
-                      control={form.control}
-                      name="name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Sablon neve *</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Pl. Felmérőlap sablon" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="type"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Dokumentum típus *</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <DialogContent className="sm:max-w-[500px]">
+                  <DialogHeader>
+                    <DialogTitle>
+                      {editingTemplate ? 'Sablon szerkesztése' : 'Új sablon létrehozása'}
+                    </DialogTitle>
+                    <DialogDescription>
+                      {editingTemplate
+                        ? 'Módosítsa a sablon adatait vagy cserélje le a sablon fájlt.'
+                        : 'Hozzon létre egy új dokumentum sablont.'}
+                    </DialogDescription>
+                  </DialogHeader>
+                  <Form {...form}>
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                      <FormField
+                        control={form.control}
+                        name="name"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Sablon neve *</FormLabel>
                             <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Válasszon típust" />
-                              </SelectTrigger>
+                              <Input placeholder="Pl. Felmérőlap sablon" {...field} />
                             </FormControl>
-                            <SelectContent>
-                              {Object.entries(TEMPLATE_TYPE_LABELS).map(([value, label]) => (
-                                <SelectItem key={value} value={value}>
-                                  {label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">
-                        Sablon fájl (DOCX) {editingTemplate && '(opcionális - csak lecseréléshez)'}
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="file"
-                          accept=".docx"
-                          onChange={handleFileSelect}
-                          className="flex-1"
-                        />
-                        {selectedFile && (
-                          <span className="text-sm text-gray-500">{selectedFile.name}</span>
+                            <FormMessage />
+                          </FormItem>
                         )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="type"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Dokumentum típus *</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Válasszon típust" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {Object.entries(TEMPLATE_TYPE_LABELS).map(([value, label]) => (
+                                  <SelectItem key={value} value={value}>
+                                    {label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">
+                          Sablon fájl (DOCX) {editingTemplate && '(opcionális - csak lecseréléshez)'}
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="file"
+                            accept=".docx"
+                            onChange={handleFileSelect}
+                            className="flex-1"
+                          />
+                          {selectedFile && (
+                            <span className="text-sm text-gray-500">{selectedFile.name}</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {editingTemplate
+                            ? 'Csak akkor töltse fel, ha le szeretné cserélni a meglévő sablont.'
+                            : 'Töltse fel a DOCX sablon fájlt. A tokeneket {token_neve} formátumban használja.'}
+                        </p>
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {editingTemplate
-                          ? 'Csak akkor töltse fel, ha le szeretné cserélni a meglévő sablont.'
-                          : 'Töltse fel a DOCX sablon fájlt. A tokeneket {token_neve} formátumban használja.'}
-                      </p>
-                    </div>
-                    <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-md border border-gray-200 dark:border-gray-700">
-                      <p className="text-sm font-medium mb-3">Elérhető tokenek:</p>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                        <div>
-                          <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">Ügyfél adatok:</p>
-                          <ul className="space-y-1 text-gray-600 dark:text-gray-400">
-                            <li>• {'{client_name}'} - Ügyfél neve</li>
-                            <li>• {'{client_address}'} - Teljes cím</li>
-                            <li>• {'{client_street}'} - Utca, házszám</li>
-                            <li>• {'{client_city}'} - Város</li>
-                            <li>• {'{client_zip}'} - IRSZ</li>
-                            <li>• {'{client_phone}'} - Telefonszám</li>
-                            <li>• {'{client_email}'} - Email cím</li>
-                          </ul>
-                        </div>
-                        <div>
-                          <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">Születési adatok:</p>
-                          <ul className="space-y-1 text-gray-600 dark:text-gray-400">
-                            <li>• {'{client_birth_place}'} - Születési hely</li>
-                            <li>• {'{client_birth_date}'} - Születési idő</li>
-                            <li>• {'{client_mother_name}'} - Anyja neve</li>
-                            <li>• {'{client_tax_id}'} - Adóazonosító</li>
-                          </ul>
-                        </div>
-                        <div>
-                          <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">Ingatlan adatok:</p>
-                          <ul className="space-y-1 text-gray-600 dark:text-gray-400">
-                            <li>• {'{property_address}'} - Teljes ingatlan cím</li>
-                            <li>• {'{property_street}'} - Ingatlan utca</li>
-                            <li>• {'{property_city}'} - Ingatlan város</li>
-                            <li>• {'{property_zip}'} - Ingatlan IRSZ</li>
-                          </ul>
-                        </div>
-                        <div>
-                          <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">Projekt adatok:</p>
-                          <ul className="space-y-1 text-gray-600 dark:text-gray-400">
-                            <li>• {'{project_title}'} - Projekt címe</li>
-                            <li>• {'{area_sqm}'} - Terület (m²)</li>
-                            <li>• {'{floor_material}'} - Födém anyaga</li>
-                            <li>• {'{insulation_option}'} - Szigetelési opció</li>
-                            <li>• {'{date}'} - Aktuális dátum</li>
-                            <li>• {'{created_at}'} - Létrehozás dátuma</li>
-                          </ul>
+                      <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-md border border-gray-200 dark:border-gray-700">
+                        <p className="text-sm font-medium mb-3">Elérhető tokenek:</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">Ügyfél adatok:</p>
+                            <ul className="space-y-1 text-gray-600 dark:text-gray-400">
+                              <li>• {'{client_name}'} - Ügyfél neve</li>
+                              <li>• {'{client_address}'} - Teljes cím</li>
+                              <li>• {'{client_street}'} - Utca, házszám</li>
+                              <li>• {'{client_city}'} - Város</li>
+                              <li>• {'{client_zip}'} - IRSZ</li>
+                              <li>• {'{client_phone}'} - Telefonszám</li>
+                              <li>• {'{client_email}'} - Email cím</li>
+                            </ul>
+                          </div>
+                          <div>
+                            <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">Születési adatok:</p>
+                            <ul className="space-y-1 text-gray-600 dark:text-gray-400">
+                              <li>• {'{client_birth_place}'} - Születési hely</li>
+                              <li>• {'{client_birth_date}'} - Születési idő</li>
+                              <li>• {'{client_mother_name}'} - Anyja neve</li>
+                              <li>• {'{client_tax_id}'} - Adóazonosító</li>
+                            </ul>
+                          </div>
+                          <div>
+                            <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">Ingatlan adatok:</p>
+                            <ul className="space-y-1 text-gray-600 dark:text-gray-400">
+                              <li>• {'{property_address}'} - Teljes ingatlan cím</li>
+                              <li>• {'{property_street}'} - Ingatlan utca</li>
+                              <li>• {'{property_city}'} - Ingatlan város</li>
+                              <li>• {'{property_zip}'} - Ingatlan IRSZ</li>
+                            </ul>
+                          </div>
+                          <div>
+                            <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">Projekt adatok:</p>
+                            <ul className="space-y-1 text-gray-600 dark:text-gray-400">
+                              <li>• {'{project_title}'} - Projekt címe</li>
+                              <li>• {'{area_sqm}'} - Terület (m²)</li>
+                              <li>• {'{floor_material}'} - Födém anyaga</li>
+                              <li>• {'{insulation_option}'} - Szigetelési opció</li>
+                              <li>• {'{date}'} - Aktuális dátum</li>
+                              <li>• {'{created_at}'} - Létrehozás dátuma</li>
+                            </ul>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <DialogFooter>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          setIsDialogOpen(false);
-                          form.reset();
-                          setSelectedFile(null);
-                        }}
-                      >
-                        Mégse
-                      </Button>
-                      <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
-                        {editingTemplate ? 'Mentés' : 'Létrehozás'}
-                      </Button>
-                    </DialogFooter>
-                  </form>
-                </Form>
-              </DialogContent>
-            </Dialog>
+                      <DialogFooter>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            setIsDialogOpen(false);
+                            form.reset();
+                            setSelectedFile(null);
+                          }}
+                        >
+                          Mégse
+                        </Button>
+                        <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
+                          {editingTemplate ? 'Mentés' : 'Létrehozás'}
+                        </Button>
+                      </DialogFooter>
+                    </form>
+                  </Form>
+                </DialogContent>
+              </Dialog>
             )}
           </div>
 
@@ -441,8 +427,8 @@ export default function TemplatesPage() {
                       <TableCell>
                         {template.template_file ? (
                           <span className="text-green-600 dark:text-green-400">
-                            ✓ {typeof template.template_file === 'object' && template.template_file.name 
-                              ? template.template_file.name 
+                            ✓ {typeof template.template_file === 'object' && template.template_file.name
+                              ? template.template_file.name
                               : 'Feltöltve'}
                           </span>
                         ) : (

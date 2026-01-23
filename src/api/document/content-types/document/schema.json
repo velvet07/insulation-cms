@@ -14,7 +14,13 @@
   "attributes": {
     "type": {
       "type": "enumeration",
-      "enum": ["contract", "worksheet", "invoice", "completion_certificate", "other"],
+      "enum": [
+        "contract",
+        "worksheet",
+        "invoice",
+        "completion_certificate",
+        "other"
+      ],
       "required": true
     },
     "file_name": {
@@ -37,6 +43,12 @@
       "type": "relation",
       "relation": "manyToOne",
       "target": "api::project.project",
+      "inversedBy": "documents"
+    },
+    "company": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::company.company",
       "inversedBy": "documents"
     },
     "file": {

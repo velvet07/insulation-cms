@@ -3,6 +3,7 @@ import type { Document, StrapiResponse } from '@/types';
 
 export interface DocumentFilters {
   project?: number | string;
+  company?: number | string;
   type?: Document['type'];
   signed?: boolean;
 }
@@ -10,7 +11,7 @@ export interface DocumentFilters {
 export const documentsApi = {
   getAll: async (filters?: DocumentFilters) => {
     const params = new URLSearchParams();
-    
+
     if (filters?.project) {
       // Strapi v5-ben a documentId-t használjuk, ha string, különben id-t
       // Próbáljuk meg mindkét formátumot
@@ -22,16 +23,24 @@ export const documentsApi = {
         params.append('filters[project][id][$eq]', projectId);
       }
     }
+    if (filters?.company) {
+      const companyId = filters.company.toString();
+      if (companyId.includes('-') || companyId.length > 10 || isNaN(Number(companyId))) {
+        params.append('filters[company][documentId][$eq]', companyId);
+      } else {
+        params.append('filters[company][id][$eq]', companyId);
+      }
+    }
     if (filters?.type) {
       params.append('filters[type][$eq]', filters.type);
     }
     if (filters?.signed !== undefined) {
       params.append('filters[signed][$eq]', filters.signed.toString());
     }
-    
+
     params.append('populate', '*');
     params.append('sort', 'createdAt:desc');
-    
+
     try {
       const response = await strapiApi.get<StrapiResponse<Document[]>>(`/documents?${params.toString()}`);
       if (response.data && Array.isArray(response.data.data)) {
@@ -43,13 +52,13 @@ export const documentsApi = {
       return [];
     } catch (error: any) {
       console.error('Error fetching documents:', error);
-      
+
       // Részletesebb hibaüzenet kinyerése
       if (error.response) {
         console.error('Strapi API Error:', error.response.data);
-        const errorMessage = error.response.data?.error?.message || 
-                           JSON.stringify(error.response.data) || 
-                           'Hiba történt a dokumentumok lekérdezése során';
+        const errorMessage = error.response.data?.error?.message ||
+          JSON.stringify(error.response.data) ||
+          'Hiba történt a dokumentumok lekérdezése során';
         throw new Error(errorMessage);
       }
       throw error;
@@ -89,10 +98,10 @@ export const documentsApi = {
     } catch (error: any) {
       if (error.response) {
         console.error('Strapi API Error:', error.response.data);
-        
+
         // Részletesebb hibaüzenet kinyerése
         let errorMessage = 'Hiba történt a dokumentum létrehozása során';
-        
+
         if (error.response.data?.error?.message) {
           errorMessage = error.response.data.error.message;
         } else if (error.response.data?.error?.details?.errors) {
@@ -103,7 +112,7 @@ export const documentsApi = {
         } else if (typeof error.response.data === 'string') {
           errorMessage = error.response.data;
         }
-        
+
         throw new Error(errorMessage);
       }
       throw error;
@@ -124,15 +133,15 @@ export const documentsApi = {
           cleanData[key] = value;
         }
       });
-      
+
       const response = await strapiApi.put<StrapiResponse<Document>>(`/documents/${id}`, { data: cleanData });
       return unwrapStrapiResponse(response);
     } catch (error: any) {
       if (error.response) {
         console.error('Strapi API Error:', error.response.data);
-        const errorMessage = error.response.data?.error?.message || 
-                           JSON.stringify(error.response.data) || 
-                           'Hiba történt a dokumentum frissítése során';
+        const errorMessage = error.response.data?.error?.message ||
+          JSON.stringify(error.response.data) ||
+          'Hiba történt a dokumentum frissítése során';
         throw new Error(errorMessage);
       }
       throw error;
@@ -145,9 +154,9 @@ export const documentsApi = {
     } catch (error: any) {
       if (error.response) {
         console.error('Strapi API Error:', error.response.data);
-        const errorMessage = error.response.data?.error?.message || 
-                           JSON.stringify(error.response.data) || 
-                           'Hiba történt a dokumentum törlése során';
+        const errorMessage = error.response.data?.error?.message ||
+          JSON.stringify(error.response.data) ||
+          'Hiba történt a dokumentum törlése során';
         throw new Error(errorMessage);
       }
       throw error;
@@ -167,9 +176,9 @@ export const documentsApi = {
     } catch (error: any) {
       if (error.response) {
         console.error('Strapi API Error:', error.response.data);
-        const errorMessage = error.response.data?.error?.message || 
-                           JSON.stringify(error.response.data) || 
-                           'Hiba történt a dokumentum generálása során';
+        const errorMessage = error.response.data?.error?.message ||
+          JSON.stringify(error.response.data) ||
+          'Hiba történt a dokumentum generálása során';
         throw new Error(errorMessage);
       }
       throw error;
@@ -189,9 +198,9 @@ export const documentsApi = {
     } catch (error: any) {
       if (error.response) {
         console.error('Strapi API Error:', error.response.data);
-        const errorMessage = error.response.data?.error?.message || 
-                           JSON.stringify(error.response.data) || 
-                           'Hiba történt a dokumentum újragenerálása során';
+        const errorMessage = error.response.data?.error?.message ||
+          JSON.stringify(error.response.data) ||
+          'Hiba történt a dokumentum újragenerálása során';
         throw new Error(errorMessage);
       }
       throw error;
@@ -207,7 +216,7 @@ export const documentsApi = {
       // Strapi file upload endpoint használata
       const strapiUrl = process.env.NEXT_PUBLIC_STRAPI_URL || 'https://cms.emermedia.eu';
       const apiToken = process.env.NEXT_PUBLIC_STRAPI_API_TOKEN;
-      
+
       const uploadResponse = await fetch(`${strapiUrl}/api/upload`, {
         method: 'POST',
         headers: {
@@ -241,9 +250,9 @@ export const documentsApi = {
     } catch (error: any) {
       if (error.response) {
         console.error('Strapi API Error:', error.response.data);
-        const errorMessage = error.response.data?.error?.message || 
-                           JSON.stringify(error.response.data) || 
-                           'Hiba történt a fájl feltöltése során';
+        const errorMessage = error.response.data?.error?.message ||
+          JSON.stringify(error.response.data) ||
+          'Hiba történt a fájl feltöltése során';
         throw new Error(errorMessage);
       }
       if (error.message) {

@@ -13,13 +13,16 @@ export interface ProjectFilters {
 
 export const projectsApi = {
   getAll: async (filters?: ProjectFilters) => {
+    console.error('🔍 [API] projectsApi.getAll called with filters:', filters);
     const params = new URLSearchParams();
-    
+
     if (filters?.status) {
       params.append('filters[status][$eq]', filters.status);
+      console.error('  ✓ Added status filter:', filters.status);
     }
     if (filters?.status_not) {
       params.append('filters[status][$ne]', filters.status_not);
+      console.error('  ✓ Added status_not filter:', filters.status_not);
     }
     if (filters?.assigned_to) {
       // Strapi v5 uses documentId, try both id and documentId
@@ -30,13 +33,16 @@ export const projectsApi = {
       if (assignedToId.length > 10 || assignedToId.includes('-') || isNaN(Number(assignedToId))) {
         // It's a documentId (string)
         params.append('filters[assigned_to][documentId][$eq]', assignedToId);
+        console.error('  ✓ Added assigned_to filter (documentId):', assignedToId);
       } else {
         // It's a numeric id
         params.append('filters[assigned_to][id][$eq]', assignedToId);
+        console.error('  ✓ Added assigned_to filter (id):', assignedToId);
       }
     }
     if (filters?.tenant) {
       params.append('filters[tenant][id][$eq]', filters.tenant.toString());
+      console.error('  ✓ Added tenant filter:', filters.tenant);
     }
     if (filters?.company) {
       // Strapi v5 uses documentId, try both id and documentId
@@ -44,9 +50,11 @@ export const projectsApi = {
       if (companyId.includes('-')) {
         // It's a documentId
         params.append('filters[company][documentId][$eq]', companyId);
+        console.error('  ✓ Added company filter (documentId):', companyId);
       } else {
         // It's a numeric id
         params.append('filters[company][id][$eq]', companyId);
+        console.error('  ✓ Added company filter (id):', companyId);
       }
     }
     if (filters?.subcontractor) {
@@ -55,31 +63,48 @@ export const projectsApi = {
       if (subcontractorId.includes('-') || subcontractorId.length > 10 || isNaN(Number(subcontractorId))) {
         // It's a documentId (string)
         params.append('filters[subcontractor][documentId][$eq]', subcontractorId);
+        console.error('  ✓ Added subcontractor filter (documentId):', subcontractorId);
       } else {
         // It's a numeric id
         params.append('filters[subcontractor][id][$eq]', subcontractorId);
+        console.error('  ✓ Added subcontractor filter (id):', subcontractorId);
       }
     }
     if (filters?.search) {
       params.append('filters[$or][0][client_name][$contains]', filters.search);
       params.append('filters[$or][1][client_address][$contains]', filters.search);
+      console.error('  ✓ Added search filter:', filters.search);
     }
-    
+
     params.append('populate', '*');
     params.append('sort', 'createdAt:desc');
-    
+
+    const apiUrl = `/projects?${params.toString()}`;
+    console.error('📡 [API] Calling Strapi API:', apiUrl);
+
     try {
-      const response = await strapiApi.get<StrapiResponse<Project[]>>(`/projects?${params.toString()}`);
+      const response = await strapiApi.get<StrapiResponse<Project[]>>(apiUrl);
+      console.error('✅ [API] Response received:', {
+        hasData: !!response.data,
+        isArray: Array.isArray(response.data),
+        hasDataData: response.data && Array.isArray(response.data.data),
+        dataDataLength: response.data && Array.isArray(response.data.data) ? response.data.data.length : 0,
+        dataLength: Array.isArray(response.data) ? response.data.length : 0
+      });
+
       // Handle both Strapi v4 and v5 response formats
       if (response.data && Array.isArray(response.data.data)) {
+        console.error('📦 [API] Returning', response.data.data.length, 'projects (v4/v5 format)');
         return response.data.data;
       }
       if (Array.isArray(response.data)) {
+        console.error('📦 [API] Returning', response.data.length, 'projects (array format)');
         return response.data;
       }
+      console.warn('⚠️ [API] Unexpected response format, returning empty array');
       return [];
     } catch (error) {
-      console.error('Error fetching projects:', error);
+      console.error('❌ [API] Error fetching projects:', error);
       throw error;
     }
   },
@@ -107,9 +132,9 @@ export const projectsApi = {
       // Részletesebb hibaüzenet
       if (error.response) {
         console.error('Strapi API Error:', error.response.data);
-        const errorMessage = error.response.data?.error?.message || 
-                           JSON.stringify(error.response.data) || 
-                           'Hiba történt a projekt létrehozása során';
+        const errorMessage = error.response.data?.error?.message ||
+          JSON.stringify(error.response.data) ||
+          'Hiba történt a projekt létrehozása során';
         throw new Error(errorMessage);
       }
       throw error;
@@ -120,16 +145,16 @@ export const projectsApi = {
     try {
       // Szűrjük ki az undefined értékeket ÉS a rendszer mezőket (amiket nem lehet frissíteni)
       const systemFields = ['id', 'documentId', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy'];
-      
+
       // Mély szűrés: kiszűrjük a rendszer mezőket, de ellenőrizzük az objektumok belsejét is
       const cleanData: any = {};
       for (const [key, value] of Object.entries(data)) {
         // Ne küldjük el undefined értékeket
         if (value === undefined) continue;
-        
+
         // Ne küldjük el a rendszer mezőket
         if (systemFields.includes(key)) continue;
-        
+
         // Ha az érték objektum, de nem relation mező (amit Strapi kezel), akkor ellenőrizzük
         // de csak akkor, ha nem egy egyszerű érték (string, number, boolean, null)
         if (value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
@@ -141,10 +166,10 @@ export const projectsApi = {
             continue;
           }
         }
-        
+
         cleanData[key] = value;
       }
-      
+
       const response = await strapiApi.put<StrapiResponse<Project>>(`/projects/${id}`, { data: cleanData });
       // Ha a response null (404-es hiba volt, de az interceptor elnyelte), akkor null-lal térünk vissza
       if (!response || !response.data || !response.data.data) {
@@ -158,17 +183,17 @@ export const projectsApi = {
         // De nem dobunk hibát, hogy ne jelenjen meg a konzolban
         return null as any;
       }
-      
+
       if (error.response) {
         // Részletesebb hibaüzenet
         let errorMessage = 'Hiba történt a projekt frissítése során';
-        
+
         // Próbáljuk meg kinyerni a hibaüzenetet különböző helyekről
         if (error.response.data?.error?.message) {
           errorMessage = error.response.data.error.message;
         } else if (error.response.data?.error) {
-          errorMessage = typeof error.response.data.error === 'string' 
-            ? error.response.data.error 
+          errorMessage = typeof error.response.data.error === 'string'
+            ? error.response.data.error
             : JSON.stringify(error.response.data.error);
         } else if (error.response.data?.message) {
           errorMessage = error.response.data.message;
@@ -188,7 +213,7 @@ export const projectsApi = {
             errorMessage = `Hiba történt (${error.response.status}): ${error.response.statusText || 'Ismeretlen hiba'}`;
           }
         }
-        
+
         throw new Error(errorMessage);
       }
       throw error;
@@ -202,9 +227,9 @@ export const projectsApi = {
       // Részletesebb hibaüzenet
       if (error.response) {
         console.error('Strapi API Error:', error.response.data);
-        const errorMessage = error.response.data?.error?.message || 
-                           JSON.stringify(error.response.data) || 
-                           'Hiba történt a projekt törlése során';
+        const errorMessage = error.response.data?.error?.message ||
+          JSON.stringify(error.response.data) ||
+          'Hiba történt a projekt törlése során';
         throw new Error(errorMessage);
       }
       throw error;

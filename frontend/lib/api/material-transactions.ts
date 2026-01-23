@@ -9,6 +9,7 @@ export interface MaterialTransaction {
   used_date?: string;
   material?: any;
   user?: any;
+  company?: any;
   project?: any;
   quantity_pallets?: number;
   quantity_rolls?: number;
@@ -22,6 +23,7 @@ export interface MaterialTransaction {
 
 export interface MaterialTransactionFilters {
   user?: number | string;
+  company?: number | string;
   material?: number | string;
   type?: MaterialTransaction['type'];
   project?: number | string;
@@ -40,13 +42,21 @@ export interface MaterialTransactionFilters {
 export const materialTransactionsApi = {
   getAll: async (filters?: MaterialTransactionFilters) => {
     const params = new URLSearchParams();
-    
+
     if (filters?.user) {
       const userId = filters.user.toString();
       if (userId.includes('-') || userId.length > 10 || isNaN(Number(userId))) {
         params.append('filters[user][documentId][$eq]', userId);
       } else {
         params.append('filters[user][id][$eq]', userId);
+      }
+    }
+    if (filters?.company) {
+      const companyId = filters.company.toString();
+      if (companyId.includes('-') || companyId.length > 10 || isNaN(Number(companyId))) {
+        params.append('filters[company][documentId][$eq]', companyId);
+      } else {
+        params.append('filters[company][id][$eq]', companyId);
       }
     }
     if (filters?.material) {
@@ -86,10 +96,10 @@ export const materialTransactionsApi = {
     if (filters?.used_date?.$eq) {
       params.append('filters[used_date][$eq]', filters.used_date.$eq);
     }
-    
+
     params.append('populate', '*');
     params.append('sort', 'pickup_date:desc,used_date:desc,createdAt:desc');
-    
+
     try {
       const response = await strapiApi.get<StrapiResponse<MaterialTransaction[]>>(`/material-transactions?${params.toString()}`);
       if (response.data && Array.isArray(response.data.data)) {
@@ -124,9 +134,9 @@ export const materialTransactionsApi = {
     } catch (error: any) {
       if (error.response) {
         console.error('Strapi API Error:', error.response.data);
-        const errorMessage = error.response.data?.error?.message || 
-                           JSON.stringify(error.response.data) || 
-                           'Hiba történt az anyag tranzakció létrehozása során';
+        const errorMessage = error.response.data?.error?.message ||
+          JSON.stringify(error.response.data) ||
+          'Hiba történt az anyag tranzakció létrehozása során';
         throw new Error(errorMessage);
       }
       throw error;
@@ -136,29 +146,29 @@ export const materialTransactionsApi = {
   update: async (id: number | string, data: Partial<MaterialTransaction>) => {
     try {
       const systemFields = ['id', 'documentId', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy'];
-      
+
       const cleanData: any = {};
       for (const [key, value] of Object.entries(data)) {
         if (value === undefined) continue;
         if (systemFields.includes(key)) continue;
-        
+
         if (value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
           if ('documentId' in value || 'id' in value || 'createdAt' in value) {
             continue;
           }
         }
-        
+
         cleanData[key] = value;
       }
-      
+
       const response = await strapiApi.put<StrapiResponse<MaterialTransaction>>(`/material-transactions/${id}`, { data: cleanData });
       return unwrapStrapiResponse(response);
     } catch (error: any) {
       if (error.response) {
         console.error('Strapi API Error:', error.response.data);
-        const errorMessage = error.response.data?.error?.message || 
-                           JSON.stringify(error.response.data) || 
-                           'Hiba történt az anyag tranzakció frissítése során';
+        const errorMessage = error.response.data?.error?.message ||
+          JSON.stringify(error.response.data) ||
+          'Hiba történt az anyag tranzakció frissítése során';
         throw new Error(errorMessage);
       }
       throw error;
@@ -171,9 +181,9 @@ export const materialTransactionsApi = {
     } catch (error: any) {
       if (error.response) {
         console.error('Strapi API Error:', error.response.data);
-        const errorMessage = error.response.data?.error?.message || 
-                           JSON.stringify(error.response.data) || 
-                           'Hiba történt az anyag tranzakció törlése során';
+        const errorMessage = error.response.data?.error?.message ||
+          JSON.stringify(error.response.data) ||
+          'Hiba történt az anyag tranzakció törlése során';
         throw new Error(errorMessage);
       }
       throw error;
@@ -182,5 +192,13 @@ export const materialTransactionsApi = {
 
   getPickupsByUser: async (userId: number | string) => {
     return materialTransactionsApi.getAll({ user: userId, type: 'pickup' });
+  },
+
+  getPickupsByCompany: async (companyId: number | string) => {
+    return materialTransactionsApi.getAll({ company: companyId, type: 'pickup' });
+  },
+
+  getByCompany: async (companyId: number | string) => {
+    return materialTransactionsApi.getAll({ company: companyId });
   },
 };

@@ -26,7 +26,7 @@ export const authApi = {
   login: async (credentials: LoginCredentials): Promise<LoginResponse> => {
     try {
       const response = await authApiClient.post<LoginResponse | { data: LoginResponse }>('/auth/local', credentials);
-      
+
       // Extract login response
       let loginResponse: LoginResponse;
       if (response.data && 'jwt' in response.data && 'user' in response.data) {
@@ -48,7 +48,7 @@ export const authApi = {
         if (loginResponse.user && typeof loginResponse.user.role === 'object' && loginResponse.user.role !== null) {
           const roleType = (loginResponse.user.role as any).type;
           const roleName = (loginResponse.user.role as any).name?.toLowerCase() || '';
-          
+
           // Transform role object to string
           if (roleName.includes('admin') || roleType === 'admin') {
             (loginResponse.user as any).role = 'admin';
@@ -62,7 +62,7 @@ export const authApi = {
             (loginResponse.user as any).role = 'worker';
           }
         }
-        
+
         // Try to populate company data if it's just an ID
         if (loginResponse.user && loginResponse.user.company) {
           // If company is just an ID, fetch the full company object
@@ -85,9 +85,9 @@ export const authApi = {
     } catch (error: any) {
       // Better error handling
       if (error.response) {
-        const errorMessage = error.response.data?.error?.message || 
-                           error.response.data?.message || 
-                           'Bejelentkezési hiba';
+        const errorMessage = error.response.data?.error?.message ||
+          error.response.data?.message ||
+          'Bejelentkezési hiba';
         throw new Error(errorMessage);
       }
       throw error;
@@ -129,36 +129,18 @@ export const authApi = {
         throw error2 || error;
       }
     }
-    
+
     let user = userResponse.data;
     const userId = user.documentId || user.id;
-    
-    // If role is missing or is just an ID, fetch it separately
-    if (!user.role || typeof user.role === 'string' || typeof user.role === 'number') {
-      console.log('[getMe] Role missing or is ID, will try to fetch via strapiApi');
-      try {
-        const { strapiApi } = await import('./strapi');
-        const userWithRole = await strapiApi.get<{ data: User }>(`/users/${userId}?populate[role]=*&populate[company]=*&populate[company][parent_company]=*`);
-        const fullUserData = userWithRole.data.data || userWithRole.data;
-        if (fullUserData.role) {
-          user.role = fullUserData.role;
-        }
-        if (fullUserData.company) {
-          user.company = fullUserData.company;
-        }
-        console.log('[getMe] Fetched role and company via strapiApi');
-      } catch (error: any) {
-        console.warn('[getMe] Failed to fetch role/company via strapiApi:', error?.response?.status);
-        // Continue with basic user
-      }
-    }
-    
+
+
+
     // Transform role if it's an object
     if (user && typeof user.role === 'object' && user.role !== null) {
       const roleType = (user.role as any).type;
       const roleName = (user.role as any).name?.toLowerCase() || '';
       const roleId = (user.role as any).id;
-      
+
       if (roleName.includes('admin') || roleType === 'admin' || roleId === 1 || roleId === '1') {
         (user as any).role = 'admin';
       } else if (roleName.includes('foovallalkozo') || roleName.includes('fővállalkozó')) {
@@ -171,14 +153,14 @@ export const authApi = {
         (user as any).role = 'worker';
       }
     }
-    
+
     // If company is just an ID, fetch it separately
     if (user.company && (typeof user.company === 'string' || typeof user.company === 'number')) {
       try {
         const { companiesApi } = await import('./companies');
         const company = await companiesApi.getOne(user.company);
         (user as any).company = company;
-        
+
         // If company has parent_company, fetch it too
         if (company.parent_company && (typeof company.parent_company === 'string' || typeof company.parent_company === 'number')) {
           try {
@@ -193,17 +175,17 @@ export const authApi = {
         console.warn('[getMe] Failed to fetch company data:', error);
       }
     }
-    
-    console.log('[getMe] Final user object:', { 
-      id: user.id, 
-      role: user.role, 
+
+    console.log('[getMe] Final user object:', {
+      id: user.id,
+      role: user.role,
       companyType: (user.company as any)?.type,
-      hasCompany: !!user.company 
+      hasCompany: !!user.company
     });
-    
+
     return user;
   },
-  
+
   // Keep the old getMe implementation as fallback but simplified
   _getMeOld: async (token: string): Promise<User> => {
     // Strapi v5 /users/me endpoint - try different populate formats
@@ -228,23 +210,23 @@ export const authApi = {
         throw error2 || error;
       }
     }
-    
+
     // Transform role to our format if needed
     const user = response.data;
-    
+
     console.log('[getMe] Raw user response:', user);
     console.log('[getMe] User role:', user?.role);
     console.log('[getMe] User company:', user?.company);
-    
+
     // If role is an object, extract the role name/type
     if (user && typeof user.role === 'object' && user.role !== null) {
       // Map Strapi role type to our role string
       const roleType = (user.role as any).type;
       const roleName = (user.role as any).name?.toLowerCase() || '';
       const roleId = (user.role as any).id;
-      
+
       console.log('[getMe] Role details:', { roleType, roleName, roleId });
-      
+
       // Check if role name contains 'admin' or type is 'admin' or id is 1 (Strapi default admin)
       if (roleName.includes('admin') || roleType === 'admin' || roleId === 1 || roleId === '1') {
         (user as any).role = 'admin';
@@ -266,7 +248,7 @@ export const authApi = {
     } else {
       console.warn('[getMe] Role is undefined or null');
     }
-    
+
     // Fetch company data if it's just an ID
     if (user && user.company) {
       if (typeof user.company === 'string' || typeof user.company === 'number') {
@@ -276,7 +258,7 @@ export const authApi = {
           const company = await companiesApi.getOne(companyId);
           console.log('[getMe] Fetched company:', company);
           (user as any).company = company;
-          
+
           // If company has parent_company, fetch it too
           if (company.parent_company) {
             if (typeof company.parent_company === 'string' || typeof company.parent_company === 'number') {
@@ -294,9 +276,9 @@ export const authApi = {
         }
       }
     }
-    
+
     console.log('[getMe] Final user object:', user);
-    
+
     return user;
   },
 

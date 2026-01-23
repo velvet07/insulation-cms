@@ -25,7 +25,7 @@ export const companiesApi = {
       params.append('filters[name][$contains]', filters.search);
     }
 
-    params.append('populate', '*');
+    // Don't populate parent_company to avoid circular references
     params.append('sort', 'name:asc');
 
     try {
@@ -43,11 +43,41 @@ export const companiesApi = {
     }
   },
 
-  getOne: async (id: number | string) => {
+  getOne: async (id: number | string, populate?: string | string[]) => {
     try {
-      const response = await strapiApi.get<StrapiResponse<Company>>(`/companies/${id}?populate=*`);
-      return unwrapStrapiResponse(response);
+      console.log('🏢 [COMPANY API] getOne called with id:', id, 'populate:', populate);
+      const params = new URLSearchParams();
+      if (populate) {
+        if (Array.isArray(populate)) {
+          populate.forEach((p, i) => params.append(`populate[${i}]`, p));
+        } else {
+          params.append('populate', populate);
+        }
+      }
+
+      const queryString = params.toString() ? `?${params.toString()}` : '';
+      const apiUrl = `/companies/${id}${queryString}`;
+      console.log('📡 [COMPANY API] Calling:', apiUrl);
+
+      const response = await strapiApi.get<StrapiResponse<Company>>(apiUrl);
+      const unwrapped = unwrapStrapiResponse(response);
+
+      console.log('✅ [COMPANY API] Response received:', {
+        id: unwrapped?.id,
+        documentId: unwrapped?.documentId,
+        name: unwrapped?.name,
+        type: unwrapped?.type,
+        hasSubcontractors: !!(unwrapped as any)?.subcontractors,
+        subcontractorsCount: (unwrapped as any)?.subcontractors?.length || 0
+      });
+
+      if ((unwrapped as any)?.subcontractors) {
+        console.log('📋 [COMPANY API] Subcontractors:', (unwrapped as any).subcontractors);
+      }
+
+      return unwrapped;
     } catch (error: any) {
+      console.error('❌ [COMPANY API] Error:', error);
       if (error.response?.status === 404) {
         throw new Error(`Cég nem található (ID: ${id})`);
       }
