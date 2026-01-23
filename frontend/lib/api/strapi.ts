@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
+import { debugLog } from '@/lib/utils/debug-flag';
 
 const strapiUrl = process.env.NEXT_PUBLIC_STRAPI_URL || 'https://cms.emermedia.eu';
 const apiToken = process.env.NEXT_PUBLIC_STRAPI_API_TOKEN;
@@ -28,7 +29,7 @@ strapiApi.interceptors.request.use(
           const jwtToken = authData?.state?.token;
           if (jwtToken) {
             config.headers.Authorization = `Bearer ${jwtToken}`;
-            console.log('[strapiApi] Retrying with JWT token for:', config.url);
+            debugLog('strapi', 'Retrying with JWT token for:', config.url);
             return config;
           }
         }
@@ -40,7 +41,7 @@ strapiApi.interceptors.request.use(
     // Use API token by default if available (full access, works reliably)
     if (apiToken) {
       config.headers.Authorization = `Bearer ${apiToken}`;
-      console.log('[strapiApi] Using API token for request:', config.url);
+      debugLog('strapi', 'Using API token for request:', config.url);
     } else if (typeof window !== 'undefined') {
       // Fallback to JWT token only if no API token is available
       try {
@@ -51,7 +52,7 @@ strapiApi.interceptors.request.use(
           
           if (jwtToken) {
             config.headers.Authorization = `Bearer ${jwtToken}`;
-            console.log('[strapiApi] No API token, using JWT token for request:', config.url);
+            debugLog('strapi', 'No API token, using JWT token for request:', config.url);
           } else {
             console.error('[strapiApi] No API token and no JWT token available for:', config.url);
           }
@@ -100,7 +101,7 @@ strapiApi.interceptors.response.use(
             if (jwtToken) {
               config._useJwtToken = true;
               config._retryCount = (config._retryCount || 0) + 1;
-              console.log('[strapiApi] API token returned 403, retrying with JWT token for:', config.url);
+              debugLog('strapi', 'API token returned 403, retrying with JWT token for:', config.url);
               return strapiApi.request(config);
             }
           }

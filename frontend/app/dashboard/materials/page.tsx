@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ProtectedRoute } from '@/components/auth/protected-route';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,6 +29,7 @@ import { materialsApi } from '@/lib/api/materials';
 import { materialBalancesApi, type MaterialBalance } from '@/lib/api/material-balances';
 import { materialTransactionsApi } from '@/lib/api/material-transactions';
 import { projectsApi } from '@/lib/api/projects';
+import { companiesApi } from '@/lib/api/companies';
 import {
   calculateMaterials,
   formatInsulationQuantity,
@@ -37,10 +38,10 @@ import {
   determineInsulationOption,
   type AvailableMaterial,
 } from '@/lib/utils/material-calculation';
-import type { Project } from '@/types';
+import type { Company, Project } from '@/types';
 import { Plus, AlertTriangle, CheckCircle2, TrendingDown, Package, Calendar, CalendarDays, List, Edit, Trash2 } from 'lucide-react';
 import { createAuditLogEntry, addAuditLogEntry } from '@/lib/utils/audit-log';
-import { isAdminRole, isSubcontractor } from '@/lib/utils/user-role';
+import { isMainContractor } from '@/lib/utils/user-role';
 import { usePermission } from '@/lib/contexts/permission-context';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -103,14 +104,96 @@ export default function MaterialsPage() {
     });
   };
 
-  const userId = user?.documentId || user?.id;
+  // Users-Permissions user relations are most reliable with numeric `id`
+  const userId = (user as any)?.id || (user as any)?.documentId;
 
   // Get company ID from user
   const userCompanyId = useMemo(() => {
     if (!user?.company) return null;
-    if (typeof user.company === 'object') return user.company.documentId || user.company.id;
+    // IMPORTANT: for filters/relations on some endpoints, Strapi is most reliable with numeric `id`
+    // (documentId filters can return 400 depending on endpoint/query).
+    if (typeof user.company === 'object') return user.company.id || user.company.documentId;
     return user.company;
   }, [user]);
+
+  // Company identifier for /companies/:id style endpoints (Strapi v5 often expects documentId)
+  const userCompanyApiId = useMemo(() => {
+    if (!user?.company) return null;
+    if (typeof user.company === 'object') return (user.company as any).documentId || (user.company as any).id;
+    return user.company;
+  }, [user]);
+
+  const isMainContractorUser = isMainContractor(user);
+
+  const getCompanyKey = (company: Partial<Company> | null | undefined): string => {
+    if (!company) return '';
+    return (company.id?.toString() || company.documentId || '').toString();
+  };
+
+  const matchesCompany = (entityCompany: any, companyKey: string): boolean => {
+    if (!entityCompany || !companyKey) return false;
+    if (typeof entityCompany === 'string' || typeof entityCompany === 'number') {
+      return entityCompany.toString() === companyKey;
+    }
+    const cid = entityCompany?.id?.toString();
+    const cdoc = entityCompany?.documentId?.toString();
+    return cid === companyKey || cdoc === companyKey;
+  };
+
+  // Main contractor: fetch subcontractors list for selector + aggregation
+  const { data: mainCompanyWithSubcontractors } = useQuery({
+    queryKey: ['company', userCompanyApiId, 'subcontractors-materials'],
+    queryFn: () => companiesApi.getOne(userCompanyApiId!, 'subcontractors'),
+    enabled: isMainContractorUser && !!userCompanyApiId,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+
+  const subcontractors = useMemo<Company[]>(() => {
+    const subs = (mainCompanyWithSubcontractors as any)?.subcontractors;
+    return Array.isArray(subs) ? (subs as Company[]) : [];
+  }, [mainCompanyWithSubcontractors]);
+
+  // Detail view selector (main contractor only)
+  const [selectedCompanyKey, setSelectedCompanyKey] = useState<string>('self');
+  const [hasInitializedSelectedCompany, setHasInitializedSelectedCompany] = useState(false);
+
+  useEffect(() => {
+    if (hasInitializedSelectedCompany) return;
+    if (!userCompanyId) return;
+
+    if (isMainContractorUser && subcontractors.length > 0) {
+      setSelectedCompanyKey(getCompanyKey(subcontractors[0]));
+    } else {
+      setSelectedCompanyKey('self');
+    }
+    setHasInitializedSelectedCompany(true);
+  }, [hasInitializedSelectedCompany, isMainContractorUser, subcontractors, userCompanyId]);
+
+  const allowedCompanyKeys = useMemo<Set<string> | null>(() => {
+    if (!userCompanyId) return null;
+    const set = new Set<string>();
+    // Include both numeric id and documentId for robustness
+    if (typeof user?.company === 'object') {
+      const obj: any = user.company;
+      if (obj?.id !== undefined) set.add(obj.id.toString());
+      if (obj?.documentId) set.add(obj.documentId.toString());
+    } else {
+      set.add(userCompanyId.toString());
+    }
+    if (isMainContractorUser) {
+      subcontractors.forEach((c) => {
+        if (c.id !== undefined) set.add(c.id.toString());
+        if (c.documentId) set.add(c.documentId);
+      });
+    }
+    return set;
+  }, [isMainContractorUser, subcontractors, user, userCompanyId]);
+
+  const allowedCompanyKeyString = useMemo(() => {
+    if (!allowedCompanyKeys) return null;
+    return Array.from(allowedCompanyKeys).sort().join('|');
+  }, [allowedCompanyKeys]);
 
   // Anyagok lekérése
   const { data: materials = [] } = useQuery({
@@ -120,9 +203,22 @@ export default function MaterialsPage() {
 
   // Anyagegyenlegek lekérése (cég alapú - minden felhasználó látja a cég készletét)
   const { data: balances = [] } = useQuery({
-    queryKey: ['material-balances', userCompanyId],
-    queryFn: () => materialBalancesApi.getByCompany(userCompanyId!),
-    enabled: !!userCompanyId,
+    queryKey: ['material-balances', allowedCompanyKeyString],
+    queryFn: async () => {
+      // Some Strapi environments reject relation filters for these endpoints (400).
+      // Fetch all and filter client-side to avoid request failures.
+      const all = await materialBalancesApi.getAll();
+      if (!allowedCompanyKeys) return [];
+      return all.filter((b: any) => {
+        const c = b?.company;
+        const cid = c?.id?.toString();
+        const cdoc = c?.documentId?.toString();
+        return (cid && allowedCompanyKeys.has(cid)) || (cdoc && allowedCompanyKeys.has(cdoc));
+      });
+    },
+    enabled: !!allowedCompanyKeyString,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 
   // Projektek lekérése (anyagigény számításhoz)
@@ -133,10 +229,79 @@ export default function MaterialsPage() {
 
   // Material Transactions lekérése (cég alapú - elérhető anyagok számításhoz)
   const { data: transactions = [] } = useQuery({
-    queryKey: ['material-transactions', userCompanyId],
-    queryFn: () => materialTransactionsApi.getByCompany(userCompanyId!),
-    enabled: !!userCompanyId,
+    queryKey: ['material-transactions', allowedCompanyKeyString, userId],
+    queryFn: async () => {
+      // Some Strapi environments reject relation filters for these endpoints (400).
+      // Fetch all and filter client-side to avoid request failures.
+      const all = await materialTransactionsApi.getAll();
+      if (!allowedCompanyKeys) return [];
+      return (all as any[]).filter((t) => {
+        // Try company first (direct or via user.company)
+        const c = (t as any)?.company ?? (t as any)?.user?.company;
+        if (c) {
+          const cid = c?.id?.toString();
+          const cdoc = c?.documentId?.toString();
+          if ((cid && allowedCompanyKeys.has(cid)) || (cdoc && allowedCompanyKeys.has(cdoc))) {
+            return true;
+          }
+        }
+        // Fallback: if company is missing but user matches current user, include it
+        // (This handles cases where backend doesn't accept company field)
+        const tUserId = (t as any)?.user?.id?.toString() ?? (t as any)?.user?.documentId?.toString() ?? (t as any)?.user?.toString();
+        if (tUserId && userId && tUserId === userId.toString()) {
+          // User matches, and user's company is in allowedCompanyKeys
+          return true;
+        }
+        return false;
+      });
+    },
+    enabled: !!allowedCompanyKeyString && !!userId,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
+
+  const selectedCompanyLabel = useMemo(() => {
+    if (!isMainContractorUser) return '';
+    if (selectedCompanyKey === 'self') return 'Saját cég';
+    const match = subcontractors.find((c) => getCompanyKey(c) === selectedCompanyKey);
+    return match?.name || 'Alvállalkozó';
+  }, [getCompanyKey, isMainContractorUser, selectedCompanyKey, subcontractors]);
+
+  const balancesForView = useMemo(() => {
+    if (!isMainContractorUser) return balances;
+    if (selectedCompanyKey === 'self') {
+      const want = userCompanyId?.toString();
+      if (!want) return [];
+      return balances.filter((b: any) => matchesCompany(b?.company, want));
+    }
+    return balances.filter((b: any) => matchesCompany((b as any)?.company, selectedCompanyKey));
+  }, [balances, isMainContractorUser, matchesCompany, selectedCompanyKey, userCompanyId]);
+
+  const transactionsForView = useMemo(() => {
+    if (!isMainContractorUser) return transactions;
+    if (selectedCompanyKey === 'self') {
+      const want = userCompanyId?.toString();
+      if (!want) return [];
+      return (transactions as any[]).filter((t) => {
+        const c = (t as any)?.company ?? (t as any)?.user?.company;
+        if (matchesCompany(c, want)) return true;
+        // Fallback: if company is missing but user matches, include it
+        const tUserId = (t as any)?.user?.id?.toString() ?? (t as any)?.user?.documentId?.toString() ?? (t as any)?.user?.toString();
+        return tUserId && userId && tUserId === userId.toString();
+      });
+    }
+    return (transactions as any[]).filter((t) => {
+      const c = (t as any)?.company ?? (t as any)?.user?.company;
+      return matchesCompany(c, selectedCompanyKey);
+    });
+  }, [isMainContractorUser, matchesCompany, selectedCompanyKey, transactions, userCompanyId, userId]);
+
+  const projectsForView = useMemo(() => {
+    if (!isMainContractorUser) return projects;
+    if (selectedCompanyKey === 'self') return projects;
+    // Subcontractor detail: only the subcontractor's projects should affect calculations.
+    return (projects as any[]).filter((p) => matchesCompany((p as any)?.subcontractor, selectedCompanyKey));
+  }, [isMainContractorUser, matchesCompany, projects, selectedCompanyKey]);
 
   // Dátum tartomány számítása
   const dateRange = useMemo(() => {
@@ -238,7 +403,7 @@ export default function MaterialsPage() {
 
     // Projektek szűrése időszakra és státuszra
     // Túllépett projekteket (scheduled_date < today és status !== 'completed') kihagyjuk
-    const relevantProjects = (projects || []).filter((p: Project) => {
+    const relevantProjects = (projectsForView || []).filter((p: Project) => {
       if (!p.scheduled_date) return false;
       const scheduledDate = new Date(p.scheduled_date);
       scheduledDate.setHours(0, 0, 0, 0);
@@ -264,7 +429,7 @@ export default function MaterialsPage() {
     availabilityDate.setHours(23, 59, 59, 999);
 
     // Szűrjük a tranzakciókat a kiválasztott anyagokra
-    const filteredTransactions = (transactions as any[]).filter((t) => {
+    const filteredTransactions = (transactionsForView as any[]).filter((t) => {
       if (!t.material) return false;
       const materialId = String(t.material.documentId || t.material.id);
       return availableMaterialsIds.length === 0 || availableMaterialsIds.includes(materialId);
@@ -360,7 +525,7 @@ export default function MaterialsPage() {
         rolls: totalBreathableMembraneRolls,
       },
     };
-  }, [projects, dateRange, requirementsPeriod, transactions, availabilityEndDate, availableMaterialsIds]);
+  }, [projectsForView, dateRange, requirementsPeriod, transactionsForView, availabilityEndDate, availableMaterialsIds]);
 
   // Anyagfelvétel form submit (több anyag egyszerre)
   const pickupMutation = useMutation({
@@ -375,7 +540,7 @@ export default function MaterialsPage() {
             quantity_pallets: item.quantity_pallets || 0,
             quantity_rolls: item.quantity_rolls || 0,
             user: userId,
-            company: userCompanyId,
+            company: userCompanyApiId ?? userCompanyId,
           })
         )
       );
@@ -436,9 +601,12 @@ export default function MaterialsPage() {
         });
       });
 
+      // Invalidate and refetch to ensure UI updates
       queryClient.invalidateQueries({ queryKey: ['material-balances'] });
       queryClient.invalidateQueries({ queryKey: ['material-transactions'] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
+      // Explicitly refetch transactions to show new pickups immediately
+      queryClient.refetchQueries({ queryKey: ['material-transactions'] });
       setIsPickupDialogOpen(false);
       setPickupQuantities({});
     },
@@ -501,19 +669,57 @@ export default function MaterialsPage() {
     pickupMutation.mutate(transactionsToCreate);
   };
 
+  // Main contractor: aggregate by subcontractor for overview
+  const subcontractorSummary = useMemo(() => {
+    if (!isMainContractorUser || subcontractors.length === 0) return [];
+
+    const pickupTx = (transactions as any[]).filter((t) => t.type === 'pickup');
+
+    return subcontractors
+      .map((sub) => {
+        const key = getCompanyKey(sub);
+
+        const txForSub = pickupTx.filter((t) => {
+          const c = (t as any)?.company ?? (t as any)?.user?.company;
+          return matchesCompany(c, key);
+        });
+        const pickupsPallets = txForSub.reduce((sum, t) => sum + (t.quantity_pallets || 0), 0);
+        const pickupsRolls = txForSub.reduce((sum, t) => sum + (t.quantity_rolls || 0), 0);
+
+        const balancesForSub = (balances as any[]).filter((b) => matchesCompany((b as any)?.company, key));
+        const deficitCount = balancesForSub.filter((b) => {
+          const bal = b.balance || {};
+          const pallets = bal.pallets || 0;
+          const rolls = bal.rolls || 0;
+          return pallets < 0 || rolls < 0;
+        }).length;
+
+        return {
+          key,
+          name: sub.name || 'Ismeretlen alvállalkozó',
+          pickupsPallets,
+          pickupsRolls,
+          balanceItems: balancesForSub.length,
+          deficitItems: deficitCount,
+        };
+      })
+      .filter((r) => r.key)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [balances, getCompanyKey, isMainContractorUser, matchesCompany, subcontractors, transactions]);
+
   // Riasztások (negatív egyenleg)
   const deficits = useMemo(() => {
-    return balances.filter((b) => {
+    return balancesForView.filter((b) => {
       const balance = b.balance || {};
       const pallets = balance.pallets || 0;
       const rolls = balance.rolls || 0;
       return pallets < 0 || rolls < 0;
     });
-  }, [balances]);
+  }, [balancesForView]);
 
   // Felvett anyagok összesítése anyagtípusra és dátumra
   const pickupTransactionsGrouped = useMemo(() => {
-    const pickupTransactions = (transactions as any[]).filter((t) => t.type === 'pickup');
+    const pickupTransactions = (transactionsForView as any[]).filter((t) => t.type === 'pickup');
 
     // Csoportosítás dátumra és anyagra
     const grouped: Record<string, Record<string, { pallets: number; rolls: number; transactions: any[]; materialName: string }>> = {};
@@ -547,7 +753,7 @@ export default function MaterialsPage() {
     });
 
     return grouped;
-  }, [transactions]);
+  }, [transactionsForView]);
 
   // Anyagegyenleg számítás: felvett anyagok - kész/elmúlt projektek anyagigénye
   const calculatedBalance = useMemo(() => {
@@ -557,7 +763,7 @@ export default function MaterialsPage() {
     // 1. Felvett anyagok összesítése anyagtípusonként
     const pickedUp: Record<string, { pallets: number; rolls: number; name: string; category: string }> = {};
 
-    (transactions as any[])
+    (transactionsForView as any[])
       .filter((t) => t.type === 'pickup')
       .forEach((t) => {
         const materialId = String(t.material?.documentId || t.material?.id || 'unknown');
@@ -576,7 +782,7 @@ export default function MaterialsPage() {
     // Fóliáknál: m²-ben számolva (nem kerekítve projektenként), majd a végén konvertáljuk tekercsre
     const usedByProjects: Record<string, { totalRolls: number; pallets: number; rolls: number; squareMeters?: number; rollsPerPallet?: number }> = {};
 
-    (projects as Project[]).forEach((p) => {
+    (projectsForView as Project[]).forEach((p) => {
       if (!p.area_sqm) return;
 
       const scheduledDate = p.scheduled_date ? new Date(p.scheduled_date) : null;
@@ -697,7 +903,7 @@ export default function MaterialsPage() {
       .sort(([, a], [, b]) => a.name.localeCompare(b.name));
 
     return { insulation, foils, all: balance };
-  }, [transactions, projects, materials]);
+  }, [transactionsForView, projectsForView, materials]);
 
   // Tranzakció törlés mutation
   const deleteTransactionMutation = useMutation({
@@ -907,14 +1113,88 @@ export default function MaterialsPage() {
                 Kezelje a szigetelőanyagokat és készleteket
               </p>
             </div>
-            {can('materials', 'pickup') && (
-              <Button onClick={() => setIsPickupDialogOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Anyag felvétel
-              </Button>
-            )}
+            <div className="flex items-center gap-3">
+              {isMainContractorUser && subcontractors.length > 0 && (
+                <Select value={selectedCompanyKey} onValueChange={setSelectedCompanyKey}>
+                  <SelectTrigger className="w-[280px]">
+                    <SelectValue placeholder="Alvállalkozó kiválasztása" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="self">Saját cég</SelectItem>
+                    {subcontractors.map((sub) => {
+                      const key = getCompanyKey(sub);
+                      return (
+                        <SelectItem key={key} value={key}>
+                          {sub.name}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              )}
+              {can('materials', 'pickup') && (
+                <Button onClick={() => setIsPickupDialogOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Anyag felvétel
+                </Button>
+              )}
+            </div>
           </div>
+          {isMainContractorUser && subcontractors.length > 0 && (
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Megtekintés: <span className="font-medium">{selectedCompanyLabel}</span>
+            </p>
+          )}
         </div>
+
+        {/* Main contractor overview */}
+        {isMainContractorUser && subcontractorSummary.length > 0 && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-semibold flex items-center">
+                <List className="mr-2 h-5 w-5" />
+                Alvállalkozók összesítése
+              </h3>
+            </div>
+            <Card>
+              <CardContent className="py-4">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Alvállalkozó</TableHead>
+                      <TableHead className="text-right">Felvett (raklap)</TableHead>
+                      <TableHead className="text-right">Felvett (tekercs)</TableHead>
+                      <TableHead className="text-right">Egyenleg tételek</TableHead>
+                      <TableHead className="text-right">Hiányos tételek</TableHead>
+                      <TableHead className="text-right">Részletek</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {subcontractorSummary.map((row) => (
+                      <TableRow key={row.key}>
+                        <TableCell className="font-medium">{row.name}</TableCell>
+                        <TableCell className="text-right">{row.pickupsPallets}</TableCell>
+                        <TableCell className="text-right">{row.pickupsRolls}</TableCell>
+                        <TableCell className="text-right">{row.balanceItems}</TableCell>
+                        <TableCell className="text-right">{row.deficitItems}</TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setSelectedCompanyKey(row.key)}
+                          >
+                            Megtekintés
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Riasztások */}
         {deficits.length > 0 && (

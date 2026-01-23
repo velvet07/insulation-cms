@@ -1,9 +1,11 @@
 import { strapiApi, unwrapStrapiResponse, unwrapStrapiArrayResponse } from './strapi';
 import type { Company, StrapiResponse } from '@/types';
+import { debugLog } from '@/lib/utils/debug-flag';
 
 export interface CompanyFilters {
   type?: Company['type'];
-  parent_company?: number;
+  // Supports numeric id, Strapi v5 documentId, or 'null' to filter missing parent.
+  parent_company?: number | string | 'null';
   search?: string;
 }
 
@@ -18,7 +20,15 @@ export const companiesApi = {
       if (filters.parent_company === 'null' as any) {
         params.append('filters[parent_company][id][$null]', 'true');
       } else {
-        params.append('filters[parent_company][id][$eq]', filters.parent_company.toString());
+        const parentCompanyId = filters.parent_company.toString();
+        // Strapi v5 supports documentId filtering; using id with a documentId string can cause server errors.
+        const looksLikeDocumentId =
+          parentCompanyId.length > 10 || parentCompanyId.includes('-') || isNaN(Number(parentCompanyId));
+        if (looksLikeDocumentId) {
+          params.append('filters[parent_company][documentId][$eq]', parentCompanyId);
+        } else {
+          params.append('filters[parent_company][id][$eq]', parentCompanyId);
+        }
       }
     }
     if (filters?.search) {
@@ -45,7 +55,7 @@ export const companiesApi = {
 
   getOne: async (id: number | string, populate?: string | string[]) => {
     try {
-      console.log('🏢 [COMPANY API] getOne called with id:', id, 'populate:', populate);
+      debugLog('companies', 'getOne called with id:', id, 'populate:', populate);
       const params = new URLSearchParams();
       if (populate) {
         if (Array.isArray(populate)) {
@@ -57,12 +67,12 @@ export const companiesApi = {
 
       const queryString = params.toString() ? `?${params.toString()}` : '';
       const apiUrl = `/companies/${id}${queryString}`;
-      console.log('📡 [COMPANY API] Calling:', apiUrl);
+      debugLog('companies', 'Calling:', apiUrl);
 
       const response = await strapiApi.get<StrapiResponse<Company>>(apiUrl);
       const unwrapped = unwrapStrapiResponse(response);
 
-      console.log('✅ [COMPANY API] Response received:', {
+      debugLog('companies', 'Response received:', {
         id: unwrapped?.id,
         documentId: unwrapped?.documentId,
         name: unwrapped?.name,
@@ -71,9 +81,7 @@ export const companiesApi = {
         subcontractorsCount: (unwrapped as any)?.subcontractors?.length || 0
       });
 
-      if ((unwrapped as any)?.subcontractors) {
-        console.log('📋 [COMPANY API] Subcontractors:', (unwrapped as any).subcontractors);
-      }
+      // NOTE: avoid dumping full subcontractor arrays by default (too noisy)
 
       return unwrapped;
     } catch (error: any) {

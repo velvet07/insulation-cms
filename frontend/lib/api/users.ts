@@ -1,6 +1,7 @@
 import axios from 'axios';
 import type { User } from '@/types';
 import { companiesApi } from './companies';
+import { debugLog } from '@/lib/utils/debug-flag';
 
 const strapiUrl = process.env.NEXT_PUBLIC_STRAPI_URL || 'https://cms.emermedia.eu';
 const apiToken = process.env.NEXT_PUBLIC_STRAPI_API_TOKEN;
@@ -15,7 +16,7 @@ const strapiApi = axios.create({
   },
 });
 
-console.log('[usersApi] Initialized with API token for user management');
+debugLog('api', '[usersApi] Initialized with API token for user management');
 
 export const usersApi = {
   // Get all users with optional filtering

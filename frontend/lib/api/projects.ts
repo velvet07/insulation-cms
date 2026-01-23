@@ -1,5 +1,6 @@
 import { strapiApi, unwrapStrapiResponse, unwrapStrapiArrayResponse } from './strapi';
 import type { Project, StrapiResponse } from '@/types';
+import { debugLog } from '@/lib/utils/debug-flag';
 
 export interface ProjectFilters {
   status?: Project['status'];
@@ -13,16 +14,16 @@ export interface ProjectFilters {
 
 export const projectsApi = {
   getAll: async (filters?: ProjectFilters) => {
-    console.error('🔍 [API] projectsApi.getAll called with filters:', filters);
+    debugLog('projects', 'projectsApi.getAll called with filters:', filters);
     const params = new URLSearchParams();
 
     if (filters?.status) {
       params.append('filters[status][$eq]', filters.status);
-      console.error('  ✓ Added status filter:', filters.status);
+      debugLog('projects', '✓ Added status filter:', filters.status);
     }
     if (filters?.status_not) {
       params.append('filters[status][$ne]', filters.status_not);
-      console.error('  ✓ Added status_not filter:', filters.status_not);
+      debugLog('projects', '✓ Added status_not filter:', filters.status_not);
     }
     if (filters?.assigned_to) {
       // Strapi v5 uses documentId, try both id and documentId
@@ -33,16 +34,16 @@ export const projectsApi = {
       if (assignedToId.length > 10 || assignedToId.includes('-') || isNaN(Number(assignedToId))) {
         // It's a documentId (string)
         params.append('filters[assigned_to][documentId][$eq]', assignedToId);
-        console.error('  ✓ Added assigned_to filter (documentId):', assignedToId);
+        debugLog('projects', '✓ Added assigned_to filter (documentId):', assignedToId);
       } else {
         // It's a numeric id
         params.append('filters[assigned_to][id][$eq]', assignedToId);
-        console.error('  ✓ Added assigned_to filter (id):', assignedToId);
+        debugLog('projects', '✓ Added assigned_to filter (id):', assignedToId);
       }
     }
     if (filters?.tenant) {
       params.append('filters[tenant][id][$eq]', filters.tenant.toString());
-      console.error('  ✓ Added tenant filter:', filters.tenant);
+      debugLog('projects', '✓ Added tenant filter:', filters.tenant);
     }
     if (filters?.company) {
       // Strapi v5 uses documentId, try both id and documentId
@@ -50,11 +51,11 @@ export const projectsApi = {
       if (companyId.includes('-')) {
         // It's a documentId
         params.append('filters[company][documentId][$eq]', companyId);
-        console.error('  ✓ Added company filter (documentId):', companyId);
+        debugLog('projects', '✓ Added company filter (documentId):', companyId);
       } else {
         // It's a numeric id
         params.append('filters[company][id][$eq]', companyId);
-        console.error('  ✓ Added company filter (id):', companyId);
+        debugLog('projects', '✓ Added company filter (id):', companyId);
       }
     }
     if (filters?.subcontractor) {
@@ -63,28 +64,28 @@ export const projectsApi = {
       if (subcontractorId.includes('-') || subcontractorId.length > 10 || isNaN(Number(subcontractorId))) {
         // It's a documentId (string)
         params.append('filters[subcontractor][documentId][$eq]', subcontractorId);
-        console.error('  ✓ Added subcontractor filter (documentId):', subcontractorId);
+        debugLog('projects', '✓ Added subcontractor filter (documentId):', subcontractorId);
       } else {
         // It's a numeric id
         params.append('filters[subcontractor][id][$eq]', subcontractorId);
-        console.error('  ✓ Added subcontractor filter (id):', subcontractorId);
+        debugLog('projects', '✓ Added subcontractor filter (id):', subcontractorId);
       }
     }
     if (filters?.search) {
       params.append('filters[$or][0][client_name][$contains]', filters.search);
       params.append('filters[$or][1][client_address][$contains]', filters.search);
-      console.error('  ✓ Added search filter:', filters.search);
+      debugLog('projects', '✓ Added search filter:', filters.search);
     }
 
     params.append('populate', '*');
     params.append('sort', 'createdAt:desc');
 
     const apiUrl = `/projects?${params.toString()}`;
-    console.error('📡 [API] Calling Strapi API:', apiUrl);
+    debugLog('projects', 'Calling Strapi API:', apiUrl);
 
     try {
       const response = await strapiApi.get<StrapiResponse<Project[]>>(apiUrl);
-      console.error('✅ [API] Response received:', {
+      debugLog('projects', 'Response received:', {
         hasData: !!response.data,
         isArray: Array.isArray(response.data),
         hasDataData: response.data && Array.isArray(response.data.data),
@@ -94,14 +95,14 @@ export const projectsApi = {
 
       // Handle both Strapi v4 and v5 response formats
       if (response.data && Array.isArray(response.data.data)) {
-        console.error('📦 [API] Returning', response.data.data.length, 'projects (v4/v5 format)');
+        debugLog('projects', 'Returning', response.data.data.length, 'projects (v4/v5 format)');
         return response.data.data;
       }
       if (Array.isArray(response.data)) {
-        console.error('📦 [API] Returning', response.data.length, 'projects (array format)');
+        debugLog('projects', 'Returning', response.data.length, 'projects (array format)');
         return response.data;
       }
-      console.warn('⚠️ [API] Unexpected response format, returning empty array');
+      debugLog('projects', 'Unexpected response format, returning empty array');
       return [];
     } catch (error) {
       console.error('❌ [API] Error fetching projects:', error);

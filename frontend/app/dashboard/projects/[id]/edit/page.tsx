@@ -100,7 +100,7 @@ export default function EditProjectPage() {
 
   // Fetch available subcontractors
   const { data: subcontractors = [], isLoading: isLoadingSubcontractors } = useQuery({
-    queryKey: ['companies', 'subcontractors'],
+    queryKey: ['companies', 'subcontractors', isMainContractor ? ((userCompany as any)?.documentId || (userCompany as any)?.id || null) : 'all'],
     queryFn: async () => {
       const filters: any = { type: 'subcontractor' };
       // If main contractor, only show their own subcontractors

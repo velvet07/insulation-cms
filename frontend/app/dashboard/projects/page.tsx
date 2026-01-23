@@ -51,9 +51,18 @@ const statusColors: Record<Project['status'], string> = {
 };
 
 export default function ProjectsPage() {
+  const debugLogs =
+    typeof window !== 'undefined' &&
+    (localStorage.getItem('debug_projects') === '1' || localStorage.getItem('debug') === '1');
+
+  const debug = (...args: unknown[]) => {
+    if (!debugLogs) return;
+    // Using console.debug so it can be filtered in DevTools.
+    console.debug(...args);
+  };
+
   if (typeof window !== 'undefined') {
-    console.error('🔴 [DEBUG] FRONTEND KÓD FUT! Ha ezt látod, a logolás működik.');
-    document.title = 'DEBUG: Projektek';
+    debug('🔴 [DEBUG] FRONTEND KÓD FUT! Ha ezt látod, a logolás működik.');
   }
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -73,11 +82,11 @@ export default function ProjectsPage() {
   // Build filters - if user is not admin, filter by company or assigned_to
   // Note: Owner filter is applied on frontend because "owner" can be either subcontractor or company
   // Default: exclude archived projects unless explicitly filtered
-  console.error('🔧 [FILTER] Building filters...');
-  console.error('  User:', { id: user?.id, email: user?.email, role: user?.role });
-  console.error('  User Company:', user?.company);
-  console.error('  Is Admin:', isAdminRole(user));
-  console.error('  Is Main Contractor:', isMainContractor(user));
+  debug('🔧 [FILTER] Building filters...');
+  debug('  User:', { id: user?.id, email: user?.email, role: user?.role });
+  debug('  User Company:', user?.company);
+  debug('  Is Admin:', isAdminRole(user));
+  debug('  Is Main Contractor:', isMainContractor(user));
 
   const filters: ProjectFilters = {
     ...(statusFilter !== 'all' && { status: statusFilter }),
@@ -88,31 +97,31 @@ export default function ProjectsPage() {
 
   // If user is not admin (or role is undefined), filter by company or assigned_to
   if (!isAdminRole(user)) {
-    console.error('  User is NOT admin, applying company/user filters...');
+    debug('  User is NOT admin, applying company/user filters...');
     if (user?.company) {
       const company = user.company as any;
       const companyId = company.documentId || company.id;
-      console.error('  Company ID:', companyId, 'Type:', company.type);
+      debug('  Company ID:', companyId, 'Type:', company.type);
 
       if (company.type === 'subcontractor' || (company.type as any) === 'Alvállalkozó') {
         // For subcontractor: show only projects where they are the assigned subcontractor
         filters.subcontractor = companyId;
-        console.error('  ✓ Applied SUBCONTRACTOR filter:', companyId);
+        debug('  ✓ Applied SUBCONTRACTOR filter:', companyId);
       } else {
-        console.error('  ✓ Main Contractor detected - NO backend filter applied (will filter on frontend)');
+        debug('  ✓ Main Contractor detected - NO backend filter applied (will filter on frontend)');
       }
       // For main contractor: show ALL projects (no company filter)
       // This way they can see projects created by subcontractors under their management
     } else if (user?.id) {
       // If user has no company, show only projects assigned to this user
       filters.assigned_to = user.id;
-      console.error('  ✓ Applied ASSIGNED_TO filter:', user.id);
+      debug('  ✓ Applied ASSIGNED_TO filter:', user.id);
     }
   } else {
-    console.error('  User is ADMIN - no filters applied');
+    debug('  User is ADMIN - no filters applied');
   }
 
-  console.error('🎯 [FILTER] Final filters to send to API:', filters);
+  debug('🎯 [FILTER] Final filters to send to API:', filters);
 
   const { data: allProjects = [], isLoading, error } = useQuery({
     queryKey: ['projects', filters],
@@ -122,11 +131,11 @@ export default function ProjectsPage() {
   // Get user company ID
   const userCompanyId = useMemo(() => {
     if (!user?.company) {
-      console.error('💼 [COMPANY] User has no company');
+      debug('💼 [COMPANY] User has no company');
       return null;
     }
     const id = typeof user.company === 'object' ? (user.company as any).documentId || (user.company as any).id : user.company;
-    console.error('💼 [COMPANY] userCompanyId calculated:', id, 'from user.company:', user?.company);
+    debug('💼 [COMPANY] userCompanyId calculated:', id, 'from user.company:', user?.company);
     return id;
   }, [user]);
 
@@ -134,14 +143,10 @@ export default function ProjectsPage() {
   const { data: fetchedCompany, isLoading: isLoadingCompany } = useQuery({
     queryKey: ['company', userCompanyId, 'with-subs'],
     queryFn: async () => {
-      console.error('🏢 [COMPANY] Fetching company details for:', userCompanyId);
+      debug('🏢 [COMPANY] Fetching company details for:', userCompanyId);
       const res = await companiesApi.getOne(userCompanyId!, 'subcontractors');
-      console.error('🏢 [COMPANY] Fetched company details:', res);
-      console.error('🏢 [COMPANY] Subcontractors:', res?.subcontractors);
-      console.error('🏢 [COMPANY] Subcontractors count:', res?.subcontractors?.length || 0);
-      if (res?.subcontractors && res.subcontractors.length > 0) {
-        console.error('🏢 [COMPANY] Subcontractor IDs:', res.subcontractors.map((s: any) => s.documentId || s.id));
-      }
+      debug('🏢 [COMPANY] Fetched company details:', res);
+      debug('🏢 [COMPANY] Subcontractors count:', res?.subcontractors?.length || 0);
       return res;
     },
     enabled: !!userCompanyId,
@@ -150,42 +155,35 @@ export default function ProjectsPage() {
   const userCompany = fetchedCompany || (typeof user?.company === 'object' ? user.company : null);
 
   useEffect(() => {
-    console.error('\n========================================');
-    console.error('👤 [USER INFO] Current User:', user);
-    console.error('👤 [USER INFO] User Company (Combined):', userCompany);
-    console.error('👤 [USER INFO] Is Admin:', isAdminRole(user));
-    console.error('👤 [USER INFO] Is Main Contractor:', isMainContractor(user));
-    console.error('========================================\n');
+    debug('\n========================================');
+    debug('👤 [USER INFO] Current User:', user);
+    debug('👤 [USER INFO] User Company (Combined):', userCompany);
+    debug('👤 [USER INFO] Is Admin:', isAdminRole(user));
+    debug('👤 [USER INFO] Is Main Contractor:', isMainContractor(user));
+    debug('========================================\n');
   }, [user, userCompany]);
 
   // Frontend filtering for main contractors - show projects where they are company OR subcontractor OR project subcontractor is theirs
   const filteredProjects = useMemo(() => {
-    console.error('\n🔍 [FRONTEND FILTER] Starting frontend filtering...');
-    console.error('📊 [FRONTEND FILTER] Total projects from API:', allProjects.length);
+    debug('\n🔍 [FRONTEND FILTER] Starting frontend filtering...');
+    debug('📊 [FRONTEND FILTER] Total projects from API:', allProjects.length);
 
     // userCompanyId is already calculated above
     const isSubcontractor = userCompany?.type === 'subcontractor' || (userCompany?.type as any) === 'Alvállalkozó';
 
-    console.error('🔍 [FRONTEND FILTER] User Company ID:', userCompanyId);
-    console.error('🔍 [FRONTEND FILTER] Is Subcontractor:', isSubcontractor);
-    console.error('🔍 [FRONTEND FILTER] User Company Type:', userCompany?.type);
+    debug('🔍 [FRONTEND FILTER] User Company ID:', userCompanyId);
+    debug('🔍 [FRONTEND FILTER] Is Subcontractor:', isSubcontractor);
+    debug('🔍 [FRONTEND FILTER] User Company Type:', userCompany?.type);
 
     // Admin sees all, subcontractors already filtered by backend, no company = no filter
     if (isAdminRole(user) || !userCompanyId || isSubcontractor) {
-      console.error('✅ [FRONTEND FILTER] Returning ALL projects (Admin/NoCompany/Subcontractor)');
-      console.error('   Reason:', isAdminRole(user) ? 'Admin' : !userCompanyId ? 'No Company' : 'Subcontractor');
+      debug('✅ [FRONTEND FILTER] Returning ALL projects (Admin/NoCompany/Subcontractor)');
+      debug('   Reason:', isAdminRole(user) ? 'Admin' : !userCompanyId ? 'No Company' : 'Subcontractor');
       return allProjects;
     }
 
-    console.error('🔍 [FRONTEND FILTER] Main Contractor detected - filtering projects...');
-    console.error('🔍 [FRONTEND FILTER] Available subcontractors:', userCompany?.subcontractors?.length || 0);
-    if (userCompany?.subcontractors && userCompany.subcontractors.length > 0) {
-      console.error('🔍 [FRONTEND FILTER] Subcontractor IDs:', userCompany.subcontractors.map((s: any) => ({
-        id: s.id,
-        documentId: s.documentId,
-        name: s.name
-      })));
-    }
+    debug('🔍 [FRONTEND FILTER] Main Contractor detected - filtering projects...');
+    debug('🔍 [FRONTEND FILTER] Available subcontractors:', userCompany?.subcontractors?.length || 0);
 
     // Main contractor: show projects where they are company OR subcontractor OR project subcontractor is one of their subcontractors
     const filtered = allProjects.filter((project) => {
@@ -204,23 +202,11 @@ export default function ProjectsPage() {
 
       const shouldInclude = isDirectlyAssigned || isSubcontractorAssigned;
 
-      console.error(`  ${shouldInclude ? '✅' : '❌'} Project ${project.id} "${project.title}":`, {
-        projCompanyId,
-        projCompanyName: project.company?.name,
-        projSubcontractorId,
-        projSubcontractorName: project.subcontractor?.name,
-        userCompanyId,
-        isDirectlyAssigned,
-        isSubcontractorAssigned,
-        subcontractorsCount: userCompany?.subcontractors?.length,
-        RESULT: shouldInclude ? 'INCLUDED' : 'EXCLUDED'
-      });
-
       return shouldInclude;
     });
 
-    console.error('\n📦 [FRONTEND FILTER] Filtered projects count:', filtered.length);
-    console.error('========================================\n');
+    debug('\n📦 [FRONTEND FILTER] Filtered projects count:', filtered.length);
+    debug('========================================\n');
     return filtered;
   }, [allProjects, user, userCompany, userCompanyId]);
 

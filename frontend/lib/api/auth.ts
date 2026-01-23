@@ -1,5 +1,6 @@
 import axios from 'axios';
 import type { User } from '@/types';
+import { debugLog } from '@/lib/utils/debug-flag';
 
 const strapiUrl = process.env.NEXT_PUBLIC_STRAPI_URL || 'https://cms.emermedia.eu';
 
@@ -40,10 +41,10 @@ export const authApi = {
       // After login, always fetch full user data with role and company
       try {
         const fullUser = await authApi.getMe(loginResponse.jwt);
-        console.log('[authApi.login] Full user data fetched:', fullUser);
+        debugLog('api', '[authApi.login] Full user data fetched');
         loginResponse.user = fullUser;
       } catch (error) {
-        console.warn('[authApi.login] Failed to fetch full user data, using login response:', error);
+        debugLog('api', '[authApi.login] Failed to fetch full user data, using login response');
         // Fallback: try to transform role from login response if available
         if (loginResponse.user && typeof loginResponse.user.role === 'object' && loginResponse.user.role !== null) {
           const roleType = (loginResponse.user.role as any).type;
@@ -74,7 +75,7 @@ export const authApi = {
               const company = await companiesApi.getOne(companyId);
               (loginResponse.user as any).company = company;
             } catch (companyError) {
-              console.warn('Failed to fetch company data after login:', companyError);
+              debugLog('api', 'Failed to fetch company data after login');
               // Don't fail login if company fetch fails
             }
           }
@@ -113,9 +114,9 @@ export const authApi = {
           Authorization: `Bearer ${token}`,
         },
       });
-      console.log('[getMe] Successfully fetched user with populate=*');
+      debugLog('api', '[getMe] Successfully fetched user with populate=*');
     } catch (error: any) {
-      console.warn('[getMe] populate=* failed, trying without populate:', error?.response?.status);
+      debugLog('api', '[getMe] populate=* failed, trying without populate', error?.response?.status);
       try {
         // Fallback to simple request without populate
         userResponse = await authApiClient.get<User>('/users/me', {
@@ -123,17 +124,51 @@ export const authApi = {
             Authorization: `Bearer ${token}`,
           },
         });
-        console.log('[getMe] Fetched user without populate');
+        debugLog('api', '[getMe] Fetched user without populate');
       } catch (error2: any) {
-        console.error('[getMe] Both requests failed:', error2);
+        debugLog('api', '[getMe] Both requests failed');
         throw error2 || error;
       }
     }
 
-    let user = userResponse.data;
+    // Strapi responses may be:
+    // - plain user object (users-permissions)
+    // - { data: { id, attributes } } (content API style)
+    // - { data: user } (some proxies/wrappers)
+    const unwrapEntity = (entity: any) => {
+      if (!entity) return entity;
+      const candidate = entity?.data ?? entity;
+      if (candidate?.attributes && (candidate?.id || candidate?.documentId)) {
+        return {
+          id: candidate.id,
+          documentId: candidate.documentId,
+          ...candidate.attributes,
+        };
+      }
+      return candidate;
+    };
+
+    let user: any = unwrapEntity(userResponse.data as any);
     const userId = user.documentId || user.id;
 
+    // If /users/me doesn't include relations (common when role lacks permissions),
+    // fall back to the /users/:id endpoint using API token to fetch full relations.
+    // This is needed for the frontend permission system (e.g., Projects filtering for Main Contractor).
+    if (user?.id && (!user?.company || !user?.role)) {
+      try {
+        const { usersApi } = await import('./users');
+        const fullUser = await usersApi.getOne(user.id);
+        user = unwrapEntity(fullUser);
+        debugLog('api', '[getMe] Fetched full user via /users/:id fallback');
+      } catch (error) {
+        debugLog('api', '[getMe] /users/:id fallback failed');
+      }
+    }
 
+    // Normalize nested relations that may come in as { data: ... }
+    if (user?.company) user.company = unwrapEntity(user.company);
+    if (user?.tenant) user.tenant = unwrapEntity(user.tenant);
+    if (user?.role) user.role = unwrapEntity(user.role);
 
     // Transform role if it's an object
     if (user && typeof user.role === 'object' && user.role !== null) {
@@ -141,7 +176,9 @@ export const authApi = {
       const roleName = (user.role as any).name?.toLowerCase() || '';
       const roleId = (user.role as any).id;
 
-      if (roleName.includes('admin') || roleType === 'admin' || roleId === 1 || roleId === '1') {
+      // NOTE: numeric role ids (e.g. 1/2) belong to users-permissions roles (Public/Authenticated/custom),
+      // they are NOT admin indicators. Only treat explicit admin roles as admin.
+      if (roleName.includes('admin') || roleType === 'admin') {
         (user as any).role = 'admin';
       } else if (roleName.includes('foovallalkozo') || roleName.includes('fővállalkozó')) {
         (user as any).role = 'foovallalkozo';
@@ -167,16 +204,16 @@ export const authApi = {
             const parentCompany = await companiesApi.getOne(company.parent_company);
             (user as any).company.parent_company = parentCompany;
           } catch (error) {
-            console.warn('[getMe] Failed to fetch parent company:', error);
+            debugLog('api', '[getMe] Failed to fetch parent company');
           }
         }
-        console.log('[getMe] Fetched company data separately');
+        debugLog('api', '[getMe] Fetched company data separately');
       } catch (error) {
-        console.warn('[getMe] Failed to fetch company data:', error);
+        debugLog('api', '[getMe] Failed to fetch company data');
       }
     }
 
-    console.log('[getMe] Final user object:', {
+    debugLog('api', '[getMe] Final user object:', {
       id: user.id,
       role: user.role,
       companyType: (user.company as any)?.type,
@@ -206,7 +243,7 @@ export const authApi = {
           },
         });
       } catch (error2: any) {
-        console.error('[getMe] Both requests failed:', error, error2);
+        debugLog('api', '[getMe] Both requests failed');
         throw error2 || error;
       }
     }
@@ -214,9 +251,9 @@ export const authApi = {
     // Transform role to our format if needed
     const user = response.data;
 
-    console.log('[getMe] Raw user response:', user);
-    console.log('[getMe] User role:', user?.role);
-    console.log('[getMe] User company:', user?.company);
+    debugLog('api', '[getMe] Raw user response:', user);
+    debugLog('api', '[getMe] User role:', user?.role);
+    debugLog('api', '[getMe] User company:', user?.company);
 
     // If role is an object, extract the role name/type
     if (user && typeof user.role === 'object' && user.role !== null) {
@@ -225,10 +262,12 @@ export const authApi = {
       const roleName = (user.role as any).name?.toLowerCase() || '';
       const roleId = (user.role as any).id;
 
-      console.log('[getMe] Role details:', { roleType, roleName, roleId });
+      debugLog('api', '[getMe] Role details:', { roleType, roleName, roleId });
 
       // Check if role name contains 'admin' or type is 'admin' or id is 1 (Strapi default admin)
-      if (roleName.includes('admin') || roleType === 'admin' || roleId === 1 || roleId === '1') {
+      // NOTE: numeric role ids (e.g. 1/2) belong to users-permissions roles (Public/Authenticated/custom),
+      // they are NOT admin indicators. Only treat explicit admin roles as admin.
+      if (roleName.includes('admin') || roleType === 'admin') {
         (user as any).role = 'admin';
       } else if (roleName.includes('foovallalkozo') || roleName.includes('fővállalkozó')) {
         (user as any).role = 'foovallalkozo';
@@ -240,13 +279,13 @@ export const authApi = {
         (user as any).role = 'worker';
       } else {
         // Keep role as object if we can't map it
-        console.warn('[getMe] Unknown role type, keeping as object:', user.role);
+        debugLog('api', '[getMe] Unknown role type, keeping as object:', user.role);
       }
     } else if (user && typeof user.role === 'string') {
       // Role is already a string, keep it
-      console.log('[getMe] Role is already string:', user.role);
+      debugLog('api', '[getMe] Role is already string:', user.role);
     } else {
-      console.warn('[getMe] Role is undefined or null');
+      debugLog('api', '[getMe] Role is undefined or null');
     }
 
     // Fetch company data if it's just an ID
@@ -256,7 +295,7 @@ export const authApi = {
           const companyId = user.company;
           const { companiesApi } = await import('./companies');
           const company = await companiesApi.getOne(companyId);
-          console.log('[getMe] Fetched company:', company);
+          debugLog('api', '[getMe] Fetched company:', company);
           (user as any).company = company;
 
           // If company has parent_company, fetch it too
@@ -266,18 +305,18 @@ export const authApi = {
                 const parentCompany = await companiesApi.getOne(company.parent_company);
                 (user as any).company.parent_company = parentCompany;
               } catch (error) {
-                console.warn('[getMe] Failed to fetch parent company:', error);
+                debugLog('api', '[getMe] Failed to fetch parent company');
               }
             }
           }
         } catch (error) {
-          console.warn('[getMe] Failed to fetch company data:', error);
+          debugLog('api', '[getMe] Failed to fetch company data');
           // Don't fail if company fetch fails
         }
       }
     }
 
-    console.log('[getMe] Final user object:', user);
+    debugLog('api', '[getMe] Final user object:', user);
 
     return user;
   },
