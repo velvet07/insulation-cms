@@ -127,108 +127,81 @@ export const materialTransactionsApi = {
       params.append('filters[used_date][$eq]', filters.used_date.$eq);
     }
 
-    const baseParams = new URLSearchParams(params);
-    // Strapi v5 nested populate format: populate[user][populate][company]=*
-    baseParams.append('populate[user][populate][company]', '*');
-    baseParams.append('populate', '*');
-    // Strapi multi-sort format
-    baseParams.append('sort[0]', 'pickup_date:desc');
-    baseParams.append('sort[1]', 'used_date:desc');
-    baseParams.append('sort[2]', 'createdAt:desc');
-
-    try {
-      const apiUrl = `/material-transactions?${baseParams.toString()}`;
-      const response = await strapiApi.get<StrapiResponse<MaterialTransaction[]>>(apiUrl);
-      if (response.data && Array.isArray(response.data.data)) {
-        return response.data.data;
-      }
-      if (Array.isArray(response.data)) {
-        return response.data;
-      }
-      return [];
-    } catch (error) {
-      const err: any = error;
-      const status = err?.response?.status;
-      const details = err?.response?.data;
-
-      // If Strapi rejects nested populate (400), try with simple populate=*
-      if (status === 400 && baseParams.toString().includes('populate[user]')) {
-        try {
-          const simpleParams = new URLSearchParams(params);
-          simpleParams.append('populate', '*');
-          simpleParams.append('sort[0]', 'pickup_date:desc');
-          simpleParams.append('sort[1]', 'used_date:desc');
-          simpleParams.append('sort[2]', 'createdAt:desc');
-          const simpleUrl = `/material-transactions?${simpleParams.toString()}`;
-          const simpleResponse = await strapiApi.get<StrapiResponse<MaterialTransaction[]>>(simpleUrl);
-          if (simpleResponse.data && Array.isArray(simpleResponse.data.data)) {
-            return simpleResponse.data.data;
-          }
-          if (Array.isArray(simpleResponse.data)) {
-            return simpleResponse.data;
-          }
-          return [];
-        } catch (simpleError) {
-          // Continue to fallback logic below
+    // Try multiple approaches, starting with simplest and working up
+    // Since Strapi v5 often rejects complex populate/sort formats, we start simple
+    const attempts = [
+      // Attempt 1: No parameters at all (most compatible, but may not populate relations)
+      () => {
+        return '/material-transactions';
+      },
+      // Attempt 2: Just populate=* (most compatible with relations)
+      () => {
+        return '/material-transactions?populate=*';
+      },
+      // Attempt 3: With simple sort
+      () => {
+        return '/material-transactions?populate=*&sort=createdAt:desc';
+      },
+      // Attempt 4: With filters (if any), simple populate
+      () => {
+        if (params.toString()) {
+          const filteredParams = new URLSearchParams(params);
+          filteredParams.append('populate', '*');
+          return `/material-transactions?${filteredParams.toString()}`;
         }
-      }
+        return null; // Skip if no filters
+      },
+      // Attempt 5: With filters and sort
+      () => {
+        if (params.toString()) {
+          const filteredParams = new URLSearchParams(params);
+          filteredParams.append('populate', '*');
+          filteredParams.append('sort', 'createdAt:desc');
+          return `/material-transactions?${filteredParams.toString()}`;
+        }
+        return null; // Skip if no filters
+      },
+    ];
 
-      // If Strapi rejects query params (common), retry with a minimal query.
-      if (status === 400) {
-        try {
-          // 1) Keep filters, simplify sorting and populate
-          const fallbackParams1 = new URLSearchParams(params);
-          fallbackParams1.append('populate[user][populate][company]', '*');
-          fallbackParams1.append('sort', 'createdAt:desc');
-          const fallbackUrl1 = `/material-transactions?${fallbackParams1.toString()}`;
-          const retry1 = await strapiApi.get<StrapiResponse<MaterialTransaction[]>>(fallbackUrl1);
-          if (retry1.data && Array.isArray((retry1.data as any).data)) {
-            return (retry1.data as any).data;
-          }
-          if (Array.isArray(retry1.data as any)) {
-            return retry1.data as any;
-          }
-
-          // 2) Keep only filters
-          const fallbackParams2 = new URLSearchParams(params);
-          const fallbackUrl2 = `/material-transactions?${fallbackParams2.toString()}`;
-          const retry2 = await strapiApi.get<StrapiResponse<MaterialTransaction[]>>(fallbackUrl2);
-          if (retry2.data && Array.isArray((retry2.data as any).data)) {
-            return (retry2.data as any).data;
-          }
-          if (Array.isArray(retry2.data as any)) {
-            return retry2.data as any;
-          }
-          return [];
-        } catch (error2) {
-          // If filters are rejected, last resort: fetch without filters and filter client-side.
-          try {
-            const unfilteredUrl = '/material-transactions?populate[user][populate][company]=*&populate=*';
-            const unfiltered = await strapiApi.get<StrapiResponse<MaterialTransaction[]>>(unfilteredUrl);
-            const items: any[] = Array.isArray((unfiltered.data as any)?.data)
-              ? (unfiltered.data as any).data
-              : Array.isArray(unfiltered.data as any)
-                ? (unfiltered.data as any)
-                : [];
-
-            if (companyIdentifiers) {
-              const wantId = companyIdentifiers.id?.toString();
-              const wantDoc = companyIdentifiers.documentId?.toString();
-              return items.filter((it) => {
-                const c = (it as any).company;
-                const cid = c?.id?.toString();
-                const cdoc = c?.documentId?.toString();
-                return (wantId && cid === wantId) || (wantDoc && cdoc === wantDoc);
-              });
-            }
-
-            return items as any;
-          } catch {
-            // If even that fails, return empty to avoid console spam in dev.
+    for (const attempt of attempts) {
+      try {
+        const apiUrl = attempt();
+        if (!apiUrl) continue; // Skip null attempts
+        
+        const response = await strapiApi.get<StrapiResponse<MaterialTransaction[]>>(apiUrl);
+        let items: any[] = [];
+        if (response.data && Array.isArray(response.data.data)) {
+          items = response.data.data;
+        } else if (Array.isArray(response.data)) {
+          items = response.data;
+        }
+        
+        // If we got data, return it (client-side filtering will handle company matching)
+        if (items.length > 0 || attempt === attempts[0]) {
+          return items;
+        }
+      } catch (error) {
+        const err: any = error;
+        const status = err?.response?.status;
+        // If it's not a 400, or if this is the last attempt, return empty
+        if (status !== 400) {
+          // Non-400 error (401, 403, 500, etc.) - don't retry
+          if (attempt === attempts[attempts.length - 1]) {
             return [];
           }
+          continue;
         }
+        // 400 error - try next attempt
+        if (attempt === attempts[attempts.length - 1]) {
+          // Last attempt failed - return empty to avoid console spam
+          return [];
+        }
+        continue; // Try next attempt
       }
+    }
+
+    // If all attempts failed, return empty array
+    return [];
 
       console.error('Error fetching material transactions:', {
         status,
