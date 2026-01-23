@@ -82,6 +82,7 @@ export default function MaterialsPage() {
     quantity: { pallets?: number; rolls?: number };
     oldQuantity?: { pallets?: number; rolls?: number };
     user: string;
+    companyName?: string; // Cégnév hozzáadása
   };
   const [materialLog, setMaterialLog] = useState<MaterialLogEntry[]>(() => {
     if (typeof window !== 'undefined') {
@@ -592,12 +593,14 @@ export default function MaterialsPage() {
     },
     onSuccess: (_data, variables) => {
       // Helyi log hozzáadása minden anyaghoz
+      const companyName = (user?.company as any)?.name || (typeof user?.company === 'string' ? user.company : null) || 'Ismeretlen cég';
       variables.forEach((item) => {
         addLogEntry({
           action: 'pickup',
           materialName: item.materialName || 'Ismeretlen anyag',
           quantity: { pallets: item.quantity_pallets, rolls: item.quantity_rolls },
           user: user?.username || user?.email || 'Ismeretlen',
+          companyName,
         });
       });
 
@@ -681,7 +684,23 @@ export default function MaterialsPage() {
 
         const txForSub = pickupTx.filter((t) => {
           const c = (t as any)?.company ?? (t as any)?.user?.company;
-          return matchesCompany(c, key);
+          if (matchesCompany(c, key)) return true;
+          // If company is missing, try to infer from user if user.company is not populated
+          // This is a fallback for cases where backend doesn't populate user.company
+          if (!c && (t as any)?.user) {
+            const tUser = (t as any).user;
+            // If user is just an ID, we can't match - skip it
+            if (typeof tUser === 'string' || typeof tUser === 'number') {
+              return false;
+            }
+            // If user.company exists but wasn't matched, it's a different company
+            if (tUser?.company) {
+              return false;
+            }
+            // If user.company is missing, we can't reliably match - skip for now
+            return false;
+          }
+          return false;
         });
         const pickupsPallets = txForSub.reduce((sum, t) => sum + (t.quantity_pallets || 0), 0);
         const pickupsRolls = txForSub.reduce((sum, t) => sum + (t.quantity_rolls || 0), 0);
@@ -963,6 +982,7 @@ export default function MaterialsPage() {
     },
     onSuccess: (_data, variables) => {
       // Helyi log hozzáadása
+      const companyName = (user?.company as any)?.name || (typeof user?.company === 'string' ? user.company : null) || 'Ismeretlen cég';
       addLogEntry({
         action: 'deleted',
         materialName: variables.transaction?.material?.name || 'Ismeretlen anyag',
@@ -971,6 +991,7 @@ export default function MaterialsPage() {
           rolls: variables.transaction?.quantity_rolls || 0
         },
         user: user?.username || user?.email || 'Ismeretlen',
+        companyName,
       });
 
       queryClient.invalidateQueries({ queryKey: ['material-balances'] });
@@ -1039,6 +1060,7 @@ export default function MaterialsPage() {
     },
     onSuccess: (_data, variables) => {
       // Helyi log hozzáadása
+      const companyName = (user?.company as any)?.name || (typeof user?.company === 'string' ? user.company : null) || 'Ismeretlen cég';
       addLogEntry({
         action: 'modified',
         materialName: variables.oldTransaction?.material?.name || 'Ismeretlen anyag',
@@ -1051,6 +1073,7 @@ export default function MaterialsPage() {
           rolls: variables.oldTransaction?.quantity_rolls || 0,
         },
         user: user?.username || user?.email || 'Ismeretlen',
+        companyName,
       });
 
       queryClient.invalidateQueries({ queryKey: ['material-balances'] });
@@ -1878,6 +1901,7 @@ export default function MaterialsPage() {
                       <TableHead>Művelet</TableHead>
                       <TableHead>Anyag</TableHead>
                       <TableHead>Felhasználó</TableHead>
+                      <TableHead>Cég</TableHead>
                       <TableHead className="text-right">Mennyiség</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1915,6 +1939,9 @@ export default function MaterialsPage() {
                           </TableCell>
                           <TableCell className="text-sm text-gray-600 dark:text-gray-400">
                             {entry.user}
+                          </TableCell>
+                          <TableCell className="text-sm text-gray-600 dark:text-gray-400">
+                            {entry.companyName || 'Ismeretlen cég'}
                           </TableCell>
                           <TableCell className="text-right">
                             {entry.action === 'modified' && entry.oldQuantity ? (

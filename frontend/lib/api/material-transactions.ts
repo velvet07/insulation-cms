@@ -128,8 +128,8 @@ export const materialTransactionsApi = {
     }
 
     const baseParams = new URLSearchParams(params);
-    // Explicitly populate user.company for filtering when company field is missing
-    baseParams.append('populate[user][populate]', 'company');
+    // Strapi v5 nested populate format: populate[user][populate][company]=*
+    baseParams.append('populate[user][populate][company]', '*');
     baseParams.append('populate', '*');
     // Strapi multi-sort format
     baseParams.append('sort[0]', 'pickup_date:desc');
@@ -151,12 +151,34 @@ export const materialTransactionsApi = {
       const status = err?.response?.status;
       const details = err?.response?.data;
 
+      // If Strapi rejects nested populate (400), try with simple populate=*
+      if (status === 400 && baseParams.toString().includes('populate[user]')) {
+        try {
+          const simpleParams = new URLSearchParams(params);
+          simpleParams.append('populate', '*');
+          simpleParams.append('sort[0]', 'pickup_date:desc');
+          simpleParams.append('sort[1]', 'used_date:desc');
+          simpleParams.append('sort[2]', 'createdAt:desc');
+          const simpleUrl = `/material-transactions?${simpleParams.toString()}`;
+          const simpleResponse = await strapiApi.get<StrapiResponse<MaterialTransaction[]>>(simpleUrl);
+          if (simpleResponse.data && Array.isArray(simpleResponse.data.data)) {
+            return simpleResponse.data.data;
+          }
+          if (Array.isArray(simpleResponse.data)) {
+            return simpleResponse.data;
+          }
+          return [];
+        } catch (simpleError) {
+          // Continue to fallback logic below
+        }
+      }
+
       // If Strapi rejects query params (common), retry with a minimal query.
       if (status === 400) {
         try {
           // 1) Keep filters, simplify sorting and populate
           const fallbackParams1 = new URLSearchParams(params);
-          fallbackParams1.append('populate[user][populate]', 'company');
+          fallbackParams1.append('populate[user][populate][company]', '*');
           fallbackParams1.append('sort', 'createdAt:desc');
           const fallbackUrl1 = `/material-transactions?${fallbackParams1.toString()}`;
           const retry1 = await strapiApi.get<StrapiResponse<MaterialTransaction[]>>(fallbackUrl1);
@@ -181,7 +203,7 @@ export const materialTransactionsApi = {
         } catch (error2) {
           // If filters are rejected, last resort: fetch without filters and filter client-side.
           try {
-            const unfilteredUrl = '/material-transactions?populate[user][populate]=company&populate=*';
+            const unfilteredUrl = '/material-transactions?populate[user][populate][company]=*&populate=*';
             const unfiltered = await strapiApi.get<StrapiResponse<MaterialTransaction[]>>(unfilteredUrl);
             const items: any[] = Array.isArray((unfiltered.data as any)?.data)
               ? (unfiltered.data as any).data
