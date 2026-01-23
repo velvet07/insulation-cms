@@ -155,6 +155,59 @@ export default function MaterialsPage() {
     return Array.isArray(subs) ? (subs as Company[]) : [];
   }, [mainCompanyWithSubcontractors]);
 
+  // Fetch users for all subcontractors to create user-id -> company mapping
+  // This helps match transactions when user.company is not populated
+  const { data: subcontractorUsers = [] } = useQuery({
+    queryKey: ['users', 'subcontractors', subcontractors.map(s => getCompanyKey(s)).join(',')],
+    queryFn: async () => {
+      if (!isMainContractorUser || subcontractors.length === 0) return [];
+      const { usersApi } = await import('@/lib/api/users');
+      // Fetch users for each subcontractor separately (more reliable than array filter)
+      const allUsers: any[] = [];
+      for (const sub of subcontractors) {
+        try {
+          // Try numeric id first
+          if (sub.id !== undefined) {
+            const users = await usersApi.getAll({ company: sub.id });
+            allUsers.push(...users);
+          }
+          // If documentId is different, try that too
+          if (sub.documentId && sub.documentId !== sub.id?.toString()) {
+            try {
+              const users = await usersApi.getAll({ company: sub.documentId });
+              // Avoid duplicates
+              const existingIds = new Set(allUsers.map(u => u.id || u.documentId));
+              allUsers.push(...users.filter((u: any) => !existingIds.has(u.id || u.documentId)));
+            } catch {
+              // Ignore errors for documentId
+            }
+          }
+        } catch (error) {
+          // Continue with next subcontractor if one fails
+          console.warn(`Failed to fetch users for subcontractor ${sub.name}:`, error);
+        }
+      }
+      return allUsers;
+    },
+    enabled: isMainContractorUser && subcontractors.length > 0,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+
+  // Create user-id -> company mapping for efficient lookup
+  const userToCompanyMap = useMemo(() => {
+    const map = new Map<string | number, any>();
+    subcontractorUsers.forEach((u: any) => {
+      const userId = u.id || u.documentId;
+      if (userId && u.company) {
+        map.set(userId.toString(), u.company);
+        if (u.id) map.set(u.id, u.company);
+        if (u.documentId) map.set(u.documentId, u.company);
+      }
+    });
+    return map;
+  }, [subcontractorUsers]);
+
   // Detail view selector (main contractor only)
   const [selectedCompanyKey, setSelectedCompanyKey] = useState<string>('self');
   const [hasInitializedSelectedCompany, setHasInitializedSelectedCompany] = useState(false);
@@ -230,7 +283,7 @@ export default function MaterialsPage() {
 
   // Material Transactions lekérése (cég alapú - elérhető anyagok számításhoz)
   const { data: transactions = [] } = useQuery({
-    queryKey: ['material-transactions', allowedCompanyKeyString, userId],
+    queryKey: ['material-transactions', allowedCompanyKeyString, userId, userToCompanyMap.size],
     queryFn: async () => {
       // Some Strapi environments reject relation filters for these endpoints (400).
       // Fetch all and filter client-side to avoid request failures.
@@ -248,11 +301,28 @@ export default function MaterialsPage() {
         }
         // Fallback: if company is missing but user matches current user, include it
         // (This handles cases where backend doesn't accept company field)
-        const tUserId = (t as any)?.user?.id?.toString() ?? (t as any)?.user?.documentId?.toString() ?? (t as any)?.user?.toString();
+        const tUser = (t as any)?.user;
+        const tUserId = typeof tUser === 'string' || typeof tUser === 'number'
+          ? tUser.toString()
+          : (tUser?.id?.toString() || tUser?.documentId?.toString());
+        
         if (tUserId && userId && tUserId === userId.toString()) {
           // User matches, and user's company is in allowedCompanyKeys
           return true;
         }
+        
+        // Fallback: try userToCompanyMap to find company for this user
+        if (tUserId && userToCompanyMap.size > 0) {
+          const userCompany = userToCompanyMap.get(tUserId) || userToCompanyMap.get(Number(tUserId));
+          if (userCompany) {
+            const cid = userCompany?.id?.toString();
+            const cdoc = userCompany?.documentId?.toString();
+            if ((cid && allowedCompanyKeys.has(cid)) || (cdoc && allowedCompanyKeys.has(cdoc))) {
+              return true;
+            }
+          }
+        }
+        
         return false;
       });
     },
@@ -288,14 +358,32 @@ export default function MaterialsPage() {
         if (matchesCompany(c, want)) return true;
         // Fallback: if company is missing but user matches, include it
         const tUserId = (t as any)?.user?.id?.toString() ?? (t as any)?.user?.documentId?.toString() ?? (t as any)?.user?.toString();
-        return tUserId && userId && tUserId === userId.toString();
+        if (tUserId && userId && tUserId === userId.toString()) return true;
+        // Fallback: try userToCompanyMap
+        if (tUserId) {
+          const userCompany = userToCompanyMap.get(tUserId) || userToCompanyMap.get(Number(tUserId));
+          if (userCompany && matchesCompany(userCompany, want)) return true;
+        }
+        return false;
       });
     }
     return (transactions as any[]).filter((t) => {
       const c = (t as any)?.company ?? (t as any)?.user?.company;
-      return matchesCompany(c, selectedCompanyKey);
+      if (matchesCompany(c, selectedCompanyKey)) return true;
+      // Fallback: try userToCompanyMap
+      const tUser = (t as any)?.user;
+      if (tUser) {
+        const userId = typeof tUser === 'string' || typeof tUser === 'number'
+          ? tUser.toString()
+          : (tUser?.id?.toString() || tUser?.documentId?.toString());
+        if (userId) {
+          const userCompany = userToCompanyMap.get(userId) || userToCompanyMap.get(Number(userId));
+          if (userCompany && matchesCompany(userCompany, selectedCompanyKey)) return true;
+        }
+      }
+      return false;
     });
-  }, [isMainContractorUser, matchesCompany, selectedCompanyKey, transactions, userCompanyId, userId]);
+  }, [isMainContractorUser, matchesCompany, selectedCompanyKey, transactions, userCompanyId, userId, userToCompanyMap]);
 
   const projectsForView = useMemo(() => {
     if (!isMainContractorUser) return projects;
@@ -689,20 +777,33 @@ export default function MaterialsPage() {
           const c = (t as any)?.company ?? (t as any)?.user?.company;
           if (matchesCompany(c, key)) return true;
           
-          // Fallback: if company is missing, try to match by user.id if user belongs to this subcontractor
+          // Fallback: if company is missing, try to match by user.id using userToCompanyMap
           // This handles cases where backend doesn't populate company or user.company
           if (!c && (t as any)?.user) {
             const tUser = (t as any).user;
-            // If user is just an ID, we can't match by company - skip it
-            if (typeof tUser === 'string' || typeof tUser === 'number') {
-              return false;
+            let userCompany: any = null;
+            
+            // Get user ID
+            const userId = typeof tUser === 'string' || typeof tUser === 'number' 
+              ? tUser.toString()
+              : (tUser?.id?.toString() || tUser?.documentId?.toString());
+            
+            if (userId) {
+              // Try to get company from map
+              userCompany = userToCompanyMap.get(userId) || userToCompanyMap.get(Number(userId));
+              
+              // If found in map, check if it matches
+              if (userCompany && matchesCompany(userCompany, key)) {
+                return true;
+              }
             }
-            // If user.company exists but wasn't matched, it's a different company
-            if (tUser?.company) {
+            
+            // If user is an object but company wasn't in map, try user.company directly
+            if (typeof tUser === 'object' && tUser?.company) {
               const userCompanyKey = getCompanyKey(tUser.company);
               return userCompanyKey === key;
             }
-            // If user.company is missing, we can't reliably match - skip for now
+            
             return false;
           }
           return false;
@@ -729,7 +830,7 @@ export default function MaterialsPage() {
       })
       .filter((r) => r.key)
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [balances, getCompanyKey, isMainContractorUser, matchesCompany, subcontractors, transactions]);
+  }, [balances, getCompanyKey, isMainContractorUser, matchesCompany, subcontractors, transactions, userToCompanyMap]);
 
   // Riasztások (negatív egyenleg)
   const deficits = useMemo(() => {
