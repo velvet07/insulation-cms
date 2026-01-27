@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/lib/store/auth';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { isAdminRole, isSubcontractor } from '@/lib/utils/user-role';
+import { isAdminRole, isMainContractor, isSubcontractor } from '@/lib/utils/user-role';
 import type { Company } from '@/types';
 import {
   LayoutDashboard,
@@ -86,9 +86,18 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   // Use the helper function for consistent subcontractor checking
   const isSubContractor = isSubcontractor(user);
   const isAdmin = isAdminRole(user);
+  const isMain = isMainContractor(user);
 
   // Check if user data is complete - if not, we should block access to restricted items
   const hasCompleteUserData = !!(user && (user.role || user.company));
+
+  const roleLabel =
+    isAdmin ? 'Admin'
+      : isMain ? 'Fővállalkozó'
+        : isSubContractor ? 'Vállalkozó'
+          : typeof user?.role === 'string' ? user.role
+            : (user?.role && typeof user.role === 'object' && (user.role as any).name) ? String((user.role as any).name)
+              : 'Felhasználó';
 
   const handleLogout = () => {
     clearAuth();
@@ -186,7 +195,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 </p>
               )}
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                {user?.role ? String(user.role) : 'Felhasználó'}
+                {roleLabel}
               </p>
             </div>
             <Button

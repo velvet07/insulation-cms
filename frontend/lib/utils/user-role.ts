@@ -6,7 +6,9 @@ export function isAdminRole(user: any): boolean {
 
   // If role is a string - case insensitive check
   if (typeof user.role === 'string') {
-    return user.role.toLowerCase() === 'admin';
+    const roleLower = user.role.toLowerCase();
+    // Accept common admin-like role strings (e.g. "Admin", "Administrator", "Super Admin")
+    return roleLower === 'admin' || roleLower.includes('admin');
   }
 
   // If role is an object (Strapi role relation)
@@ -21,6 +23,7 @@ export function isAdminRole(user: any): boolean {
 
   return false;
 }
+
 
 // Helper function to check if user is a subcontractor
 export function isSubcontractor(user: any): boolean {
