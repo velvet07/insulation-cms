@@ -297,8 +297,42 @@ export default factories.createCoreController('api::project.project', ({ strapi 
     if (fromDate) createdAtRange.$gte = fromDate.toISOString();
     if (toDate) createdAtRange.$lte = toDate.toISOString();
 
+    const extractProjectRef = (rel: any): { id?: number; documentId?: string } => {
+      if (!rel) return {};
+      if (typeof rel === 'number') return { id: rel };
+      if (typeof rel === 'string') {
+        const n = Number(rel);
+        if (!isNaN(n) && String(n) === rel) return { id: n };
+        return { documentId: rel };
+      }
+      if (typeof rel === 'object') {
+        // EntityService populated relation usually comes as { id, documentId, ... }
+        if (rel.id) return { id: Number(rel.id) };
+        if (rel.documentId) return { documentId: safeString(rel.documentId) };
+        // Sometimes relations can come as { data: { id, attributes } }
+        if (rel.data?.id) return { id: Number(rel.data.id) };
+        if (rel.data?.documentId) return { documentId: safeString(rel.data.documentId) };
+      }
+      return {};
+    };
+
+    const resolveProjectDocumentIdsToNumeric = async (docIds: string[]) => {
+      const resolved = new Map<string, number>();
+      for (const docId of docIds) {
+        try {
+          // @ts-ignore
+          const p = await (strapi as any).documents('api::project.project').findOne({ documentId: docId });
+          if (p?.id) resolved.set(docId, Number(p.id));
+        } catch {
+          // ignore
+        }
+      }
+      return resolved;
+    };
+
     // 1) Candidates: projects that have ANY activity within the range
     const candidateProjectIds = new Set<number>();
+    const candidateProjectDocumentIds = new Set<string>();
 
     const documentsInRange = await (strapi as any).entityService.findMany('api::document.document', {
       filters: Object.keys(createdAtRange).length ? { createdAt: createdAtRange } : {},
@@ -309,9 +343,9 @@ export default factories.createCoreController('api::project.project', ({ strapi 
     });
 
     for (const d of documentsInRange || []) {
-      const p = d.project;
-      const pid = typeof p === 'object' ? p?.id : p;
-      if (pid) candidateProjectIds.add(pid);
+      const ref = extractProjectRef(d.project);
+      if (ref.id) candidateProjectIds.add(ref.id);
+      else if (ref.documentId) candidateProjectDocumentIds.add(ref.documentId);
     }
 
     const photosInRange = await (strapi as any).entityService.findMany('api::photo.photo', {
@@ -323,18 +357,45 @@ export default factories.createCoreController('api::project.project', ({ strapi 
     });
 
     for (const ph of photosInRange || []) {
-      const p = ph.project;
-      const pid = typeof p === 'object' ? p?.id : p;
-      if (pid) candidateProjectIds.add(pid);
+      const ref = extractProjectRef(ph.project);
+      if (ref.id) candidateProjectIds.add(ref.id);
+      else if (ref.documentId) candidateProjectDocumentIds.add(ref.documentId);
+    }
+
+    // Resolve documentIds -> numeric ids (Strapi v5 sometimes uses documentId in relations)
+    if (candidateProjectDocumentIds.size > 0) {
+      const mapping = await resolveProjectDocumentIdsToNumeric(Array.from(candidateProjectDocumentIds));
+      for (const id of mapping.values()) candidateProjectIds.add(id);
     }
 
     if (candidateProjectIds.size === 0) {
-      return { data: [] };
+      // Fallback: if started_at is already maintained, use it directly.
+      const startedAtRange: any = {};
+      if (fromDate) startedAtRange.$gte = fromDate.toISOString();
+      if (toDate) startedAtRange.$lte = toDate.toISOString();
+
+      const projects = await (strapi as any).entityService.findMany('api::project.project', {
+        filters: {
+          ...(companyFilter || {}),
+          ...(Object.keys(startedAtRange).length ? { started_at: startedAtRange } : {}),
+        },
+        populate: [
+          'company',
+          'company.parent_company',
+          'subcontractor',
+          'subcontractor.parent_company',
+          'assigned_to',
+        ],
+        sort: ['started_at:desc'],
+        limit: 10000,
+      });
+
+      return { data: projects || [] };
     }
 
     // 2) Load all activity for candidate projects and compute FIRST activity per project
     const candidateIds = Array.from(candidateProjectIds);
-    const firstActivityByProject = new Map<number, string>(); // projectId -> ISO string
+    const firstActivityByProject = new Map<number, number>(); // projectId -> epoch ms
 
     const allDocs = await (strapi as any).entityService.findMany('api::document.document', {
       filters: { project: { id: { $in: candidateIds } } },
@@ -345,12 +406,13 @@ export default factories.createCoreController('api::project.project', ({ strapi 
     });
 
     for (const d of allDocs || []) {
-      const p = d.project;
-      const pid = typeof p === 'object' ? p?.id : p;
+      const ref = extractProjectRef(d.project);
+      const pid = ref.id;
       if (!pid) continue;
-      const createdAt = safeString(d.createdAt);
+      const ts = Date.parse(safeString(d.createdAt));
+      if (isNaN(ts)) continue;
       const prev = firstActivityByProject.get(pid);
-      if (!prev || createdAt < prev) firstActivityByProject.set(pid, createdAt);
+      if (prev === undefined || ts < prev) firstActivityByProject.set(pid, ts);
     }
 
     const allPhotos = await (strapi as any).entityService.findMany('api::photo.photo', {
@@ -362,19 +424,19 @@ export default factories.createCoreController('api::project.project', ({ strapi 
     });
 
     for (const ph of allPhotos || []) {
-      const p = ph.project;
-      const pid = typeof p === 'object' ? p?.id : p;
+      const ref = extractProjectRef(ph.project);
+      const pid = ref.id;
       if (!pid) continue;
-      const createdAt = safeString(ph.createdAt);
+      const ts = Date.parse(safeString(ph.createdAt));
+      if (isNaN(ts)) continue;
       const prev = firstActivityByProject.get(pid);
-      if (!prev || createdAt < prev) firstActivityByProject.set(pid, createdAt);
+      if (prev === undefined || ts < prev) firstActivityByProject.set(pid, ts);
     }
 
     // 3) Keep only those whose FIRST activity is within the requested range
     const startedProjectIds: number[] = [];
-    for (const [pid, firstIso] of firstActivityByProject.entries()) {
-      const first = new Date(firstIso);
-      if (isNaN(first.getTime())) continue;
+    for (const [pid, firstTs] of firstActivityByProject.entries()) {
+      const first = new Date(firstTs);
       if (fromDate && first < fromDate) continue;
       if (toDate && first > toDate) continue;
       startedProjectIds.push(pid);
@@ -411,8 +473,9 @@ export default factories.createCoreController('api::project.project', ({ strapi 
     // Backfill started_at if missing
     for (const p of projects || []) {
       const pid = p.id;
-      const firstIso = firstActivityByProject.get(pid);
-      if (!firstIso) continue;
+      const firstTs = firstActivityByProject.get(pid);
+      if (firstTs === undefined) continue;
+      const firstIso = new Date(firstTs).toISOString();
       if (!p.started_at) {
         try {
           await (strapi as any).entityService.update('api::project.project', pid, {
