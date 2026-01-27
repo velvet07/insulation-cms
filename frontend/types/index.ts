@@ -25,6 +25,7 @@ export interface Company extends StrapiEntity {
   type: 'main_contractor' | 'subcontractor';
   tax_number?: string;
   address?: string;
+  billing_price_per_sqm?: number;
   parent_company?: Company;
   subcontractors?: Company[];
   user?: User[];
@@ -77,6 +78,7 @@ export interface Project extends StrapiEntity {
   billing_amount?: number;
   completed_at?: string;
   approved_at?: string;
+  started_at?: string;
   approved_by?: User;
   revision_notes?: string; // Jegyzet a visszaküldés javításra esetén
   sent_back_at?: string; // Dátum amikor visszaküldték javításra
@@ -153,6 +155,7 @@ export interface Document extends StrapiEntity {
   file_name?: string;
   file_size?: number;
   signed: boolean;
+  requires_signature?: boolean;
   signature_data?: string | Record<string, unknown>; // Base64 encoded image vagy JSON
   signed_at?: string;
   project?: Project;

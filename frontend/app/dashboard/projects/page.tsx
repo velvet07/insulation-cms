@@ -28,7 +28,8 @@ import { companiesApi } from '@/lib/api/companies';
 import { useAuthStore } from '@/lib/store/auth';
 import { isAdminRole, isMainContractor } from '@/lib/utils/user-role';
 import { usePermission } from '@/lib/contexts/permission-context';
-import { Plus, Search, Eye, Edit, Trash2 } from 'lucide-react';
+import { Plus, Search, Eye, Edit, Trash2, Download } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const statusLabels: Record<Project['status'], string> = {
   pending: 'Függőben',
@@ -68,6 +69,7 @@ export default function ProjectsPage() {
   const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
   const { can } = usePermission();
+  const canExportZip = can('projects', 'export_zip');
 
   useEffect(() => {
     if (!can('projects', 'view_list')) {
@@ -78,6 +80,8 @@ export default function ProjectsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<Project['status'] | 'all'>('all');
   const [ownerFilter, setOwnerFilter] = useState<string>('all');
+  const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(new Set());
+  const [isExporting, setIsExporting] = useState(false);
 
   // Build filters - if user is not admin, filter by company or assigned_to
   // Note: Owner filter is applied on frontend because "owner" can be either subcontractor or company
@@ -245,6 +249,73 @@ export default function ProjectsPage() {
       return ownerId?.toString() === filterId;
     });
 
+  // keep selection in sync with current filtered list (drop ids that are no longer visible)
+  useEffect(() => {
+    if (!canExportZip) {
+      // If user can't export, we don't keep/collect selections.
+      setSelectedProjectIds(new Set());
+      return;
+    }
+    setSelectedProjectIds((prev) => {
+      if (prev.size === 0) return prev;
+      const visible = new Set(projects.map((p) => (p.documentId || p.id).toString()));
+      const next = new Set(Array.from(prev).filter((id) => visible.has(id)));
+      // Avoid infinite re-render loop: only update state if selection actually changed.
+      if (next.size === prev.size) {
+        let same = true;
+        for (const id of next) {
+          if (!prev.has(id)) {
+            same = false;
+            break;
+          }
+        }
+        if (same) return prev;
+      }
+      return next;
+    });
+  }, [projects, canExportZip]);
+
+  const toggleSelectAll = () => {
+    if (!canExportZip) return;
+    const visibleIds = projects.map((p) => (p.documentId || p.id).toString());
+    setSelectedProjectIds((prev) => {
+      if (visibleIds.length > 0 && prev.size === visibleIds.length) {
+        return new Set();
+      }
+      return new Set(visibleIds);
+    });
+  };
+
+  const toggleSelectOne = (id: string) => {
+    if (!canExportZip) return;
+    setSelectedProjectIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkExport = async () => {
+    if (!canExportZip) return;
+    if (selectedProjectIds.size === 0) return;
+    setIsExporting(true);
+    try {
+      const ids = Array.from(selectedProjectIds);
+      const { blob, filename } = await projectsApi.bulkExport(ids);
+      const url = window.URL.createObjectURL(blob);
+      const a = window.document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      window.document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const handleView = (project: Project) => {
     // Use documentId if available (Strapi v5), otherwise use id
     const identifier = project.documentId || project.id;
@@ -285,12 +356,25 @@ export default function ProjectsPage() {
                 Kezelje a padlásfödém szigetelési projekteket
               </p>
             </div>
-            {can('projects', 'create') && (
-              <Button onClick={() => router.push('/dashboard/projects/new')}>
-                <Plus className="mr-2 h-4 w-4" />
-                Új projekt
-              </Button>
-            )}
+            <div className="flex gap-2">
+              {canExportZip && (
+                <Button
+                  variant="outline"
+                  onClick={handleBulkExport}
+                  disabled={selectedProjectIds.size === 0 || isExporting}
+                  title="Kiválasztott projektek exportálása ZIP-be"
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  {isExporting ? 'Export...' : `Export ZIP (${selectedProjectIds.size})`}
+                </Button>
+              )}
+              {can('projects', 'create') && (
+                <Button onClick={() => router.push('/dashboard/projects/new')}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Új projekt
+                </Button>
+              )}
+            </div>
           </div>
 
           {/* Filters */}
@@ -363,6 +447,15 @@ export default function ProjectsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  {canExportZip && (
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={projects.length > 0 && selectedProjectIds.size === projects.length}
+                        onCheckedChange={toggleSelectAll}
+                        aria-label="Összes kijelölése"
+                      />
+                    </TableHead>
+                  )}
                   <TableHead>Projekt neve</TableHead>
                   <TableHead>Ügyfél neve</TableHead>
                   <TableHead>Cím</TableHead>
@@ -376,6 +469,15 @@ export default function ProjectsPage() {
               <TableBody>
                 {projects.map((project) => (
                   <TableRow key={project.id}>
+                    {canExportZip && (
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedProjectIds.has((project.documentId || project.id).toString())}
+                          onCheckedChange={() => toggleSelectOne((project.documentId || project.id).toString())}
+                          aria-label="Projekt kijelölése"
+                        />
+                      </TableCell>
+                    )}
                     <TableCell>
                       <button
                         onClick={() => handleView(project)}

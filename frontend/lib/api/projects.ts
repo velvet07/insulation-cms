@@ -1,6 +1,42 @@
 import { strapiApi, unwrapStrapiResponse, unwrapStrapiArrayResponse } from './strapi';
 import type { Project, StrapiResponse } from '@/types';
+
+let supportsStartedForBillingRoute: boolean | null = null;
 import { debugLog } from '@/lib/utils/debug-flag';
+
+const STARTED_FOR_BILLING_SUPPORT_KEY = 'supportsStartedForBillingRoute';
+
+function getStoredStartedForBillingSupport(): boolean | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const v = window.localStorage.getItem(STARTED_FOR_BILLING_SUPPORT_KEY);
+    if (v === 'true') return true;
+    if (v === 'false') return false;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function setStoredStartedForBillingSupport(value: boolean) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(STARTED_FOR_BILLING_SUPPORT_KEY, value ? 'true' : 'false');
+  } catch {
+    // ignore
+  }
+}
+
+function is404Error(e: any): boolean {
+  const status = e?.response?.status;
+  if (status === 404) return true;
+  const msg = safeString(e?.message);
+  return msg.includes('404') && msg.toLowerCase().includes('not found');
+}
+
+function safeString(v: any) {
+  return (v ?? '').toString();
+}
 
 export interface ProjectFilters {
   status?: Project['status'];
@@ -48,7 +84,7 @@ export const projectsApi = {
     if (filters?.company) {
       // Strapi v5 uses documentId, try both id and documentId
       const companyId = filters.company.toString();
-      if (companyId.includes('-')) {
+      if (companyId.includes('-') || companyId.length > 10 || isNaN(Number(companyId))) {
         // It's a documentId
         params.append('filters[company][documentId][$eq]', companyId);
         debugLog('projects', '✓ Added company filter (documentId):', companyId);
@@ -117,7 +153,23 @@ export const projectsApi = {
       return unwrapStrapiResponse(response);
     } catch (error: any) {
       if (error.response?.status === 404) {
-        // Try with documentId if regular id doesn't work
+        // Fallback: Strapi v5 REST often expects numeric id in /:id.
+        // If caller passed documentId, resolve via filter.
+        const idStr = id?.toString?.() || String(id);
+        if (idStr && (idStr.length > 10 || idStr.includes('-') || isNaN(Number(idStr)))) {
+          try {
+            const params = new URLSearchParams();
+            params.append('filters[documentId][$eq]', idStr);
+            params.append('populate', '*');
+            const res = await strapiApi.get<StrapiResponse<Project[]>>(`/projects?${params.toString()}`);
+            const payload: any = res.data as any;
+            const arr: Project[] = Array.isArray(payload?.data) ? payload.data : Array.isArray(payload) ? payload : [];
+            if (arr.length > 0) return arr[0];
+          } catch {
+            // ignore and throw below
+          }
+        }
+
         console.error('Project not found with id:', id);
         throw new Error(`Projekt nem található (ID: ${id})`);
       }
@@ -234,6 +286,113 @@ export const projectsApi = {
         throw new Error(errorMessage);
       }
       throw error;
+    }
+  },
+
+  /**
+   * Bulk export projects to ZIP (server-side streaming).
+   * Returns a Blob + suggested filename.
+   */
+  bulkExport: async (projectIds: Array<number | string>) => {
+    const strapiUrl = process.env.NEXT_PUBLIC_STRAPI_URL || 'https://cms.emermedia.eu';
+    const apiToken = process.env.NEXT_PUBLIC_STRAPI_API_TOKEN;
+
+    const response = await fetch(`${strapiUrl}/api/projects/bulk-export`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(apiToken ? { Authorization: `Bearer ${apiToken}` } : {}),
+      },
+      body: JSON.stringify({ data: { projectIds } }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '');
+      throw new Error(errorText || `Bulk export sikertelen (${response.status})`);
+    }
+
+    const contentDisposition = response.headers.get('content-disposition') || '';
+    const filenameMatch = contentDisposition.match(/filename="([^"]+)"/i);
+    const filename = filenameMatch?.[1] || 'export.zip';
+
+    const blob = await response.blob();
+    return { blob, filename };
+  },
+
+  /**
+   * Billing: get "started" projects within date range.
+   * A projekt "megkezdett", ha volt benne dokumentum generálás / dokumentum feltöltés / fotó feltöltés.
+   * (Backend kiszámolja a legelső aktivitást, és backfill-eli a started_at mezőt is.)
+   */
+  getStartedForBilling: async (paramsInput: { from?: string; to?: string; company?: number | string }) => {
+    // Prefer new backend route, but gracefully fallback on older servers.
+    const params = new URLSearchParams();
+    if (paramsInput.from) params.append('from', paramsInput.from);
+    if (paramsInput.to) params.append('to', paramsInput.to);
+    if (paramsInput.company) params.append('company', paramsInput.company.toString());
+
+    const callNew = async () => {
+      const response = await strapiApi.get<StrapiResponse<Project[]>>(`/projects/started-for-billing?${params.toString()}`);
+      const payload: any = response.data as any;
+      if (payload && Array.isArray(payload.data)) return payload.data as Project[];
+      if (payload && Array.isArray(payload.data?.data)) return payload.data.data as Project[];
+      if (Array.isArray(payload)) return payload as Project[];
+      return [];
+    };
+
+    const callLegacy = async () => {
+      const legacyParams = new URLSearchParams();
+      legacyParams.append('filters[started_at][$notNull]', 'true');
+
+      if (paramsInput.from) {
+        legacyParams.append('filters[started_at][$gte]', new Date(paramsInput.from).toISOString());
+      }
+      if (paramsInput.to) {
+        const end = new Date(paramsInput.to);
+        end.setHours(23, 59, 59, 999);
+        legacyParams.append('filters[started_at][$lte]', end.toISOString());
+      }
+      if (paramsInput.company) {
+        const companyId = paramsInput.company.toString();
+        if (companyId.includes('-') || companyId.length > 10 || isNaN(Number(companyId))) {
+          legacyParams.append('filters[company][documentId][$eq]', companyId);
+        } else {
+          legacyParams.append('filters[company][id][$eq]', companyId);
+        }
+      }
+
+      legacyParams.append('populate', '*');
+      legacyParams.append('sort', 'started_at:asc');
+
+      const response = await strapiApi.get<StrapiResponse<Project[]>>(`/projects?${legacyParams.toString()}`);
+      const payload: any = response.data as any;
+      if (payload && Array.isArray(payload.data)) return payload.data as Project[];
+      if (Array.isArray(payload)) return payload as Project[];
+      return [];
+    };
+
+    // Cache support decision across reloads to avoid repeated 404 spam in console.
+    if (supportsStartedForBillingRoute === null) {
+      const stored = getStoredStartedForBillingSupport();
+      if (stored !== null) supportsStartedForBillingRoute = stored;
+    }
+
+    if (supportsStartedForBillingRoute === false) {
+      return callLegacy();
+    }
+
+    try {
+      const result = await callNew();
+      supportsStartedForBillingRoute = true;
+      setStoredStartedForBillingSupport(true);
+      return result;
+    } catch (e: any) {
+      if (is404Error(e)) {
+        supportsStartedForBillingRoute = false;
+        setStoredStartedForBillingSupport(false);
+        return callLegacy();
+      }
+      throw e;
     }
   },
 };

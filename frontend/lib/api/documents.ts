@@ -237,16 +237,39 @@ export const documentsApi = {
         throw new Error('A feltöltött fájl ID-ja nem található');
       }
 
+      const createDocument = async (data: Record<string, any>) => {
+        const response = await strapiApi.post<StrapiResponse<Document>>('/documents', { data });
+        return unwrapStrapiResponse(response);
+      };
+
       // Dokumentum létrehozása a feltöltött fájllal
-      const response = await strapiApi.post<StrapiResponse<Document>>('/documents', {
-        data: {
+      // Megjegyzés: ha a szerveren még nincs deployolva a requires_signature mező,
+      // akkor "Invalid key requires_signature" hibát kapunk. Ilyenkor újrapróbáljuk nélküle,
+      // hogy a feltöltés régi szerveren is működjön.
+      try {
+        return await createDocument({
           project: projectId,
           type,
+          requires_signature: false,
           file: fileId,
           file_name: file.name,
-        },
-      });
-      return unwrapStrapiResponse(response);
+        });
+      } catch (error: any) {
+        const message =
+          error?.response?.data?.error?.message ||
+          error?.message ||
+          '';
+
+        if (message.includes('Invalid key requires_signature')) {
+          return await createDocument({
+            project: projectId,
+            type,
+            file: fileId,
+            file_name: file.name,
+          });
+        }
+        throw error;
+      }
     } catch (error: any) {
       if (error.response) {
         console.error('Strapi API Error:', error.response.data);

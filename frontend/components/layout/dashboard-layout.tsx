@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/lib/store/auth';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import {
   FileText,
   Calendar,
   Package,
+  Receipt,
   Settings,
   LogOut,
   Menu,
@@ -97,6 +98,18 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     router.push('/login');
   };
 
+  const navItemsWithAdmin = useMemo(() => {
+    if (!isAdmin) return navItems;
+    return [
+      ...navItems,
+      {
+        title: 'Elszámolás',
+        href: '/dashboard/billing',
+        icon: Receipt,
+      },
+    ];
+  }, [isAdmin]);
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Mobile sidebar overlay */}
@@ -130,7 +143,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
           {/* Navigation */}
           <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-            {navItems.map((item) => {
+            {navItemsWithAdmin.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
 

@@ -68,6 +68,7 @@ const companySchema = z.object({
   tax_number: z.string().optional(),
   address: z.string().optional(),
   parent_company: z.string().optional(),
+  billing_price_per_sqm: z.string().optional(),
 });
 
 type CompanyFormValues = z.infer<typeof companySchema>;
@@ -207,13 +208,45 @@ export default function SettingsPage() {
       tax_number: '',
       address: '',
       parent_company: undefined,
+      billing_price_per_sqm: '',
     },
   });
+
+  const normalizeCompanyPayload = (data: CompanyFormValues) => {
+    const submitData: any = { ...data };
+
+    // Only Admin can set billing price
+    if (!isAdmin) {
+      delete submitData.billing_price_per_sqm;
+      return submitData;
+    }
+
+    // Only main contractors have a billing price
+    if (data.type !== 'main_contractor') {
+      delete submitData.billing_price_per_sqm;
+      return submitData;
+    }
+
+    const raw = (data.billing_price_per_sqm || '').toString().trim().replace(',', '.');
+    if (!raw) {
+      delete submitData.billing_price_per_sqm;
+      return submitData;
+    }
+
+    const price = Number(raw);
+    if (!Number.isFinite(price) || price < 0) {
+      delete submitData.billing_price_per_sqm;
+      return submitData;
+    }
+
+    submitData.billing_price_per_sqm = price;
+    return submitData;
+  };
 
   // Mutations
   const createMutation = useMutation({
     mutationFn: (data: CompanyFormValues) => {
-      const submitData: any = { ...data };
+      const submitData: any = normalizeCompanyPayload(data);
       if (isMainContractor && !isAdmin && userCompany) {
         submitData.parent_company = userCompany.documentId || userCompany.id;
       }
@@ -228,7 +261,7 @@ export default function SettingsPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: CompanyFormValues }) => companiesApi.update(id, data as any),
+    mutationFn: ({ id, data }: { id: string; data: CompanyFormValues }) => companiesApi.update(id, normalizeCompanyPayload(data)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['companies'] });
       form.reset();
@@ -343,6 +376,10 @@ export default function SettingsPage() {
         tax_number: company.tax_number || '',
         address: company.address || '',
         parent_company: company.parent_company ? (company.parent_company.documentId || company.parent_company.id?.toString()) : undefined,
+        billing_price_per_sqm:
+          company.type === 'main_contractor' && company.billing_price_per_sqm !== undefined && company.billing_price_per_sqm !== null
+            ? String(company.billing_price_per_sqm)
+            : '',
       });
       setIsDialogOpen(true);
     }
@@ -546,6 +583,28 @@ export default function SettingsPage() {
                             </FormItem>
                           )}
                         />
+                        {isAdmin && form.watch('type') === 'main_contractor' && (
+                          <FormField
+                            control={form.control}
+                            name="billing_price_per_sqm"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Ár (Ft/m²) - elszámoláshoz</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    {...field}
+                                    inputMode="decimal"
+                                    placeholder="Pl. 460"
+                                  />
+                                </FormControl>
+                                <FormDescription>
+                                  Csak Fővállalkozóknál értelmezett. Az elszámolásnál a megkezdett projektek \(m²\)-e ezzel szorzódik.
+                                </FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        )}
                         <FormField
                           control={form.control}
                           name="address"

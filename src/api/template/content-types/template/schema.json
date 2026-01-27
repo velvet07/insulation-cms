@@ -18,7 +18,19 @@
     },
     "type": {
       "type": "enumeration",
-      "enum": ["contract", "worksheet", "invoice"],
+      "enum": [
+        "felmerolap",
+        "vallalkozasi_szerzodes",
+        "megallapodas",
+        "szerzodes_energiahatékonysag",
+        "adatkezelesi_hozzajarulas",
+        "teljesitesi_igazolo",
+        "munkaterul_atadas",
+        "other",
+        "contract",
+        "worksheet",
+        "invoice"
+      ],
       "required": true
     },
     "tokens": {

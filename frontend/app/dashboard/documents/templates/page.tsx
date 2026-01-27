@@ -329,44 +329,56 @@ export default function TemplatesPage() {
                         <p className="text-sm font-medium mb-3">Elérhető tokenek:</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
                           <div>
-                            <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">Ügyfél adatok:</p>
+                            <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">Szerződő fél (1):</p>
                             <ul className="space-y-1 text-gray-600 dark:text-gray-400">
-                              <li>• {'{client_name}'} - Ügyfél neve</li>
-                              <li>• {'{client_address}'} - Teljes cím</li>
-                              <li>• {'{client_street}'} - Utca, házszám</li>
-                              <li>• {'{client_city}'} - Város</li>
-                              <li>• {'{client_zip}'} - IRSZ</li>
-                              <li>• {'{client_phone}'} - Telefonszám</li>
-                              <li>• {'{client_email}'} - Email cím</li>
+                              <li>• {'{nev1}'} - Név</li>
+                              <li>• {'{irsz1}'} - Irányítószám</li>
+                              <li>• {'{telepules1}'} - Település</li>
+                              <li>• {'{cim1}'} - Cím (utca, házszám)</li>
+                              <li>• {'{telefon}'} - Telefonszám</li>
+                              <li>• {'{email1}'} - Email</li>
                             </ul>
                           </div>
                           <div>
-                            <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">Születési adatok:</p>
+                            <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">Személyes adatok (1):</p>
                             <ul className="space-y-1 text-gray-600 dark:text-gray-400">
-                              <li>• {'{client_birth_place}'} - Születési hely</li>
-                              <li>• {'{client_birth_date}'} - Születési idő</li>
-                              <li>• {'{client_mother_name}'} - Anyja neve</li>
-                              <li>• {'{client_tax_id}'} - Adóazonosító</li>
+                              <li>• {'{szhely}'} - Születési hely</li>
+                              <li>• {'{szido1}'} - Születési idő</li>
+                              <li>• {'{anyjaneve1}'} - Anyja neve</li>
+                              <li>• {'{adoazonosito1}'} - Adóazonosító</li>
                             </ul>
                           </div>
                           <div>
-                            <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">Ingatlan adatok:</p>
+                            <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">Projekt / ingatlan:</p>
                             <ul className="space-y-1 text-gray-600 dark:text-gray-400">
-                              <li>• {'{property_address}'} - Teljes ingatlan cím</li>
-                              <li>• {'{property_street}'} - Ingatlan utca</li>
-                              <li>• {'{property_city}'} - Ingatlan város</li>
-                              <li>• {'{property_zip}'} - Ingatlan IRSZ</li>
+                              <li>• {'{projektirsz}'} - Ingatlan IRSZ</li>
+                              <li>• {'{projekttelepules}'} - Ingatlan település</li>
+                              <li>• {'{projektcim}'} - Ingatlan cím (utca, házszám)</li>
+                              <li>• {'{hrsz}'} - HRSZ</li>
+                              <li>• {'{negyzetmeter}'} - Terület (m²)</li>
+                              <li>• {'{fodem_anyaga}'} - Födém anyaga</li>
                             </ul>
                           </div>
                           <div>
-                            <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">Projekt adatok:</p>
+                            <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">Szerződő fél (2) / cég:</p>
                             <ul className="space-y-1 text-gray-600 dark:text-gray-400">
-                              <li>• {'{project_title}'} - Projekt címe</li>
-                              <li>• {'{area_sqm}'} - Terület (m²)</li>
-                              <li>• {'{floor_material}'} - Födém anyaga</li>
-                              <li>• {'{insulation_option}'} - Szigetelési opció</li>
-                              <li>• {'{date}'} - Aktuális dátum</li>
-                              <li>• {'{created_at}'} - Létrehozás dátuma</li>
+                              <li>• {'{nev2}'} - Név</li>
+                              <li>• {'{irsz2}'} - Irányítószám</li>
+                              <li>• {'{telepules2}'} - Település</li>
+                              <li>• {'{cim2}'} - Cím</li>
+                              <li>• {'{szido2}'} - Születési idő</li>
+                              <li>• {'{anyjaneve2}'} - Anyja neve</li>
+                              <li>• {'{adoazonosito2}'} - Adóazonosító</li>
+                              <li>• {'{adoszam}'} - Adószám</li>
+                            </ul>
+                          </div>
+                          <div>
+                            <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">Dátumok / egyéb:</p>
+                            <ul className="space-y-1 text-gray-600 dark:text-gray-400">
+                              <li>• {'{szerzodesdatum}'} - Szerződés dátuma</li>
+                              <li>• {'{kivdatum}'} - Kivitelezés dátuma</li>
+                              <li>• {'{kivdatum_real}'} - Kivitelezés dátuma (tényleges)</li>
+                              <li>• {'{hem}'} - HEM</li>
                             </ul>
                           </div>
                         </div>

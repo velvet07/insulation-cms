@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
   TableBody,
@@ -30,7 +31,7 @@ import {
 import { documentsApi } from '@/lib/api/documents';
 import { templatesApi } from '@/lib/api/templates';
 import { DOCUMENT_TYPE_LABELS, TEMPLATE_TYPE_LABELS, type Document, type Template, type Project } from '@/types';
-import { Plus, Download, Trash2, FileText, Loader2, PenTool, X, Check, Upload } from 'lucide-react';
+import { Plus, Download, Trash2, FileText, Loader2, PenTool, X, Check, Upload, Edit } from 'lucide-react';
 import { SignaturePad } from '@/components/ui/signature-pad';
 import dynamic from 'next/dynamic';
 
@@ -54,7 +55,11 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
   const [selectedDocumentForSignature, setSelectedDocumentForSignature] = useState<Document | null>(null);
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
+  const [uploadType, setUploadType] = useState<Document['type']>('other');
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<Set<string>>(new Set());
+  const [isTypeChangeDialogOpen, setIsTypeChangeDialogOpen] = useState(false);
+  const [newDocumentType, setNewDocumentType] = useState<Document['type']>('other');
 
 
   const projectId = project.documentId || project.id;
@@ -140,21 +145,61 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
   };
 
   const uploadMutation = useMutation({
-    mutationFn: async ({ file, type }: { file: File; type?: Document['type'] }) => {
-      const document = await documentsApi.upload(projectId, file, type || 'other');
+    mutationFn: async ({ files, type }: { files: File[]; type: Document['type'] }) => {
+      const created: Document[] = [];
+      for (const file of files) {
+        const document = await documentsApi.upload(projectId, file, type || 'other');
+        created.push(document);
 
-      // Audit log bejegyzés
+        // Audit log bejegyzés (fájlonként)
+        const auditLogEntry = createAuditLogEntry(
+          'document_uploaded',
+          user,
+          `Dokumentum feltöltve: ${file.name}`
+        );
+        auditLogEntry.module = 'Dokumentumok';
+
+        const currentProject = await projectsApi.getOne(projectId);
+        const updatedAuditLog = addAuditLogEntry(currentProject.audit_log, auditLogEntry);
+
+        try {
+          await projectsApi.update(projectId, {
+            audit_log: updatedAuditLog,
+          });
+        } catch (error: any) {
+          if (!error?.message?.includes('Invalid key audit_log')) {
+            console.error('Error updating audit log:', error);
+          }
+        }
+      }
+      return created;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+      setIsUploadDialogOpen(false);
+      setUploadFiles([]);
+      setUploadType('other');
+    },
+    onError: (error: any) => {
+      console.error('Error uploading file:', error);
+    },
+  });
+
+  const documentTypeUpdateMutation = useMutation({
+    mutationFn: async ({ documentId, type }: { documentId: string; type: Document['type'] }) => {
+      await documentsApi.update(documentId, { type });
+
       const auditLogEntry = createAuditLogEntry(
-        'document_uploaded',
+        'document_modified',
         user,
-        `Dokumentum feltöltve: ${file.name}`
+        `Dokumentum típusa módosítva: ${DOCUMENT_TYPE_LABELS[type as keyof typeof DOCUMENT_TYPE_LABELS] || type}`
       );
       auditLogEntry.module = 'Dokumentumok';
 
-      const currentProject = await projectsApi.getOne(projectId);
-      const updatedAuditLog = addAuditLogEntry(currentProject.audit_log, auditLogEntry);
-
       try {
+        const currentProject = await projectsApi.getOne(projectId);
+        const updatedAuditLog = addAuditLogEntry(currentProject.audit_log, auditLogEntry);
         await projectsApi.update(projectId, {
           audit_log: updatedAuditLog,
         });
@@ -163,17 +208,48 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
           console.error('Error updating audit log:', error);
         }
       }
-
-      return document;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
-      setIsUploadDialogOpen(false);
-      setUploadFile(null);
     },
     onError: (error: any) => {
-      console.error('Error uploading file:', error);
+      console.error('Error updating document type:', error);
+    },
+  });
+
+  const bulkTypeUpdateMutation = useMutation({
+    mutationFn: async ({ documentIds, type }: { documentIds: string[]; type: Document['type'] }) => {
+      await Promise.all(documentIds.map((id) => documentsApi.update(id, { type })));
+
+      const auditLogEntry = createAuditLogEntry(
+        'document_modified',
+        user,
+        `${documentIds.length} feltöltött dokumentum típusa módosítva: ${DOCUMENT_TYPE_LABELS[type as keyof typeof DOCUMENT_TYPE_LABELS] || type}`
+      );
+      auditLogEntry.module = 'Dokumentumok';
+
+      try {
+        const currentProject = await projectsApi.getOne(projectId);
+        const updatedAuditLog = addAuditLogEntry(currentProject.audit_log, auditLogEntry);
+        await projectsApi.update(projectId, {
+          audit_log: updatedAuditLog,
+        });
+      } catch (error: any) {
+        if (!error?.message?.includes('Invalid key audit_log')) {
+          console.error('Error updating audit log:', error);
+        }
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+      setSelectedDocumentIds(new Set());
+      setIsTypeChangeDialogOpen(false);
+      setNewDocumentType('other');
+    },
+    onError: (error: any) => {
+      console.error('Error bulk updating document type:', error);
     },
   });
 
@@ -219,6 +295,39 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
     onError: (error: any) => {
       console.error('Error deleting document:', error);
       // Hiba esetén sem alert, csak console log
+    },
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (documentIds: string[]) => {
+      const auditLogEntry = createAuditLogEntry(
+        'document_deleted',
+        user,
+        `${documentIds.length} dokumentum törölve`
+      );
+      auditLogEntry.module = 'Dokumentumok';
+
+      await Promise.all(documentIds.map((id) => documentsApi.delete(id)));
+
+      try {
+        const currentProject = await projectsApi.getOne(projectId);
+        const updatedAuditLog = addAuditLogEntry(currentProject.audit_log, auditLogEntry);
+        await projectsApi.update(projectId, {
+          audit_log: updatedAuditLog,
+        });
+      } catch (error: any) {
+        if (!error?.message?.includes('Invalid key audit_log')) {
+          console.error('Error updating audit log:', error);
+        }
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+      setSelectedDocumentIds(new Set());
+    },
+    onError: (error: any) => {
+      console.error('Error bulk deleting documents:', error);
     },
   });
 
@@ -284,6 +393,49 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
     if (confirm(`Biztosan törölni szeretné ezt a dokumentumot: ${document.file_name || 'Névtelen'}?`)) {
       const identifier = document.documentId || document.id;
       deleteMutation.mutate(identifier);
+    }
+  };
+
+  const documentById = useMemo(() => {
+    const m = new Map<string, Document>();
+    for (const d of documents) {
+      const id = (d.documentId || d.id).toString();
+      m.set(id, d);
+    }
+    return m;
+  }, [documents]);
+
+  const selectedUploadedDocumentIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const id of selectedDocumentIds) {
+      const d = documentById.get(id);
+      if (d?.requires_signature === false) ids.push(id);
+    }
+    return ids;
+  }, [selectedDocumentIds, documentById]);
+
+  const handleToggleDocumentSelection = (id: string) => {
+    setSelectedDocumentIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleSelectAllDocuments = (checked: boolean | 'indeterminate') => {
+    if (checked) {
+      const allIds = documents.map((d) => (d.documentId || d.id).toString());
+      setSelectedDocumentIds(new Set(allIds));
+    } else {
+      setSelectedDocumentIds(new Set());
+    }
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedDocumentIds.size === 0) return;
+    if (confirm(`Biztosan törölni szeretné a kijelölt ${selectedDocumentIds.size} dokumentumot?`)) {
+      bulkDeleteMutation.mutate(Array.from(selectedDocumentIds));
     }
   };
 
@@ -438,30 +590,49 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
               <DialogHeader>
                 <DialogTitle>Fájl feltöltése</DialogTitle>
                 <DialogDescription>
-                  Töltsön fel képet vagy PDF fájlt (pl. tulajdoni lap, lakcímkártya).
+                  Töltsön fel scannelt képet/PDF-et. Válassza ki, hogy melyik dokumentum kategóriához tartozzon.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div>
+                  <label className="text-sm font-medium mb-2 block">Dokumentum kategória *</label>
+                  <Select value={uploadType} onValueChange={(v) => setUploadType(v as Document['type'])}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Válasszon kategóriát" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(DOCUMENT_TYPE_LABELS).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
                   <label className="text-sm font-medium mb-2 block">Fájl kiválasztása *</label>
                   <input
                     type="file"
+                    multiple
                     accept="image/*,.pdf"
                     onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        setUploadFile(file);
-                      }
+                      const files = Array.from(e.target.files || []);
+                      if (files.length > 0) setUploadFiles(files);
                     }}
                     className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                   />
                 </div>
-                {uploadFile && (
+                {uploadFiles.length > 0 && (
                   <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded-md">
-                    <p className="text-sm font-medium">{uploadFile.name}</p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {(uploadFile.size / 1024 / 1024).toFixed(2)} MB
-                    </p>
+                    <p className="text-sm font-medium">{uploadFiles.length} fájl kiválasztva</p>
+                    <div className="mt-2 space-y-1 text-xs text-gray-600 dark:text-gray-400">
+                      {uploadFiles.slice(0, 6).map((f) => (
+                        <div key={`${f.name}-${f.size}`}>{f.name}</div>
+                      ))}
+                      {uploadFiles.length > 6 && (
+                        <div>… és még {uploadFiles.length - 6} fájl</div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -470,17 +641,18 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
                   variant="outline"
                   onClick={() => {
                     setIsUploadDialogOpen(false);
-                    setUploadFile(null);
+                    setUploadFiles([]);
+                    setUploadType('other');
                   }}
                 >
                   Mégse
                 </Button>
                 <Button
                   onClick={() => {
-                    if (!uploadFile) return;
-                    uploadMutation.mutate({ file: uploadFile, type: 'other' });
+                    if (uploadFiles.length === 0) return;
+                    uploadMutation.mutate({ files: uploadFiles, type: uploadType });
                   }}
-                  disabled={!uploadFile || uploadMutation.isPending}
+                  disabled={uploadFiles.length === 0 || uploadMutation.isPending}
                 >
                   {uploadMutation.isPending ? (
                     <>
@@ -488,7 +660,7 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
                       Feltöltés...
                     </>
                   ) : (
-                    'Feltöltés'
+                    `Feltöltés (${uploadFiles.length})`
                   )}
                 </Button>
               </DialogFooter>
@@ -618,9 +790,51 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
         </div>
       ) : (
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+          {/* Bulk selection toolbar */}
+          {documents.length > 0 && (
+            <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 p-3 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <Checkbox
+                    checked={documents.length > 0 && selectedDocumentIds.size === documents.length}
+                    onCheckedChange={handleSelectAllDocuments}
+                  />
+                  <span className="text-sm">Összes kijelölése</span>
+                </label>
+                {selectedDocumentIds.size > 0 && (
+                  <span className="text-sm text-gray-500">{selectedDocumentIds.size} kijelölve</span>
+                )}
+              </div>
+              {selectedDocumentIds.size > 0 && (
+                <div className="flex gap-2">
+                  {selectedUploadedDocumentIds.length > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsTypeChangeDialogOpen(true)}
+                      disabled={bulkTypeUpdateMutation.isPending}
+                    >
+                      <Edit className="mr-2 h-4 w-4" />
+                      Típus módosítása ({selectedUploadedDocumentIds.length})
+                    </Button>
+                  )}
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleBulkDelete}
+                    disabled={bulkDeleteMutation.isPending}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    {bulkDeleteMutation.isPending ? 'Törlés...' : `${selectedDocumentIds.size} dokumentum törlése`}
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12"></TableHead>
                 <TableHead>Név</TableHead>
                 <TableHead>Típus</TableHead>
                 <TableHead>Státusz</TableHead>
@@ -629,14 +843,51 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {documents.map((document) => (
-                <TableRow key={document.id}>
+              {documents.map((document) => {
+                const documentId = (document.documentId || document.id).toString();
+                const isUploaded = document.requires_signature === false;
+                return (
+                <TableRow key={documentId}>
+                  <TableCell>
+                    <Checkbox
+                      checked={selectedDocumentIds.has(documentId)}
+                      onCheckedChange={() => handleToggleDocumentSelection(documentId)}
+                    />
+                  </TableCell>
                   <TableCell className="font-medium">
                     {document.file_name || `Dokumentum ${document.id}`}
                   </TableCell>
-                  <TableCell>{DOCUMENT_TYPE_LABELS[document.type as keyof typeof DOCUMENT_TYPE_LABELS] || document.type}</TableCell>
                   <TableCell>
-                    {document.signed ? (
+                    {isUploaded ? (
+                      <Select
+                        value={document.type}
+                        onValueChange={(v) => {
+                          const nextType = v as Document['type'];
+                          documentTypeUpdateMutation.mutate({ documentId, type: nextType });
+                        }}
+                        disabled={documentTypeUpdateMutation.isPending}
+                      >
+                        <SelectTrigger className="w-56">
+                          <SelectValue placeholder="Válasszon típust" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(DOCUMENT_TYPE_LABELS).map(([value, label]) => (
+                            <SelectItem key={value} value={value}>
+                              {label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      DOCUMENT_TYPE_LABELS[document.type as keyof typeof DOCUMENT_TYPE_LABELS] || document.type
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {isUploaded ? (
+                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                        Rendben
+                      </span>
+                    ) : document.signed ? (
                       <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
                         Aláírva
                       </span>
@@ -651,7 +902,7 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
-                      {!document.signed && (
+                      {!isUploaded && !document.signed && (
                         <Button
                           variant="ghost"
                           size="icon"
@@ -689,11 +940,67 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
+              )})}
             </TableBody>
           </Table>
         </div>
       )}
+
+      {/* Bulk type change dialog (feltöltött dokumentumokhoz) */}
+      <Dialog open={isTypeChangeDialogOpen} onOpenChange={setIsTypeChangeDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Dokumentum típus módosítása</DialogTitle>
+            <DialogDescription>
+              Csak a feltöltött (nem aláírandó) dokumentumok típusát módosítja. ({selectedUploadedDocumentIds.length} db)
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <label className="text-sm font-medium mb-2 block">Új dokumentum típus *</label>
+              <Select value={newDocumentType} onValueChange={(v) => setNewDocumentType(v as Document['type'])}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Válasszon típust" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(DOCUMENT_TYPE_LABELS).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsTypeChangeDialogOpen(false);
+                setNewDocumentType('other');
+              }}
+            >
+              Mégse
+            </Button>
+            <Button
+              onClick={() => {
+                if (selectedUploadedDocumentIds.length === 0) return;
+                bulkTypeUpdateMutation.mutate({ documentIds: selectedUploadedDocumentIds, type: newDocumentType });
+              }}
+              disabled={selectedUploadedDocumentIds.length === 0 || bulkTypeUpdateMutation.isPending}
+            >
+              {bulkTypeUpdateMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Mentés...
+                </>
+              ) : (
+                `Mentés (${selectedUploadedDocumentIds.length})`
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Aláírás Section (nem Dialog) */}
       {selectedDocumentForSignature && (

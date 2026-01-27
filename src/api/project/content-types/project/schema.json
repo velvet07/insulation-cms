@@ -99,6 +99,9 @@
     "approved_at": {
       "type": "datetime"
     },
+    "started_at": {
+      "type": "datetime"
+    },
     "revision_notes": {
       "type": "text"
     },

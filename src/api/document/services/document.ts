@@ -161,6 +161,24 @@ export default factories.createCoreService('api::document.document', ({ strapi }
 
       // Docxtemplater inicializálása kép modullal (ha elérhető)
       const zip = new PizZip(templateBuffer);
+
+      // Kompatibilitás: ha a sablonban {{token}} formátum van, alakítsuk {token}-re
+      // (a DOCX zipben lévő XML-ekben cserélünk, mert a DOCX tömörített)
+      try {
+        // @ts-ignore
+        zip.forEach((relativePath: string, file: any) => {
+          if (!relativePath || file?.dir) return;
+          if (!relativePath.endsWith('.xml')) return;
+          const content = file.asText();
+          const replaced = content.replace(/{{/g, '{').replace(/}}/g, '}');
+          if (replaced !== content) {
+            // @ts-ignore
+            zip.file(relativePath, replaced);
+          }
+        });
+      } catch (e: any) {
+        strapi.log.warn('Could not normalize {{}} tokens in DOCX template:', e?.message || e);
+      }
       
       const docOptions: any = {
         paragraphLoop: true,
@@ -301,10 +319,25 @@ export default factories.createCoreService('api::document.document', ({ strapi }
         throw new Error(`PDF fájl feltöltése sikertelen: ${uploadError.message}`);
       }
 
-      // Type mapping - CSAK azokat engedjük át, amik a szerver sémájában is szerepelnek
-      // Amíg a szerveren nem frissíted a Document content type "type" mezőjét, 
-      // addig itt csak a régi értékek maradhatnak, vagy marad az 'other'
-      const serverAllowedTypes = ['contract', 'worksheet', 'invoice', 'completion_certificate', 'other'];
+      // Type mapping - engedjük át a (régi + új) dokumentumtípusokat, különben 'other'
+      // Fontos: a Strapi sémában a Document.type enum értékeit ehhez igazítottuk.
+      const serverAllowedTypes = [
+        // új típusok
+        'felmerolap',
+        'vallalkozasi_szerzodes',
+        'megallapodas',
+        'szerzodes_energiahatékonysag',
+        'adatkezelesi_hozzajarulas',
+        'teljesitesi_igazolo',
+        'munkaterul_atadas',
+        // régi típusok (kompatibilitás)
+        'contract',
+        'worksheet',
+        'invoice',
+        'completion_certificate',
+        // fallback
+        'other',
+      ];
       const documentType = serverAllowedTypes.includes(template.type) ? template.type : 'other';
 
       strapi.log.info(`Creating document record. Type: ${documentType} (template original type: ${template.type})`);
@@ -316,6 +349,7 @@ export default factories.createCoreService('api::document.document', ({ strapi }
           project: project.id,
           uploaded_by: userId,
           signed: false,
+          requires_signature: true,
           file_name: pdfFileName,
           file: fileEntity.id,
         },
@@ -413,6 +447,24 @@ export default factories.createCoreService('api::document.document', ({ strapi }
 
       // Docxtemplater inicializálása
       const zip = new PizZip(templateBuffer);
+
+      // Kompatibilitás: ha a sablonban {{token}} formátum van, alakítsuk {token}-re
+      try {
+        // @ts-ignore
+        zip.forEach((relativePath: string, file: any) => {
+          if (!relativePath || file?.dir) return;
+          if (!relativePath.endsWith('.xml')) return;
+          const content = file.asText();
+          const replaced = content.replace(/{{/g, '{').replace(/}}/g, '}');
+          if (replaced !== content) {
+            // @ts-ignore
+            zip.file(relativePath, replaced);
+          }
+        });
+      } catch (e: any) {
+        strapi.log.warn('Could not normalize {{}} tokens in DOCX template:', e?.message || e);
+      }
+
       const docOptions: any = {
         paragraphLoop: true,
         linebreaks: true,
@@ -548,6 +600,26 @@ export default factories.createCoreService('api::document.document', ({ strapi }
    * Projekt adataiból készít token objektumot
    */
   createTokensFromProject(project: any) {
+    const parseHungarianAddress = (address: string): { zip: string; city: string; street: string } => {
+      const value = (address || '').toString().trim();
+      if (!value) return { zip: '', city: '', street: '' };
+
+      // Common format: "1234 Város, Utca 1."
+      const m1 = value.match(/^(\d{4})\s+([^,]+),\s*(.+)$/);
+      if (m1) {
+        return { zip: m1[1] || '', city: (m1[2] || '').trim(), street: (m1[3] || '').trim() };
+      }
+
+      // Legacy-like format: "Utca 1., Város, 1234"
+      const parts = value.split(',').map((p) => p.trim()).filter(Boolean);
+      if (parts.length >= 3 && /^\d{4}$/.test(parts[2])) {
+        return { street: parts[0] || '', city: parts[1] || '', zip: parts[2] || '' };
+      }
+
+      // Fallback: keep address as street
+      return { zip: '', city: '', street: value };
+    };
+
     const clientAddress = project.client_zip && project.client_city && project.client_street
       ? `${project.client_zip} ${project.client_city}, ${project.client_street}`
       : project.client_address || '';
@@ -573,27 +645,75 @@ export default factories.createCoreService('api::document.document', ({ strapi }
       return date.toLocaleDateString('hu-HU', { year: 'numeric', month: 'long', day: 'numeric' });
     };
 
-      return {
-        client_name: project.client_name || '',
-        client_address: clientAddress,
-        client_street: project.client_street || '',
-        client_city: project.client_city || '',
-        client_zip: project.client_zip || '',
-        client_phone: project.client_phone || '',
-        client_email: project.client_email || '',
-        client_birth_place: project.client_birth_place || '',
-        client_birth_date: project.client_birth_date ? formatDate(project.client_birth_date) : '',
-        client_mother_name: project.client_mother_name || '',
-        client_tax_id: project.client_tax_id || '',
-        property_address: propertyAddress,
-        property_street: project.property_street || '',
-        property_city: project.property_city || '',
-        property_zip: project.property_zip || '',
-        project_title: project.title || '',
-        area_sqm: project.area_sqm || 0,
-        floor_material: project.floor_material ? (floorMaterialLabels[project.floor_material] || project.floor_material) : '',
-        date: new Date().toLocaleDateString('hu-HU', { year: 'numeric', month: 'long', day: 'numeric' }),
-      };
+    const company = (project.company && typeof project.company === 'object') ? project.company : null;
+    const companyAddressParsed = company?.address ? parseHungarianAddress(company.address) : { zip: '', city: '', street: '' };
+
+    const floorMaterialValue = project.floor_material
+      ? (floorMaterialLabels[project.floor_material] || project.floor_material)
+      : '';
+
+    // Legacy tokens (existing templates)
+    const legacyTokens = {
+      client_name: project.client_name || '',
+      client_address: clientAddress,
+      client_street: project.client_street || '',
+      client_city: project.client_city || '',
+      client_zip: project.client_zip || '',
+      client_phone: project.client_phone || '',
+      client_email: project.client_email || '',
+      client_birth_place: project.client_birth_place || '',
+      client_birth_date: project.client_birth_date ? formatDate(project.client_birth_date) : '',
+      client_mother_name: project.client_mother_name || '',
+      client_tax_id: project.client_tax_id || '',
+      property_address: propertyAddress,
+      property_street: project.property_street || '',
+      property_city: project.property_city || '',
+      property_zip: project.property_zip || '',
+      project_title: project.title || '',
+      area_sqm: project.area_sqm || 0,
+      floor_material: floorMaterialValue,
+      date: new Date().toLocaleDateString('hu-HU', { year: 'numeric', month: 'long', day: 'numeric' }),
+    };
+
+    // New tokens (requested list)
+    const newTokens = {
+      nev1: project.client_name || '',
+      irsz1: project.client_zip || '',
+      telepules1: project.client_city || '',
+      cim1: project.client_street || '',
+      szhely: project.client_birth_place || '',
+      szido1: project.client_birth_date ? formatDate(project.client_birth_date) : '',
+      anyjaneve1: project.client_mother_name || '',
+      adoazonosito1: project.client_tax_id || '',
+      telefon: project.client_phone || '',
+      email1: project.client_email || '',
+
+      projektirsz: project.property_zip || '',
+      projekttelepules: project.property_city || '',
+      projektcim: project.property_street || '',
+
+      nev2: company?.name || '',
+      irsz2: companyAddressParsed.zip || '',
+      telepules2: companyAddressParsed.city || '',
+      cim2: companyAddressParsed.street || company?.address || '',
+      szido2: '',
+      anyjaneve2: '',
+      adoazonosito2: '',
+
+      hrsz: '',
+      negyzetmeter: project.area_sqm ? String(project.area_sqm) : '',
+      szerzodesdatum: project.createdAt ? formatDate(project.createdAt) : '',
+      kivdatum: project.scheduled_date ? formatDate(project.scheduled_date) : '',
+      hem: '',
+      fodem_anyaga: floorMaterialValue,
+      adoszam: company?.tax_number || '',
+      kivdatum_real: project.completed_at ? formatDate(project.completed_at) : '',
+    };
+
+    return {
+      ...legacyTokens,
+      ...newTokens,
+    };
     },
 
   /**

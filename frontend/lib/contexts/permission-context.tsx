@@ -30,6 +30,7 @@ export const PERMISSION_CONFIG: Record<PermissionModule, PermissionFeature[]> = 
         { id: 'photos', label: 'Fotók kezelése', read: 'view_photos', write: 'manage_photos' },
         { id: 'documents', label: 'Dokumentumok', read: 'view_project_documents', write: 'manage_documents' },
         { id: 'worksheet', label: 'Munkalap', read: 'view_worksheet', write: 'manage_worksheet' },
+        { id: 'export_zip', label: 'Projekt export (ZIP)', write: 'export_zip' },
         { id: 'delete', label: 'Törlés', write: 'delete' },
         { id: 'approve', label: 'Jóváhagyás', write: 'approve' },
     ],
@@ -97,7 +98,8 @@ const DEFAULT_MATRIX: PermissionMatrix = {
                 view_list: true, create: true, edit: true, delete: false,
                 view_details: true, view_photos: true, view_project_documents: true,
                 view_worksheet: true, manage_photos: true, manage_documents: true,
-                manage_worksheet: true, approve: true
+                manage_worksheet: true, approve: true,
+                export_zip: true
             },
             materials: {
                 view_list: true, pickup: true, view_transactions: true,
@@ -118,7 +120,8 @@ const DEFAULT_MATRIX: PermissionMatrix = {
                 view_list: true, create: false, edit: false, delete: false,
                 view_details: true, view_photos: true, view_project_documents: true,
                 view_worksheet: true, manage_photos: true, manage_documents: true,
-                manage_worksheet: true, approve: false
+                manage_worksheet: true, approve: false,
+                export_zip: false
             },
             materials: {
                 view_list: true, pickup: true, view_transactions: false,
@@ -136,7 +139,7 @@ const DEFAULT_MATRIX: PermissionMatrix = {
         },
         guest: {
             // Guest has basic view permissions so they can navigate
-            projects: { view_list: true, view_details: true, view_photos: true, view_project_documents: true, view_worksheet: true },
+            projects: { view_list: true, view_details: true, view_photos: true, view_project_documents: true, view_worksheet: true, export_zip: false },
             materials: { view_list: true },
             settings: { view_list: true },
             calendar: { view_calendar: true },

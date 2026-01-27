@@ -15,11 +15,18 @@
     "type": {
       "type": "enumeration",
       "enum": [
+        "felmerolap",
+        "vallalkozasi_szerzodes",
+        "megallapodas",
+        "szerzodes_energiahatékonysag",
+        "adatkezelesi_hozzajarulas",
+        "teljesitesi_igazolo",
+        "munkaterul_atadas",
+        "other",
         "contract",
         "worksheet",
         "invoice",
-        "completion_certificate",
-        "other"
+        "completion_certificate"
       ],
       "required": true
     },
@@ -32,6 +39,10 @@
     "signed": {
       "type": "boolean",
       "default": false
+    },
+    "requires_signature": {
+      "type": "boolean",
+      "default": true
     },
     "signature_data": {
       "type": "json"

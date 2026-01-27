@@ -31,6 +31,9 @@
     "address": {
       "type": "string"
     },
+    "billing_price_per_sqm": {
+      "type": "decimal"
+    },
     "parent_company": {
       "type": "relation",
       "relation": "manyToOne",

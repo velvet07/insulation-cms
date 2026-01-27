@@ -18,6 +18,7 @@
     "@strapi/plugin-cloud": "5.33.3",
     "@strapi/plugin-users-permissions": "5.33.3",
     "@strapi/strapi": "5.33.3",
+    "archiver": "^7.0.1",
     "better-sqlite3": "12.4.1",
     "docxtemplater": "^3.67.6",
     "node-fetch": "^3.3.2",
