@@ -1,13 +1,15 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ProtectedRoute } from '@/components/auth/protected-route';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Table,
   TableBody,
@@ -16,18 +18,44 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import { projectsApi } from '@/lib/api/projects';
 import { useAuthStore } from '@/lib/store/auth';
 import { usePermission } from '@/lib/contexts/permission-context';
 import type { Project } from '@/types';
-import { FileCheck, CheckCircle2, Loader2 } from 'lucide-react';
+import { CheckCircle2, Copy, FileText, Loader2 } from 'lucide-react';
 
 export default function ApprovedProjectsPage() {
   const user = useAuthStore((state) => state.user);
   const { can } = usePermission();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [selectedProjects, setSelectedProjects] = useState<Set<string>>(new Set());
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const monthStartStr = useMemo(() => {
+    const d = new Date();
+    const start = new Date(d.getFullYear(), d.getMonth(), 1);
+    return start.toISOString().split('T')[0];
+  }, []);
+
+  const [fromDate, setFromDate] = useState<string>(monthStartStr);
+  const [toDate, setToDate] = useState<string>(todayStr);
+
+  type TigMarkMap = Record<string, { markedAt: string }>;
+  const [tigMarks, setTigMarks] = useState<TigMarkMap>({});
+
+  const [isListDialogOpen, setIsListDialogOpen] = useState(false);
+  const [generatedListText, setGeneratedListText] = useState('');
+  const [generatedListTitle, setGeneratedListTitle] = useState('');
+
+  const [selectedForCompletion, setSelectedForCompletion] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!can('approved_projects', 'view_list')) {
@@ -42,108 +70,29 @@ export default function ApprovedProjectsPage() {
     enabled: can('approved_projects', 'view_list'),
   });
 
-  // Group projects by subcontractor only - must be before conditional return
-  const projectsBySubcontractor = useMemo(() => {
-    const grouped: Record<string, {
-      subcontractor: { id: string; name: string; } | null;
-      projects: Project[];
-      totalArea: number;
-    }> = {};
-
-    approvedProjects.forEach((project) => {
-      // Get subcontractor - a projekt vagy subcontractornál van, vagy közvetlenül a main contractornál
-      // Ha nincs subcontractor, akkor a projekt közvetlenül a main contractornál van
-      const subcontractor = project.subcontractor;
-      const subcontractorId = subcontractor?.documentId || subcontractor?.id || 'no-subcontractor';
-      const subcontractorName = subcontractor?.name || 'Nincs alvállalkozó';
-
-      // Initialize subcontractor group if needed
-      if (!grouped[subcontractorId]) {
-        grouped[subcontractorId] = {
-          subcontractor: subcontractor ? { id: subcontractorId, name: subcontractorName } : null,
-          projects: [],
-          totalArea: 0,
-        };
-      }
-
-      // Add project to subcontractor group
-      const subcontractorGroup = grouped[subcontractorId];
-      subcontractorGroup.projects.push(project);
-      subcontractorGroup.totalArea += project.area_sqm || 0;
-    });
-
-    return grouped;
-  }, [approvedProjects]);
-
-  // Generate completion certificates mutation - must be before conditional return
-  const generateCertificatesMutation = useMutation({
-    mutationFn: async (projectIds: string[]) => {
-      // TODO: Implement completion certificate generation
-      // This will:
-      // 1. Generate PDF certificates for each selected project
-      // 2. Send email to subcontractor with certificate attached
-      // 3. Archive the projects
-
-      // For now, just archive the projects
-      const archivePromises = projectIds.map((projectId) =>
-        projectsApi.update(projectId, { status: 'archived' })
-      );
-
-      await Promise.all(archivePromises);
-
-      return { success: true, count: projectIds.length };
+  const completeProjectsMutation = useMutation({
+    mutationFn: async (projects: Project[]) => {
+      const completedAt = new Date().toISOString();
+      const toComplete = projects.filter((p) => p.status === 'approved');
+      const promises = toComplete.map((p) => {
+        const identifier = p.documentId || p.id;
+        if (!identifier) return Promise.reject(new Error('Projekt azonosító hiányzik'));
+        return projectsApi.update(identifier, {
+          status: 'completed',
+          completed_at: completedAt,
+        });
+      });
+      await Promise.all(promises);
+      return { count: toComplete.length };
     },
-    onSuccess: (data) => {
-      alert(`Sikeres művelet: ${data.count} projekt teljesítési igazolása generálva és archiválva.`);
-      setSelectedProjects(new Set());
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['projects', 'approved'] });
     },
     onError: (error: any) => {
-      alert(`Hiba: ${error.message || 'Hiba történt a teljesítési igazolások generálása során.'}`);
+      alert(`Hiba: ${error?.message || 'Hiba történt a projekt lezárása során.'}`);
     },
   });
-
-
-
-  const handleSelectProject = (projectId: string) => {
-    setSelectedProjects((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(projectId)) {
-        newSet.delete(projectId);
-      } else {
-        newSet.add(projectId);
-      }
-      return newSet;
-    });
-  };
-
-  const handleSelectAll = (projectIds: string[]) => {
-    setSelectedProjects((prev) => {
-      const newSet = new Set(prev);
-      const allSelected = projectIds.every((id) => newSet.has(id));
-
-      if (allSelected) {
-        // Deselect all
-        projectIds.forEach((id) => newSet.delete(id));
-      } else {
-        // Select all
-        projectIds.forEach((id) => newSet.add(id));
-      }
-
-      return newSet;
-    });
-  };
-
-  const handleGenerateCertificates = () => {
-    if (selectedProjects.size === 0) {
-      alert('Kérjük, válasszon ki legalább egy projektet.');
-      return;
-    }
-
-    if (confirm(`Biztosan generál teljesítési igazolást ${selectedProjects.size} projekthez?`)) {
-      generateCertificatesMutation.mutate(Array.from(selectedProjects));
-    }
-  };
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return '-';
@@ -152,6 +101,170 @@ export default function ApprovedProjectsPage() {
       month: 'long',
       day: 'numeric',
     });
+  };
+
+  const normalizeDate = (s: string) => (s || '').slice(0, 10);
+  const toUtcMs = (dateStr: string) => {
+    const [y, m, d] = normalizeDate(dateStr).split('-').map((p) => parseInt(p, 10));
+    if (!y || !m || !d) return NaN;
+    return Date.UTC(y, m - 1, d);
+  };
+
+  const tigStorageKey = useMemo(() => {
+    const companyKey =
+      (user?.company && typeof user.company === 'object' && ((user.company as any).id || (user.company as any).documentId)) ||
+      'unknown';
+    return `tig_marked_v1_${String(companyKey)}`;
+  }, [user]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = localStorage.getItem(tigStorageKey);
+      if (!raw) {
+        setTigMarks({});
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      setTigMarks(parsed && typeof parsed === 'object' ? (parsed as TigMarkMap) : {});
+    } catch {
+      setTigMarks({});
+    }
+  }, [tigStorageKey]);
+
+  const persistTigMarks = (next: TigMarkMap) => {
+    setTigMarks(next);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(tigStorageKey, JSON.stringify(next));
+    }
+  };
+
+  const isTigMarked = (projectId: string) => !!tigMarks[projectId];
+
+  const setTigMarked = (projectId: string, marked: boolean) => {
+    const next = { ...tigMarks };
+    if (marked) next[projectId] = { markedAt: new Date().toISOString() };
+    else delete next[projectId];
+    persistTigMarks(next);
+  };
+
+  const toggleSelectedForCompletion = (projectId: string, checked: boolean) => {
+    setSelectedForCompletion((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(projectId);
+      else next.delete(projectId);
+      return next;
+    });
+  };
+
+  const filteredProjects = useMemo(() => {
+    const fromMs = toUtcMs(fromDate);
+    const toMs = toUtcMs(toDate);
+    return (approvedProjects || []).filter((p) => {
+      const d = normalizeDate(p.approved_at || '');
+      const ms = toUtcMs(d);
+      if (!Number.isFinite(ms)) return false;
+      if (Number.isFinite(fromMs) && ms < fromMs) return false;
+      if (Number.isFinite(toMs) && ms > toMs) return false;
+      return true;
+    });
+  }, [approvedProjects, fromDate, toDate]);
+
+  type Group = {
+    approvedDate: string; // YYYY-MM-DD
+    companyId: string;
+    companyName: string;
+    projects: Project[];
+    totalArea: number;
+    markedCount: number;
+  };
+
+  const groupsByDate = useMemo(() => {
+    const byKey = new Map<string, Group>();
+
+    filteredProjects.forEach((project) => {
+      const approvedDate = normalizeDate(project.approved_at || '');
+      const subcontractor = project.subcontractor;
+      const companyId = String(subcontractor?.documentId || subcontractor?.id || 'no-subcontractor');
+      const companyName = subcontractor?.name || 'Nincs alvállalkozó';
+      const key = `${approvedDate}__${companyId}`;
+
+      if (!byKey.has(key)) {
+        byKey.set(key, {
+          approvedDate,
+          companyId,
+          companyName,
+          projects: [],
+          totalArea: 0,
+          markedCount: 0,
+        });
+      }
+
+      const g = byKey.get(key)!;
+      g.projects.push(project);
+      g.totalArea += project.area_sqm || 0;
+    });
+
+    // Compute marked counts
+    byKey.forEach((g) => {
+      g.markedCount = g.projects.reduce((acc, p) => acc + (isTigMarked(String(p.documentId || p.id)) ? 1 : 0), 0);
+    });
+
+    const groups = Array.from(byKey.values());
+    groups.sort((a, b) => {
+      const d = toUtcMs(b.approvedDate) - toUtcMs(a.approvedDate);
+      if (d !== 0) return d;
+      return a.companyName.localeCompare(b.companyName, 'hu-HU');
+    });
+
+    const byDate: Record<string, Group[]> = {};
+    groups.forEach((g) => {
+      if (!byDate[g.approvedDate]) byDate[g.approvedDate] = [];
+      byDate[g.approvedDate].push(g);
+    });
+    return byDate;
+  }, [filteredProjects, tigMarks]);
+
+  const buildTextList = (approvedDate: string, companyName: string, projects: Project[]) => {
+    const lines: string[] = [];
+    const totalSqm = projects.reduce((acc, p) => acc + (p.area_sqm || 0), 0);
+    lines.push('Teljesítési igazolás – Projekt lista');
+    lines.push(`Cég: ${companyName}`);
+    lines.push(`Jóváhagyás dátuma: ${formatDate(approvedDate)}`);
+    lines.push('');
+    projects.forEach((p) => {
+      const sqm = p.area_sqm ?? 0;
+      lines.push(`- ${p.title} | ${p.client_address} | ${sqm} m²`);
+    });
+    lines.push('');
+    lines.push(`Összesen: ${totalSqm.toLocaleString('hu-HU')} m²`);
+    lines.push(`Projektek száma: ${projects.length}`);
+    return { text: lines.join('\n'), totalSqm };
+  };
+
+  const handleGenerateTextList = (group: Group) => {
+    const projects = [...group.projects].sort((a, b) => (a.title || '').localeCompare(b.title || '', 'hu-HU'));
+    const { text } = buildTextList(group.approvedDate, group.companyName, projects);
+    setGeneratedListTitle(`${formatDate(group.approvedDate)} • ${group.companyName}`);
+    setGeneratedListText(text);
+    setIsListDialogOpen(true);
+
+    // Mark all projects in the group as "certificate created"
+    const next = { ...tigMarks };
+    projects.forEach((p) => {
+      const id = String(p.documentId || p.id);
+      next[id] = { markedAt: new Date().toISOString() };
+    });
+    persistTigMarks(next);
+  };
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(generatedListText);
+    } catch {
+      // Fallback: leave text selectable in textarea
+      alert('A vágólapra másolás nem sikerült. Jelölje ki és másolja manuálisan.');
+    }
   };
 
   return (
@@ -163,29 +276,26 @@ export default function ApprovedProjectsPage() {
               <div>
                 <h2 className="text-3xl font-bold">Jóváhagyott projektek</h2>
                 <p className="text-gray-600 dark:text-gray-400 mt-1">
-                  Teljesítési igazolások generálása subcontractoroknak
+                  Dátum szerinti listázás és teljesítési igazolás (szöveges lista)
                 </p>
               </div>
-              {selectedProjects.size > 0 && (
-                <Button
-                  onClick={handleGenerateCertificates}
-                  disabled={generateCertificatesMutation.isPending}
-                >
-                  {generateCertificatesMutation.isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Generálás...
-                    </>
-                  ) : (
-                    <>
-                      <FileCheck className="mr-2 h-4 w-4" />
-                      Teljesítési igazolás generálása ({selectedProjects.size})
-                    </>
-                  )}
-                </Button>
-              )}
             </div>
           </div>
+
+          <Card className="mb-6">
+            <CardContent className="py-4">
+              <div className="flex flex-wrap gap-4 items-end">
+                <div>
+                  <Label htmlFor="from-date" className="text-sm">Dátumtól</Label>
+                  <Input id="from-date" type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="w-44" />
+                </div>
+                <div>
+                  <Label htmlFor="to-date" className="text-sm">Dátumig</Label>
+                  <Input id="to-date" type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="w-44" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
           {isLoading ? (
             <Card>
@@ -194,88 +304,161 @@ export default function ApprovedProjectsPage() {
                 <p className="text-gray-500 mt-2">Betöltés...</p>
               </CardContent>
             </Card>
-          ) : Object.keys(projectsBySubcontractor).length === 0 ? (
+          ) : Object.keys(groupsByDate).length === 0 ? (
             <Card>
               <CardContent className="py-8 text-center text-gray-500">
                 <CheckCircle2 className="mx-auto h-12 w-12 mb-2 text-gray-400" />
-                <p className="text-sm">Nincs jóváhagyott projekt.</p>
+                <p className="text-sm">Nincs jóváhagyott projekt a megadott dátumtartományban.</p>
               </CardContent>
             </Card>
           ) : (
             <div className="space-y-4">
-              {Object.entries(projectsBySubcontractor).map(([subcontractorId, subcontractorGroup]) => {
-                const allProjectIds = subcontractorGroup.projects.map((p) => String(p.documentId || p.id));
-                const allSelected = allProjectIds.length > 0 && allProjectIds.every((id) => selectedProjects.has(id));
-                const someSelected = allProjectIds.some((id) => selectedProjects.has(id));
+              {Object.entries(groupsByDate).map(([approvedDate, groups]) => (
+                <Card key={approvedDate}>
+                  <CardHeader>
+                    <CardTitle>{formatDate(approvedDate)}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {groups.map((g) => (
+                      <Card key={`${g.approvedDate}__${g.companyId}`}>
+                        <CardHeader>
+                          <div className="flex items-center justify-between gap-4">
+                            <CardTitle className="text-base">
+                              {g.companyName} ({g.projects.length} projekt, összesen {g.totalArea.toLocaleString('hu-HU')} m²)
+                              {g.markedCount > 0 && (
+                                <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
+                                  • Jelölve: {g.markedCount}/{g.projects.length}
+                                </span>
+                              )}
+                            </CardTitle>
+                            {(() => {
+                              const groupProjectIds = g.projects.map((p) => String(p.documentId || p.id));
+                              const selectedCount = groupProjectIds.reduce((acc, id) => acc + (selectedForCompletion.has(id) ? 1 : 0), 0);
+                              const allSelected = groupProjectIds.length > 0 && selectedCount === groupProjectIds.length;
+                              const someSelected = selectedCount > 0 && !allSelected;
 
-                return (
-                  <Card key={subcontractorId}>
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <CardTitle>
-                          {subcontractorGroup.subcontractor?.name || 'Nincs alvállalkozó'}
-                          {' '}({subcontractorGroup.projects.length} projekt, összesen {subcontractorGroup.totalArea.toLocaleString('hu-HU')} m²)
-                        </CardTitle>
-                        <div className="flex items-center gap-2">
-                          <Checkbox
-                            checked={allSelected}
-                            onCheckedChange={() => handleSelectAll(allProjectIds)}
-                            ref={(el) => {
-                              if (el) {
-                                (el as any).indeterminate = someSelected && !allSelected;
-                              }
-                            }}
-                          />
-                          <span className="text-sm text-gray-600 dark:text-gray-400">
-                            Összes kijelölése
-                          </span>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="w-12"></TableHead>
-                            <TableHead>Ügyfél neve</TableHead>
-                            <TableHead>Cím</TableHead>
-                            <TableHead className="text-right">Terület (m²)</TableHead>
-                            <TableHead>Jóváhagyás dátuma</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {subcontractorGroup.projects.map((project) => {
-                            const projectId = String(project.documentId || project.id);
-                            const isSelected = selectedProjects.has(projectId);
+                              return (
+                                <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-2 mr-2">
+                                    <Checkbox
+                                      checked={allSelected}
+                                      onCheckedChange={(checked) => {
+                                        const shouldSelectAll = checked === true;
+                                        setSelectedForCompletion((prev) => {
+                                          const next = new Set(prev);
+                                          groupProjectIds.forEach((id) => {
+                                            if (shouldSelectAll) next.add(id);
+                                            else next.delete(id);
+                                          });
+                                          return next;
+                                        });
+                                      }}
+                                      ref={(el) => {
+                                        if (el) {
+                                          (el as any).indeterminate = someSelected;
+                                        }
+                                      }}
+                                    />
+                                    <span className="text-xs text-gray-600 dark:text-gray-400">Kijelölés</span>
+                                  </div>
 
-                            return (
-                              <TableRow key={projectId}>
-                                <TableCell>
-                                  <Checkbox
-                                    checked={isSelected}
-                                    onCheckedChange={() => handleSelectProject(projectId)}
-                                  />
-                                </TableCell>
-                                <TableCell className="font-medium">
-                                  {project.client_name}
-                                </TableCell>
-                                <TableCell>{project.client_address}</TableCell>
-                                <TableCell className="text-right">
-                                  {project.area_sqm ? `${project.area_sqm} m²` : '-'}
-                                </TableCell>
-                                <TableCell>{formatDate(project.approved_at)}</TableCell>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={selectedCount === 0 || completeProjectsMutation.isPending}
+                                    onClick={() => {
+                                      if (selectedCount === 0) return;
+                                      if (confirm(`Biztosan befejezetté jelölöd a kijelölt ${selectedCount} projektet?`)) {
+                                        const selectedProjects = g.projects.filter((p) => selectedForCompletion.has(String(p.documentId || p.id)));
+                                        completeProjectsMutation.mutate(selectedProjects, {
+                                          onSuccess: () => {
+                                            setSelectedForCompletion((prev) => {
+                                              const next = new Set(prev);
+                                              selectedProjects.forEach((p) => next.delete(String(p.documentId || p.id)));
+                                              return next;
+                                            });
+                                          },
+                                        });
+                                      }
+                                    }}
+                                  >
+                                    Befejezés ({selectedCount})
+                                  </Button>
+
+                                  <Button type="button" variant="outline" size="sm" onClick={() => handleGenerateTextList(g)}>
+                                    <FileText className="mr-2 h-4 w-4" />
+                                    Szöveges lista generálása
+                                  </Button>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="w-16 text-center">Kijelölés</TableHead>
+                                <TableHead className="w-16 text-center">TIG</TableHead>
+                                <TableHead>Projekt neve</TableHead>
+                                <TableHead>Cím</TableHead>
+                                <TableHead className="text-right">Terület (m²)</TableHead>
                               </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+                            </TableHeader>
+                            <TableBody>
+                              {g.projects.map((project) => {
+                                const projectId = String(project.documentId || project.id);
+                                const marked = isTigMarked(projectId);
+                                const selected = selectedForCompletion.has(projectId);
+                                return (
+                                  <TableRow key={projectId}>
+                                    <TableCell className="text-center">
+                                      <Checkbox
+                                        checked={selected}
+                                        onCheckedChange={(checked) => toggleSelectedForCompletion(projectId, checked === true)}
+                                      />
+                                    </TableCell>
+                                    <TableCell className="text-center">
+                                      <Checkbox
+                                        checked={marked}
+                                        onCheckedChange={(checked) => setTigMarked(projectId, checked === true)}
+                                      />
+                                    </TableCell>
+                                    <TableCell className="font-medium">{project.title}</TableCell>
+                                    <TableCell>{project.client_address}</TableCell>
+                                    <TableCell className="text-right">{project.area_sqm ? `${project.area_sqm} m²` : '-'}</TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           )}
         </div>
+
+        <Dialog open={isListDialogOpen} onOpenChange={setIsListDialogOpen}>
+          <DialogContent className="max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>Szöveges lista</DialogTitle>
+              <DialogDescription>{generatedListTitle}</DialogDescription>
+            </DialogHeader>
+            <Textarea value={generatedListText} readOnly className="min-h-[320px] font-mono text-xs" />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={handleCopy}>
+                <Copy className="mr-2 h-4 w-4" />
+                Másolás
+              </Button>
+              <Button type="button" onClick={() => setIsListDialogOpen(false)}>Bezárás</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </DashboardLayout>
     </ProtectedRoute>
   );
