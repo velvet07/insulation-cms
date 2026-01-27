@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/select';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/lib/store/auth';
+import { cn } from '@/lib/utils';
 import { materialsApi } from '@/lib/api/materials';
 import { materialBalancesApi, type MaterialBalance } from '@/lib/api/material-balances';
 import { materialTransactionsApi } from '@/lib/api/material-transactions';
@@ -54,6 +55,10 @@ import {
 } from '@/components/ui/table';
 
 type RequirementsPeriod = 'today' | 'tomorrow' | 'week' | 'two-weeks' | 'month' | 'custom';
+type MaterialAvailabilityRule = {
+  fromDate: string; // YYYY-MM-DD
+  materialIds: string[]; // empty => no restriction (all materials available)
+};
 
 export default function MaterialsPage() {
   const user = useAuthStore((state) => state.user);
@@ -62,9 +67,11 @@ export default function MaterialsPage() {
   const [requirementsPeriod, setRequirementsPeriod] = useState<RequirementsPeriod>('week');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
-  // Elérhető anyagok kezelése (checklist + end date)
-  const [availableMaterialsIds, setAvailableMaterialsIds] = useState<string[]>([]);
-  const [availabilityEndDate, setAvailabilityEndDate] = useState('');
+  // Elérhető anyagok kezelése (dátumhoz kötött idővonal + checklist)
+  const [availabilityRules, setAvailabilityRules] = useState<MaterialAvailabilityRule[]>([]);
+  const [availabilityFromDate, setAvailabilityFromDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [draftAvailableMaterialsIds, setDraftAvailableMaterialsIds] = useState<string[]>([]);
+  const [editingAvailabilityRuleFromDate, setEditingAvailabilityRuleFromDate] = useState<string | null>(null);
   const [isAvailableMaterialsDialogOpen, setIsAvailableMaterialsDialogOpen] = useState(false);
   const [pickupDate, setPickupDate] = useState(new Date().toISOString().split('T')[0]);
   // Táblázatos anyagfelvétel: minden anyaghoz külön mennyiség
@@ -116,6 +123,74 @@ export default function MaterialsPage() {
     if (typeof user.company === 'object') return user.company.id || user.company.documentId;
     return user.company;
   }, [user]);
+
+  const availabilityRulesStorageKey = useMemo(() => {
+    const companyKey = userCompanyId ? String(userCompanyId) : 'unknown';
+    return `materialAvailabilityRules_v1_${companyKey}`;
+  }, [userCompanyId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = localStorage.getItem(availabilityRulesStorageKey);
+      if (!raw) {
+        setAvailabilityRules([]);
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        const sanitized: MaterialAvailabilityRule[] = parsed
+          .filter((r) => r && typeof r.fromDate === 'string' && Array.isArray(r.materialIds))
+          .map((r) => ({
+            fromDate: String(r.fromDate).slice(0, 10),
+            materialIds: (r.materialIds as any[]).map((id) => String(id)),
+          }));
+        setAvailabilityRules(sanitized);
+      } else {
+        setAvailabilityRules([]);
+      }
+    } catch {
+      setAvailabilityRules([]);
+    }
+  }, [availabilityRulesStorageKey]);
+
+  const saveAvailabilityRules = (next: MaterialAvailabilityRule[]) => {
+    setAvailabilityRules(next);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(availabilityRulesStorageKey, JSON.stringify(next));
+    }
+  };
+
+  const dateToUtcMs = (dateStr: string): number => {
+    const [y, m, d] = dateStr.split('-').map((p) => parseInt(p, 10));
+    if (!y || !m || !d) return NaN;
+    return Date.UTC(y, m - 1, d);
+  };
+
+  const findActiveAvailabilityRule = (dateStr: string): MaterialAvailabilityRule | null => {
+    const target = dateToUtcMs(dateStr);
+    if (!Number.isFinite(target)) return null;
+    const sorted = [...availabilityRules].sort((a, b) => dateToUtcMs(a.fromDate) - dateToUtcMs(b.fromDate));
+    let active: MaterialAvailabilityRule | null = null;
+    for (const r of sorted) {
+      const t = dateToUtcMs(r.fromDate);
+      if (!Number.isFinite(t)) continue;
+      if (t <= target) active = r;
+      else break;
+    }
+    return active;
+  };
+
+  const activeRuleForSelectedFromDate = useMemo(
+    () => findActiveAvailabilityRule(availabilityFromDate),
+    [availabilityRules, availabilityFromDate]
+  );
+  const activeMaterialIdsForSelectedFromDate = activeRuleForSelectedFromDate?.materialIds ?? [];
+
+  const activeMaterialIdsForPickupDate = useMemo(() => {
+    const active = findActiveAvailabilityRule(pickupDate);
+    return active?.materialIds ?? [];
+  }, [availabilityRules, pickupDate]);
 
   // Company identifier for /companies/:id style endpoints (Strapi v5 often expects documentId)
   const userCompanyApiId = useMemo(() => {
@@ -470,6 +545,7 @@ export default function MaterialsPage() {
         projectsNoOption: 0,
         totalArea: 0,
         availableMaterials: [],
+        availabilityRuleFromDate: null,
         insulation: {
           total_rolls: 0,
           total_pallets: 0,
@@ -511,17 +587,18 @@ export default function MaterialsPage() {
     });
 
     // Elérhető anyagok számítása dátum alapján
-    // Csak a kiválasztott anyagokat számoljuk
-    const availabilityDate = availabilityEndDate
-      ? new Date(availabilityEndDate)
-      : new Date(); // Ha nincs beállítva, akkor mai dátumig
+    // A kiválasztott (aktuálisan érvényes) anyagokat számoljuk az időszak végdátuma szerint
+    const rangeEndStr = endDate.toISOString().split('T')[0];
+    const activeRuleForRangeEnd = findActiveAvailabilityRule(rangeEndStr);
+    const activeMaterialIdsForRangeEnd = activeRuleForRangeEnd?.materialIds ?? [];
+    const availabilityDate = new Date(endDate); // időszak végdátuma (készlet számításhoz)
     availabilityDate.setHours(23, 59, 59, 999);
 
     // Szűrjük a tranzakciókat a kiválasztott anyagokra
     const filteredTransactions = (transactionsForView as any[]).filter((t) => {
       if (!t.material) return false;
       const materialId = String(t.material.documentId || t.material.id);
-      return availableMaterialsIds.length === 0 || availableMaterialsIds.includes(materialId);
+      return activeMaterialIdsForRangeEnd.length === 0 || activeMaterialIdsForRangeEnd.includes(materialId);
     });
 
     const availableMaterials = calculateAvailableMaterials(
@@ -613,8 +690,9 @@ export default function MaterialsPage() {
       breathable_membrane: {
         rolls: totalBreathableMembraneRolls,
       },
+      availabilityRuleFromDate: activeRuleForRangeEnd?.fromDate || null,
     };
-  }, [projectsForView, dateRange, requirementsPeriod, transactionsForView, availabilityEndDate, availableMaterialsIds]);
+  }, [projectsForView, dateRange, requirementsPeriod, transactionsForView, availabilityRules]);
 
   // Anyagfelvétel form submit (több anyag egyszerre)
   const pickupMutation = useMutation({
@@ -710,9 +788,9 @@ export default function MaterialsPage() {
   const handlePickupSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Szűrjük az elérhető anyagokat
+    // Szűrjük az elérhető (aktuálisan érvényes) anyagokat a felvétel dátumára
     const availableMaterials = materials.filter(
-      (m) => availableMaterialsIds.length === 0 || availableMaterialsIds.includes(String(m.documentId || m.id))
+      (m) => activeMaterialIdsForPickupDate.length === 0 || activeMaterialIdsForPickupDate.includes(String(m.documentId || m.id))
     );
 
     if (availableMaterials.length === 0) {
@@ -1717,32 +1795,70 @@ export default function MaterialsPage() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => setIsAvailableMaterialsDialogOpen(true)}
+                    onClick={() => {
+                      setDraftAvailableMaterialsIds(activeMaterialIdsForSelectedFromDate);
+                      setEditingAvailabilityRuleFromDate(
+                        availabilityRules.some((r) => r.fromDate === availabilityFromDate) ? availabilityFromDate : null
+                      );
+                      setIsAvailableMaterialsDialogOpen(true);
+                    }}
                   >
                     <Package className="mr-2 h-4 w-4" />
-                    {availableMaterialsIds.length > 0 ? `${availableMaterialsIds.length} anyag kiválasztva` : 'Anyagok kiválasztása'}
+                    {activeMaterialIdsForSelectedFromDate.length > 0
+                      ? `${activeMaterialIdsForSelectedFromDate.length} anyag kiválasztva`
+                      : 'Anyagok kiválasztása'}
                   </Button>
                 )}
               </div>
               <div className="mb-3">
-                <Label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">Számítás dátumig:</Label>
+                <Label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">Érvényes ettől a dátumtól:</Label>
                 <Input
                   type="date"
-                  value={availabilityEndDate}
-                  onChange={(e) => setAvailabilityEndDate(e.target.value)}
+                  value={availabilityFromDate}
+                  onChange={(e) => setAvailabilityFromDate(e.target.value)}
                   className="w-full max-w-xs"
                 />
               </div>
-              {availableMaterialsIds.length > 0 && (
+              {availabilityRules.length > 0 && (
+                <div className="mt-2">
+                  <div className="text-[11px] text-gray-500 dark:text-gray-400 mb-1">Beállítások dátum szerint:</div>
+                  <div className="flex flex-wrap gap-2">
+                    {[...availabilityRules]
+                      .sort((a, b) => dateToUtcMs(a.fromDate) - dateToUtcMs(b.fromDate))
+                      .map((r) => (
+                        <button
+                          type="button"
+                          key={r.fromDate}
+                          className={cn(
+                            'px-2 py-1 rounded text-[11px] cursor-pointer hover:bg-gray-300/60 dark:hover:bg-gray-700/60',
+                            r.fromDate === availabilityFromDate
+                              ? 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-100'
+                              : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'
+                          )}
+                          onClick={() => {
+                            setAvailabilityFromDate(r.fromDate);
+                            setDraftAvailableMaterialsIds(r.materialIds);
+                            setEditingAvailabilityRuleFromDate(r.fromDate);
+                            setIsAvailableMaterialsDialogOpen(true);
+                          }}
+                        >
+                          {r.fromDate} • {r.materialIds.length > 0 ? `${r.materialIds.length} anyag` : 'összes'}
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {activeMaterialIdsForSelectedFromDate.length > 0 && (
                 <div className="mt-3">
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                    {availableMaterialsIds.length} anyag kiválasztva. Az anyagigény számítás csak ezekből az anyagokból történik.
+                    {activeMaterialIdsForSelectedFromDate.length} anyag kiválasztva. Ettől a dátumtól az anyagigény számítás csak ezekből az anyagokból történik.
                   </p>
                   <div className="text-xs space-y-1">
                     <div className="font-medium text-gray-700 dark:text-gray-300 mb-1">Kiválasztott anyagok:</div>
                     <div className="flex flex-wrap gap-2">
                       {materials
-                        .filter((m) => availableMaterialsIds.includes(String(m.documentId || m.id)))
+                        .filter((m) => activeMaterialIdsForSelectedFromDate.includes(String(m.documentId || m.id)))
                         .map((material) => (
                           <span
                             key={material.documentId || material.id}
@@ -1755,9 +1871,9 @@ export default function MaterialsPage() {
                   </div>
                 </div>
               )}
-              {availableMaterialsIds.length === 0 && (
-                <p className="text-xs text-amber-600 dark:text-amber-400">
-                  ⚠️ Nincs kiválasztott anyag. Kattintson az "Anyagok kiválasztása" gombra!
+              {activeMaterialIdsForSelectedFromDate.length === 0 && (
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  ℹ️ Nincs korlátozás beállítva erre a dátumra (az összes anyag elérhetőnek számít).
                 </p>
               )}
             </div>
@@ -1772,7 +1888,9 @@ export default function MaterialsPage() {
                   {/* Elérhető anyagok megjelenítése */}
                   {materialRequirements.availableMaterials && materialRequirements.availableMaterials.length > 0 && (
                     <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded">
-                      <div className="text-sm font-medium mb-2">Elérhető anyagok ({availabilityEndDate || 'mai dátumig'}):</div>
+                      <div className="text-sm font-medium mb-2">
+                        Elérhető anyagok {materialRequirements.availabilityRuleFromDate ? `(${materialRequirements.availabilityRuleFromDate}-tól)` : '(nincs korlátozás)'}:
+                      </div>
                       <div className="space-y-1 text-xs">
                         {materialRequirements.availableMaterials.map((mat: AvailableMaterial) => (
                           <div key={String(mat.materialId)} className="flex justify-between">
@@ -1899,7 +2017,7 @@ export default function MaterialsPage() {
                       </TableHeader>
                       <TableBody>
                         {materials
-                          .filter((m) => availableMaterialsIds.length === 0 || availableMaterialsIds.includes(String(m.documentId || m.id)))
+                          .filter((m) => activeMaterialIdsForPickupDate.length === 0 || activeMaterialIdsForPickupDate.includes(String(m.documentId || m.id)))
                           .map((material) => {
                             const materialId = String(material.documentId || material.id);
                             const isInsulation = material.category === 'insulation';
@@ -1958,7 +2076,7 @@ export default function MaterialsPage() {
                               </TableRow>
                             );
                           })}
-                        {materials.filter((m) => availableMaterialsIds.length === 0 || availableMaterialsIds.includes(String(m.documentId || m.id))).length === 0 && (
+                        {materials.filter((m) => activeMaterialIdsForPickupDate.length === 0 || activeMaterialIdsForPickupDate.includes(String(m.documentId || m.id))).length === 0 && (
                           <TableRow>
                             <TableCell colSpan={3} className="text-center text-gray-500 py-4">
                               Nincs elérhető anyag
@@ -2082,7 +2200,13 @@ export default function MaterialsPage() {
         </div>
 
         {/* Elérhető anyagok kiválasztása dialog */}
-        <Dialog open={isAvailableMaterialsDialogOpen} onOpenChange={setIsAvailableMaterialsDialogOpen}>
+        <Dialog
+          open={isAvailableMaterialsDialogOpen}
+          onOpenChange={(open) => {
+            setIsAvailableMaterialsDialogOpen(open);
+            if (!open) setEditingAvailabilityRuleFromDate(null);
+          }}
+        >
           <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Elérhető anyagok kiválasztása</DialogTitle>
@@ -2097,7 +2221,7 @@ export default function MaterialsPage() {
                 ) : (
                   materials.map((material) => {
                     const materialId = String(material.documentId || material.id);
-                    const isChecked = availableMaterialsIds.includes(materialId);
+                    const isChecked = draftAvailableMaterialsIds.includes(materialId);
 
                     return (
                       <div key={materialId} className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">
@@ -2106,9 +2230,9 @@ export default function MaterialsPage() {
                           checked={isChecked}
                           onCheckedChange={(checked) => {
                             if (checked) {
-                              setAvailableMaterialsIds([...availableMaterialsIds, materialId]);
+                              setDraftAvailableMaterialsIds([...draftAvailableMaterialsIds, materialId]);
                             } else {
-                              setAvailableMaterialsIds(availableMaterialsIds.filter((id) => id !== materialId));
+                              setDraftAvailableMaterialsIds(draftAvailableMaterialsIds.filter((id) => id !== materialId));
                             }
                           }}
                         />
@@ -2137,7 +2261,7 @@ export default function MaterialsPage() {
                   })
                 )}
               </div>
-              {availableMaterialsIds.length === 0 && (
+              {draftAvailableMaterialsIds.length === 0 && (
                 <p className="text-sm text-amber-600 dark:text-amber-400">
                   ⚠️ Ha nem választ ki anyagot, az összes anyag elérhetőnek számít.
                 </p>
@@ -2148,14 +2272,46 @@ export default function MaterialsPage() {
                 type="button"
                 variant="outline"
                 onClick={() => {
-                  setAvailableMaterialsIds([]);
+                  setDraftAvailableMaterialsIds([]);
                 }}
               >
                 Összes törlése
               </Button>
+              {(editingAvailabilityRuleFromDate || availabilityRules.some((r) => r.fromDate === availabilityFromDate)) && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="text-red-600 border-red-200 hover:bg-red-50 dark:hover:bg-red-900/20"
+                  onClick={() => {
+                    const ruleToDelete = editingAvailabilityRuleFromDate ?? availabilityFromDate;
+                    if (!ruleToDelete) return;
+                    if (confirm(`Biztosan törölni szeretnéd a(z) ${ruleToDelete} dátumú beállítást?`)) {
+                      const next = availabilityRules.filter((r) => r.fromDate !== ruleToDelete);
+                      saveAvailabilityRules(next);
+                      setIsAvailableMaterialsDialogOpen(false);
+                    }
+                  }}
+                >
+                  Beállítás törlése
+                </Button>
+              )}
               <Button
                 type="button"
                 onClick={() => {
+                  if (!availabilityFromDate) {
+                    alert('Kérjük válasszon dátumot!');
+                    return;
+                  }
+                  const newRule: MaterialAvailabilityRule = {
+                    fromDate: availabilityFromDate,
+                    materialIds: draftAvailableMaterialsIds,
+                  };
+                  const ruleToRemove = editingAvailabilityRuleFromDate ?? availabilityFromDate;
+                  const next = [
+                    ...availabilityRules.filter((r) => r.fromDate !== ruleToRemove),
+                    newRule,
+                  ].sort((a, b) => dateToUtcMs(a.fromDate) - dateToUtcMs(b.fromDate));
+                  saveAvailabilityRules(next);
                   setIsAvailableMaterialsDialogOpen(false);
                 }}
               >
