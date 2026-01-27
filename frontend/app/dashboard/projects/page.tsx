@@ -280,7 +280,7 @@ export default function ProjectsPage() {
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-3xl font-bold text-red-600">Projektek (DEBUG MÓD)</h2>
+              <h2 className="text-3xl font-bold">Projektek</h2>
               <p className="text-gray-600 dark:text-gray-400 mt-1">
                 Kezelje a padlásfödém szigetelési projekteket
               </p>
