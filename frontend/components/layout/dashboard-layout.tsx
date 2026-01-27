@@ -63,13 +63,6 @@ const navItems: NavItem[] = [
     module: 'materials',
     action: 'view_list',
   },
-  {
-    title: 'Beállítások',
-    href: '/dashboard/settings',
-    icon: Settings,
-    module: 'settings',
-    action: 'view_list',
-  },
 ];
 
 interface DashboardLayoutProps {
@@ -181,6 +174,23 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   Jóváhagyott projektek
                 </Button>
               )}
+            {/* Settings should be the last item */}
+            {can('settings', 'view_list') && (
+              <Button
+                variant={pathname === '/dashboard/settings' ? 'secondary' : 'ghost'}
+                className={cn(
+                  'w-full justify-start',
+                  pathname === '/dashboard/settings' && 'bg-gray-100 dark:bg-gray-700'
+                )}
+                onClick={() => {
+                  router.push('/dashboard/settings');
+                  setSidebarOpen(false);
+                }}
+              >
+                <Settings className="mr-2 h-5 w-5" />
+                Beállítások
+              </Button>
+            )}
           </nav>
 
           {/* User info and logout */}

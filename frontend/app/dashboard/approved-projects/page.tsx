@@ -339,29 +339,6 @@ export default function ApprovedProjectsPage() {
 
                               return (
                                 <div className="flex items-center gap-2">
-                                  <div className="flex items-center gap-2 mr-2">
-                                    <Checkbox
-                                      checked={allSelected}
-                                      onCheckedChange={(checked) => {
-                                        const shouldSelectAll = checked === true;
-                                        setSelectedForCompletion((prev) => {
-                                          const next = new Set(prev);
-                                          groupProjectIds.forEach((id) => {
-                                            if (shouldSelectAll) next.add(id);
-                                            else next.delete(id);
-                                          });
-                                          return next;
-                                        });
-                                      }}
-                                      ref={(el) => {
-                                        if (el) {
-                                          (el as any).indeterminate = someSelected;
-                                        }
-                                      }}
-                                    />
-                                    <span className="text-xs text-gray-600 dark:text-gray-400">Kijelölés</span>
-                                  </div>
-
                                   <Button
                                     type="button"
                                     variant="outline"
@@ -399,8 +376,59 @@ export default function ApprovedProjectsPage() {
                           <Table>
                             <TableHeader>
                               <TableRow>
-                                <TableHead className="w-16 text-center">Kijelölés</TableHead>
-                                <TableHead className="w-16 text-center">TIG</TableHead>
+                                <TableHead className="w-16 text-center">
+                                  <div className="flex items-center justify-center gap-2">
+                                    <Checkbox
+                                      checked={
+                                        g.projects.length === 0
+                                          ? false
+                                          : g.projects.every((p) => selectedForCompletion.has(String(p.documentId || p.id)))
+                                            ? true
+                                            : g.projects.some((p) => selectedForCompletion.has(String(p.documentId || p.id)))
+                                              ? 'indeterminate'
+                                              : false
+                                      }
+                                      onCheckedChange={(checked) => {
+                                        const shouldSelectAll = checked === true;
+                                        const ids = g.projects.map((p) => String(p.documentId || p.id));
+                                        setSelectedForCompletion((prev) => {
+                                          const next = new Set(prev);
+                                          ids.forEach((id) => {
+                                            if (shouldSelectAll) next.add(id);
+                                            else next.delete(id);
+                                          });
+                                          return next;
+                                        });
+                                      }}
+                                    />
+                                    <span>Kijelölés</span>
+                                  </div>
+                                </TableHead>
+                                <TableHead className="w-16 text-center">
+                                  <div className="flex items-center justify-center gap-2">
+                                    <Checkbox
+                                      checked={
+                                        g.markedCount === 0
+                                          ? false
+                                          : g.markedCount === g.projects.length
+                                            ? true
+                                            : 'indeterminate'
+                                      }
+                                      onCheckedChange={(checked) => {
+                                        const shouldMark = checked === true;
+                                        const ids = g.projects.map((p) => String(p.documentId || p.id));
+                                        const markedAt = new Date().toISOString();
+                                        const next = { ...tigMarks };
+                                        ids.forEach((id) => {
+                                          if (shouldMark) next[id] = { markedAt };
+                                          else delete next[id];
+                                        });
+                                        persistTigMarks(next);
+                                      }}
+                                    />
+                                    <span>TIG</span>
+                                  </div>
+                                </TableHead>
                                 <TableHead>Projekt neve</TableHead>
                                 <TableHead>Cím</TableHead>
                                 <TableHead className="text-right">Terület (m²)</TableHead>
