@@ -88,7 +88,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const roleLabel =
     isAdmin ? 'Admin'
       : isMain ? 'Fővállalkozó'
-        : isSubContractor ? 'Vállalkozó'
+        : isSubContractor ? 'Alvállalkozó'
           : typeof user?.role === 'string' ? user.role
             : (user?.role && typeof user.role === 'object' && (user.role as any).name) ? String((user.role as any).name)
               : 'Felhasználó';
