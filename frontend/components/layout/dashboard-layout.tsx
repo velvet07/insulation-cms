@@ -98,7 +98,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     router.push('/login');
   };
 
-  const navItemsWithAdmin = useMemo(() => {
+  const navItemsWithAdmin = useMemo<NavItem[]>(() => {
     if (!isAdmin) return navItems;
     return [
       ...navItems,

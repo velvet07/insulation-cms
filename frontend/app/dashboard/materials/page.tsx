@@ -413,7 +413,7 @@ export default function MaterialsPage() {
     return match?.name || 'Alvállalkozó';
   }, [getCompanyKey, isMainContractorUser, selectedCompanyKey, subcontractors]);
 
-  const balancesForView = useMemo(() => {
+  const balancesForView = useMemo<any[]>(() => {
     if (!isMainContractorUser) return balances;
     if (selectedCompanyKey === 'self') {
       const want = userCompanyId?.toString();
