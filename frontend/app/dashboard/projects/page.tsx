@@ -70,12 +70,13 @@ export default function ProjectsPage() {
   const user = useAuthStore((state) => state.user);
   const { can } = usePermission();
   const canExportZip = can('projects', 'export_zip');
+  const canViewList = can('projects', 'view_list');
 
   useEffect(() => {
-    if (!can('projects', 'view_list')) {
+    if (!canViewList) {
       router.push('/dashboard');
     }
-  }, [can, router]);
+  }, [canViewList, router]);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<Project['status'] | 'all'>('all');
@@ -253,7 +254,7 @@ export default function ProjectsPage() {
   useEffect(() => {
     if (!canExportZip) {
       // If user can't export, we don't keep/collect selections.
-      setSelectedProjectIds(new Set());
+      setSelectedProjectIds((prev) => (prev.size === 0 ? prev : new Set()));
       return;
     }
     setSelectedProjectIds((prev) => {
