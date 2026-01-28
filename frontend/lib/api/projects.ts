@@ -4,7 +4,8 @@ import type { Project, StrapiResponse } from '@/types';
 let supportsStartedForBillingRoute: boolean | null = null;
 import { debugLog } from '@/lib/utils/debug-flag';
 
-const STARTED_FOR_BILLING_SUPPORT_KEY = 'supportsStartedForBillingRoute';
+// Bump key to avoid getting stuck on an old cached "false" after backend deploys.
+const STARTED_FOR_BILLING_SUPPORT_KEY = 'supportsStartedForBillingRoute_v2';
 
 function getStoredStartedForBillingSupport(): boolean | null {
   if (typeof window === 'undefined') return null;

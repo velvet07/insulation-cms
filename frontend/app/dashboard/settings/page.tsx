@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -199,6 +199,16 @@ export default function SettingsPage() {
   });
 
   const roles = rolesData?.roles || [];
+  const authenticatedRoleId = useMemo(() => {
+    const role = roles.find((r: any) => {
+      const type = ((r?.type ?? '') as string).toLowerCase();
+      const name = ((r?.name ?? '') as string).toLowerCase();
+      return type === 'authenticated' || name === 'authenticated';
+    });
+    const rawId = (role as any)?.id;
+    const n = typeof rawId === 'number' ? rawId : Number(rawId);
+    return Number.isFinite(n) ? n : undefined;
+  }, [roles]);
 
   const form = useForm<CompanyFormValues>({
     resolver: zodResolver(companySchema),
@@ -356,6 +366,15 @@ export default function SettingsPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
   });
 
+  // Only Admin can choose role; others default to "Authenticated" for new users.
+  useEffect(() => {
+    if (!isUserDialogOpen) return;
+    if (isAdmin) return;
+    if (editingUser) return; // only apply default on create
+    if (!authenticatedRoleId) return;
+    if (userRole === authenticatedRoleId) return;
+    setUserRole(authenticatedRoleId);
+  }, [isUserDialogOpen, isAdmin, editingUser, authenticatedRoleId, userRole]);
 
   // Handlers
   const onSubmit = (data: CompanyFormValues) => {
@@ -440,18 +459,21 @@ export default function SettingsPage() {
   };
 
   const handleUserCreate = () => {
-    createUserMutation.mutate({
+    const roleToSend = isAdmin ? userRole : authenticatedRoleId;
+    const payload: any = {
       username: userUsername,
       email: userEmail,
       password: userPassword,
       company: selectedUserCompany || null,
-      role: userRole,
-    });
+    };
+    if (roleToSend !== undefined) payload.role = roleToSend;
+    createUserMutation.mutate(payload);
   };
 
   const handleUserUpdate = () => {
     if (!editingUser) return;
-    const data: any = { username: userUsername, email: userEmail, company: selectedUserCompany || null, role: userRole };
+    const data: any = { username: userUsername, email: userEmail, company: selectedUserCompany || null };
+    if (isAdmin && userRole !== undefined) data.role = userRole;
     if (userPassword) data.password = userPassword;
     updateUserMutation.mutate({ id: editingUser.id!, data });
   };
@@ -721,15 +743,17 @@ export default function SettingsPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label>Szerepkör</Label>
-                <Select value={userRole?.toString()} onValueChange={v => setUserRole(parseInt(v))}>
-                  <SelectTrigger><SelectValue placeholder="Válassz szerepkört" /></SelectTrigger>
-                  <SelectContent>
-                    {roles.map((r: any) => <SelectItem key={r.id} value={r.id.toString()}>{r.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+              {isAdmin && (
+                <div>
+                  <Label>Szerepkör</Label>
+                  <Select value={userRole?.toString()} onValueChange={(v) => setUserRole(parseInt(v))}>
+                    <SelectTrigger><SelectValue placeholder="Válassz szerepkört" /></SelectTrigger>
+                    <SelectContent>
+                      {roles.map((r: any) => <SelectItem key={r.id} value={r.id.toString()}>{r.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
             <DialogFooter>
               <Button onClick={editingUser ? handleUserUpdate : handleUserCreate}>Mentés</Button>
