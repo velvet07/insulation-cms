@@ -31,6 +31,9 @@ import {
   downloadAppleCalendarFile,
   generateCalendarEventFromProject,
 } from '@/lib/utils/calendar-export';
+import { useAuthStore } from '@/lib/store/auth';
+import { companiesApi } from '@/lib/api/companies';
+import { isAdminRole, isMainContractor } from '@/lib/utils/user-role';
 
 // Moment magyar nyelv beállítása
 import 'moment/locale/hu';
@@ -47,14 +50,16 @@ interface ProjectEvent extends Event {
 export default function CalendarPage() {
   const router = useRouter();
   const { can } = usePermission();
+  const canViewCalendar = can('calendar', 'view_calendar');
   const queryClient = useQueryClient();
   const [view, setView] = useState<View>('month');
+  const user = useAuthStore((state) => state.user);
 
   useEffect(() => {
-    if (!can('calendar', 'view_calendar')) {
+    if (!canViewCalendar) {
       router.push('/dashboard');
     }
-  }, [can, router]);
+  }, [canViewCalendar, router]);
   const [date, setDate] = useState(new Date());
   const [selectedEvent, setSelectedEvent] = useState<ProjectEvent | null>(null);
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
@@ -63,11 +68,87 @@ export default function CalendarPage() {
   const [scheduleEndTime, setScheduleEndTime] = useState('16:00');
   const [isSavingSchedule, setIsSavingSchedule] = useState(false);
 
-  // Projektek lekérése (amiknek van scheduled_date)
-  const { data: projects = [], isLoading } = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => projectsApi.getAll(),
+  // Use the same visibility rules as the Projects page:
+  // - Admin: all projects
+  // - Subcontractor: only projects where subcontractor == their company
+  // - Main contractor: projects where they are company OR subcontractor OR subcontractor is one of their subcontractors
+  const userCompanyId = useMemo(() => {
+    if (!user?.company) return null;
+    return typeof user.company === 'object' ? (user.company as any).documentId || (user.company as any).id : user.company;
+  }, [user]);
+
+  const { data: fetchedCompany } = useQuery({
+    queryKey: ['company', userCompanyId, 'with-subs'],
+    queryFn: () => companiesApi.getOne(userCompanyId!, 'subcontractors'),
+    enabled: !!userCompanyId && !isAdminRole(user),
+    staleTime: 1000 * 60 * 30,
   });
+
+  const baseFilters = useMemo(() => {
+    // Match Projects page default: exclude archived by default
+    const filters: any = { status_not: 'archived' };
+
+    if (!isAdminRole(user)) {
+      const directCompany = typeof user?.company === 'object' ? (user.company as any) : null;
+      const companyId = directCompany?.documentId || directCompany?.id || userCompanyId;
+      const companyType = directCompany?.type || (fetchedCompany as any)?.type;
+
+      if (companyType === 'subcontractor' || companyType === 'Alvállalkozó') {
+        if (companyId) filters.subcontractor = companyId;
+      } else if (!directCompany && !userCompanyId && user?.id) {
+        // No company: show only projects assigned to this user (same as Projects page)
+        filters.assigned_to = user.id;
+      }
+    }
+
+    return filters;
+  }, [user, userCompanyId, fetchedCompany]);
+
+  const canQueryProjects = useMemo(() => {
+    if (!canViewCalendar) return false;
+    if (isAdminRole(user)) return true;
+    if (!userCompanyId) return true;
+    // If company is already populated (has type), we can build correct filters immediately.
+    if (typeof user?.company === 'object') return true;
+    // Otherwise wait until we resolved the company (so subcontractors don't briefly fetch all projects).
+    return !!fetchedCompany;
+  }, [canViewCalendar, user, userCompanyId, fetchedCompany]);
+
+  // Projektek lekérése (csak a látható halmazhoz szükségesek)
+  const { data: allProjects = [], isLoading } = useQuery({
+    queryKey: ['calendar-projects', baseFilters],
+    queryFn: () => projectsApi.getAll(baseFilters),
+    enabled: canQueryProjects,
+  });
+
+  const userCompany = fetchedCompany || (typeof user?.company === 'object' ? user.company : null);
+
+  const projects: Project[] = useMemo(() => {
+    // Admin sees all, subcontractors are already filtered by backend, no company = no extra filter
+    const isSubcontractor =
+      (userCompany as any)?.type === 'subcontractor' || ((userCompany as any)?.type as any) === 'Alvállalkozó';
+    if (isAdminRole(user) || !userCompanyId || isSubcontractor) return allProjects;
+
+    // Main contractor: show projects where they are company OR subcontractor OR project subcontractor is theirs
+    const mainId = userCompanyId.toString();
+    return allProjects.filter((project) => {
+      const projCompanyId = (project.company as any)?.documentId || (project.company as any)?.id;
+      const projSubcontractorId = (project.subcontractor as any)?.documentId || (project.subcontractor as any)?.id;
+
+      const isDirectlyAssigned =
+        (projCompanyId?.toString() === mainId) || (projSubcontractorId?.toString() === mainId);
+
+      let isSubcontractorAssigned = false;
+      const subs = (userCompany as any)?.subcontractors;
+      if (Array.isArray(subs) && projSubcontractorId) {
+        isSubcontractorAssigned = subs.some(
+          (sub: any) => (sub.documentId || sub.id)?.toString() === projSubcontractorId.toString()
+        );
+      }
+
+      return isDirectlyAssigned || isSubcontractorAssigned;
+    });
+  }, [allProjects, user, userCompany, userCompanyId]);
 
   // Projektekből naptár események generálása
   const events: ProjectEvent[] = useMemo(() => {

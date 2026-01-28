@@ -30,16 +30,17 @@ export function PermissionMatrix() {
         // 2. W -> R dependency: If we turn on a Write permission, we must turn on the corresponding Read permission
         if (checked) {
             const feature = PERMISSION_CONFIG[module].find(f => f.write === action);
-            if (feature && feature.read) {
-                newMatrix.permissions[roleId][module][feature.read] = true;
-            }
+            if (feature?.read) newMatrix.permissions[roleId][module][feature.read] = true;
+            if (feature?.requiresRead) newMatrix.permissions[roleId][module][feature.requiresRead] = true;
         }
 
-        // 3. R -> W dependency: If we turn off a Read permission, we must turn off the corresponding Write permission
+        // 3. R -> W dependency: If we turn off a Read permission, we must turn off the corresponding Write permission(s)
         if (!checked) {
-            const feature = PERMISSION_CONFIG[module].find(f => f.read === action);
-            if (feature && feature.write) {
-                newMatrix.permissions[roleId][module][feature.write] = false;
+            const features = PERMISSION_CONFIG[module].filter(
+                (f) => (f.read === action || f.requiresRead === action) && !!f.write
+            );
+            for (const f of features) {
+                if (f.write) newMatrix.permissions[roleId][module][f.write] = false;
             }
         }
 

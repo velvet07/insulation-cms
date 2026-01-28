@@ -35,7 +35,7 @@ export function isSubcontractor(user: any): boolean {
   if (user.role) {
     if (typeof user.role === 'string') {
       const roleLower = user.role.toLowerCase();
-      if (roleLower === 'alvallalkozo' || roleLower.includes('subcontractor')) {
+      if (roleLower === 'alvallalkozo' || roleLower.includes('alvállalkozó') || roleLower.includes('subcontractor')) {
         return true;
       }
     }
@@ -43,8 +43,14 @@ export function isSubcontractor(user: any): boolean {
     if (typeof user.role === 'object' && user.role !== null) {
       const roleName = (user.role as any).name?.toLowerCase() || '';
       const roleType = (user.role as any).type?.toLowerCase() || '';
-      if (roleName.includes('alvallalkozo') || roleName.includes('subcontractor') ||
-        roleType.includes('alvallalkozo') || roleType.includes('subcontractor')) {
+      if (
+        roleName.includes('alvallalkozo') ||
+        roleName.includes('alvállalkozó') ||
+        roleName.includes('subcontractor') ||
+        roleType.includes('alvallalkozo') ||
+        roleType.includes('alvállalkozó') ||
+        roleType.includes('subcontractor')
+      ) {
         return true;
       }
     }
@@ -73,7 +79,12 @@ export function isMainContractor(user: any): boolean {
   if (user.role) {
     if (typeof user.role === 'string') {
       const roleLower = user.role.toLowerCase();
-      if (roleLower === 'foovallalkozo' || roleLower.includes('main') || roleLower.includes('contractor')) {
+      if (
+        roleLower === 'foovallalkozo' ||
+        roleLower.includes('fővállalkozó') ||
+        roleLower.includes('main') ||
+        roleLower.includes('contractor')
+      ) {
         return true;
       }
     }
@@ -82,8 +93,12 @@ export function isMainContractor(user: any): boolean {
       const roleName = (user.role as any).name?.toLowerCase() || '';
       const roleType = (user.role as any).type?.toLowerCase() || '';
       if (
-        roleName.includes('foovallalkozo') || roleName.includes('main') ||
-        roleType.includes('foovallalkozo') || roleType.includes('main')
+        roleName.includes('foovallalkozo') ||
+        roleName.includes('fővállalkozó') ||
+        roleName.includes('main') ||
+        roleType.includes('foovallalkozo') ||
+        roleType.includes('fővállalkozó') ||
+        roleType.includes('main')
       ) {
         return true;
       }

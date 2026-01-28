@@ -5,6 +5,9 @@ import { useAuthStore } from '@/lib/store/auth';
 import { isAdminRole, isSubcontractor, isMainContractor } from '@/lib/utils/user-role';
 import { companiesApi } from '@/lib/api/companies';
 import { useQuery } from '@tanstack/react-query';
+import { permissionMatrixApi } from '@/lib/api/permission-matrix';
+
+const PERMISSION_MATRIX_STORAGE_KEY = 'permission_matrix_v3';
 
 // Types
 export type PermissionAction = string;
@@ -21,11 +24,18 @@ export interface PermissionFeature {
     label: string;
     read?: string;
     write?: string;
+    /**
+     * Optional dependency for "write-only" actions (e.g. create).
+     * If the write action is enabled, this read action will be enabled too.
+     * If this read action is disabled, the write action will be disabled too.
+     */
+    requiresRead?: string;
 }
 
 export const PERMISSION_CONFIG: Record<PermissionModule, PermissionFeature[]> = {
     projects: [
-        { id: 'list', label: 'Projekt lista', read: 'view_list', write: 'create' },
+        { id: 'list', label: 'Projekt lista', read: 'view_list' },
+        { id: 'create', label: 'Projekt létrehozás', write: 'create', requiresRead: 'view_list' },
         { id: 'details', label: 'Projekt adatok', read: 'view_details', write: 'edit' },
         { id: 'photos', label: 'Fotók kezelése', read: 'view_photos', write: 'manage_photos' },
         { id: 'documents', label: 'Dokumentumok', read: 'view_project_documents', write: 'manage_documents' },
@@ -117,7 +127,7 @@ const DEFAULT_MATRIX: PermissionMatrix = {
         },
         subcontractor: {
             projects: {
-                view_list: true, create: false, edit: false, delete: false,
+                view_list: true, create: true, edit: true, delete: true,
                 view_details: true, view_photos: true, view_project_documents: true,
                 view_worksheet: true, manage_photos: true, manage_documents: true,
                 manage_worksheet: true, approve: false,
@@ -133,7 +143,7 @@ const DEFAULT_MATRIX: PermissionMatrix = {
                 manage_companies: false, manage_users: true,
                 manage_material_types: false, manage_photo_categories: false, manage_permissions: false
             },
-            calendar: { view_calendar: false },
+            calendar: { view_calendar: true },
             documents: { view_list: false, view_templates: false, manage_templates: false },
             approved_projects: { view_list: false },
         },
@@ -149,61 +159,165 @@ const DEFAULT_MATRIX: PermissionMatrix = {
     },
 };
 
+function mergeMatrixWithDefaults(parsed: any): PermissionMatrix {
+    // Merge with default roles to ensure new roles (like guest) are present
+    const mergedMatrix: PermissionMatrix = { ...DEFAULT_MATRIX };
+
+    // Restore saved permissions for existing roles
+    if (parsed?.permissions) {
+        Object.keys(parsed.permissions).forEach((roleId) => {
+            if (mergedMatrix.permissions[roleId]) {
+                mergedMatrix.permissions[roleId] = {
+                    ...mergedMatrix.permissions[roleId],
+                    ...parsed.permissions[roleId],
+                };
+            }
+        });
+    }
+
+    // Restore saved roles (if any custom ones were added)
+    if (parsed?.roles) {
+        const defaultRoleIds = DEFAULT_MATRIX.roles.map((r) => r.id);
+        const customRoles = parsed.roles.filter((r: Role) => !defaultRoleIds.includes(r.id));
+        mergedMatrix.roles = [...DEFAULT_MATRIX.roles, ...customRoles];
+
+        // Also restore permissions for custom roles
+        customRoles.forEach((r: Role) => {
+            if (parsed.permissions?.[r.id]) {
+                mergedMatrix.permissions[r.id] = parsed.permissions[r.id];
+            }
+        });
+    }
+
+    return mergedMatrix;
+}
+
+function loadMatrixFromLocalStorage(): PermissionMatrix | null {
+    if (typeof window === 'undefined') return null;
+    const saved = window.localStorage.getItem(PERMISSION_MATRIX_STORAGE_KEY);
+    if (!saved) return null;
+    try {
+        const parsed = JSON.parse(saved);
+        return mergeMatrixWithDefaults(parsed);
+    } catch (e) {
+        console.error('Failed to parse permission matrix', e);
+        return null;
+    }
+}
+
 const PermissionContext = createContext<PermissionContextType | undefined>(undefined);
 
 export function PermissionProvider({ children }: { children: React.ReactNode }) {
     const user = useAuthStore((state) => state.user);
     const [matrix, setMatrix] = useState<PermissionMatrix>(DEFAULT_MATRIX);
+    const [resolvedCompany, setResolvedCompany] = useState<any | null>(null);
+    const lastServerMatrixJsonRef = React.useRef<string | null>(null);
 
     // Load matrix from localStorage on mount (mock persistence)
     useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const saved = localStorage.getItem('permission_matrix_v3');
-            if (saved) {
-                try {
-                    const parsed = JSON.parse(saved);
-                    // Merge with default roles to ensure new roles (like guest) are present
-                    const mergedMatrix = { ...DEFAULT_MATRIX };
+        const loaded = loadMatrixFromLocalStorage();
+        if (loaded) setMatrix(loaded);
+    }, []);
 
-                    // Restore saved permissions for existing roles
-                    if (parsed.permissions) {
-                        Object.keys(parsed.permissions).forEach(roleId => {
-                            if (mergedMatrix.permissions[roleId]) {
-                                mergedMatrix.permissions[roleId] = {
-                                    ...mergedMatrix.permissions[roleId],
-                                    ...parsed.permissions[roleId]
-                                };
-                            }
-                        });
-                    }
+    // Load matrix from backend (shared across users/browsers).
+    // Falls back to localStorage if backend route isn't available.
+    useEffect(() => {
+        let cancelled = false;
 
-                    // Restore saved roles (if any custom ones were added)
-                    if (parsed.roles) {
-                        const defaultRoleIds = DEFAULT_MATRIX.roles.map(r => r.id);
-                        const customRoles = parsed.roles.filter((r: Role) => !defaultRoleIds.includes(r.id));
-                        mergedMatrix.roles = [...DEFAULT_MATRIX.roles, ...customRoles];
+        const loadFromServer = async () => {
+            try {
+                const serverMatrix = await permissionMatrixApi.get();
+                if (!serverMatrix) return;
+                if (cancelled) return;
+                const json = JSON.stringify(serverMatrix);
+                if (lastServerMatrixJsonRef.current === json) return;
+                lastServerMatrixJsonRef.current = json;
 
-                        // Also restore permissions for custom roles
-                        customRoles.forEach((r: Role) => {
-                            if (parsed.permissions[r.id]) {
-                                mergedMatrix.permissions[r.id] = parsed.permissions[r.id];
-                            }
-                        });
-                    }
-
-                    setMatrix(mergedMatrix);
-                } catch (e) {
-                    console.error('Failed to parse permission matrix', e);
+                setMatrix(mergeMatrixWithDefaults(serverMatrix));
+                if (typeof window !== 'undefined') {
+                    window.localStorage.setItem(PERMISSION_MATRIX_STORAGE_KEY, JSON.stringify(serverMatrix));
                 }
+            } catch {
+                // ignore - keep localStorage/default
             }
+        };
+
+        loadFromServer();
+
+        const onFocus = () => {
+            // Refresh when user returns to the tab (helps propagate admin changes).
+            loadFromServer();
+        };
+
+        if (typeof window !== 'undefined') {
+            window.addEventListener('focus', onFocus);
+            document.addEventListener('visibilitychange', onFocus);
         }
+
+        return () => {
+            cancelled = true;
+            if (typeof window !== 'undefined') {
+                window.removeEventListener('focus', onFocus);
+                document.removeEventListener('visibilitychange', onFocus);
+            }
+        };
+    }, []);
+
+    // Periodic refresh so role changes apply to other users without reload.
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+
+        let cancelled = false;
+        const tick = async () => {
+            if (cancelled) return;
+            // Only poll when tab is visible to reduce load.
+            if (document.visibilityState !== 'visible') return;
+            try {
+                const serverMatrix = await permissionMatrixApi.get();
+                if (!serverMatrix) return;
+                const json = JSON.stringify(serverMatrix);
+                if (lastServerMatrixJsonRef.current === json) return;
+                lastServerMatrixJsonRef.current = json;
+                setMatrix(mergeMatrixWithDefaults(serverMatrix));
+                window.localStorage.setItem(PERMISSION_MATRIX_STORAGE_KEY, json);
+            } catch {
+                // ignore
+            }
+        };
+
+        const id = window.setInterval(() => {
+            tick();
+        }, 10000);
+
+        return () => {
+            cancelled = true;
+            window.clearInterval(id);
+        };
+    }, []);
+
+    // Keep matrix in sync across tabs/windows (storage event doesn't fire in the same tab).
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+
+        const onStorage = (e: StorageEvent) => {
+            if (e.key !== PERMISSION_MATRIX_STORAGE_KEY) return;
+            const loaded = loadMatrixFromLocalStorage();
+            if (loaded) setMatrix(loaded);
+        };
+
+        window.addEventListener('storage', onStorage);
+        return () => window.removeEventListener('storage', onStorage);
     }, []);
 
     const updateMatrix = (newMatrix: PermissionMatrix) => {
         setMatrix(newMatrix);
         if (typeof window !== 'undefined') {
-            localStorage.setItem('permission_matrix_v3', JSON.stringify(newMatrix));
+            localStorage.setItem(PERMISSION_MATRIX_STORAGE_KEY, JSON.stringify(newMatrix));
         }
+        // Best-effort server persistence so changes apply to other users/browsers.
+        permissionMatrixApi.set(newMatrix).catch(() => {
+            // ignore; local persistence still works
+        });
     };
 
     // Determine user role
@@ -212,6 +326,37 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
         if (typeof user.company === 'object') return user.company.documentId || user.company.id;
         return user.company;
     }, [user]);
+
+    // Resolve company object when user.company is only an id/documentId (common with persisted auth state).
+    // This is needed for reliable role detection (main_contractor vs subcontractor).
+    useEffect(() => {
+        let cancelled = false;
+
+        const resolve = async () => {
+            if (!userCompanyId) {
+                if (!cancelled) setResolvedCompany(null);
+                return;
+            }
+
+            const directCompany = typeof user?.company === 'object' && user.company !== null ? user.company : null;
+            if (directCompany && 'type' in (directCompany as any)) {
+                if (!cancelled) setResolvedCompany(directCompany);
+                return;
+            }
+
+            try {
+                const company = await companiesApi.getOne(userCompanyId);
+                if (!cancelled) setResolvedCompany(company);
+            } catch {
+                if (!cancelled) setResolvedCompany(null);
+            }
+        };
+
+        resolve();
+        return () => {
+            cancelled = true;
+        };
+    }, [userCompanyId, user?.company]);
 
     // DISABLED: Company fetch causes infinite loop
     // const { data: fetchedCompany, isLoading: isLoadingCompany } = useQuery({
@@ -228,7 +373,18 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
         if (!user) return null;
         if (isAdminRole(user)) return 'admin';
 
-        // Use helpers which check both role and company type
+        // Prefer resolved company (covers persisted auth where company is only an id)
+        const effectiveCompany =
+            resolvedCompany || (typeof user.company === 'object' && user.company !== null ? user.company : null);
+
+        if (effectiveCompany?.type === 'main_contractor' || (effectiveCompany?.type as any) === 'Fővállalkozó') {
+            return 'main_contractor';
+        }
+        if (effectiveCompany?.type === 'subcontractor' || (effectiveCompany?.type as any) === 'Alvállalkozó') {
+            return 'subcontractor';
+        }
+
+        // Fallback: role helpers (also check role strings/objects)
         if (isMainContractor(user)) return 'main_contractor';
         if (isSubcontractor(user)) return 'subcontractor';
 
@@ -242,7 +398,7 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
         }
 
         return 'guest';
-    }, [user]);
+    }, [user, resolvedCompany]);
 
     const can = (module: PermissionModule, action: PermissionAction): boolean => {
         if (!currentRoleId) return false;
