@@ -2,6 +2,13 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "regions": ["fra1"],
+  "git": {
+    "deploymentEnabled": {
+      "main": false,
+      "master": false,
+      "website": true
+    }
+  },
   "headers": [
     {
       "source": "/(.*)",

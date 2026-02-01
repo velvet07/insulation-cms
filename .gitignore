@@ -97,3 +97,6 @@ ssl
 nbproject
 .tmp
 .eslintcache
+
+.vercel
+.env*.local
