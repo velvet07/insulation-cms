@@ -10,7 +10,7 @@ export default function HomePage() {
             <div
               className="flex min-h-[580px] flex-col gap-6 md:gap-8 rounded-xl items-center justify-center p-8 relative overflow-hidden shadow-2xl bg-cover bg-center bg-no-repeat"
               style={{
-                backgroundImage: `linear-gradient(rgba(16, 25, 34, 0.75) 0%, rgba(16, 25, 34, 0.75) 100%), url("/hero-bg.png")`
+                background: `linear-gradient(135deg, #101922 0%, #1c2127 50%, #207D82 100%)`
               }}
             >
               <div className="flex flex-col gap-4 text-center max-w-[850px] relative z-10">
@@ -156,7 +156,7 @@ export default function HomePage() {
             <div
               className="w-full lg:w-1/2 bg-center bg-no-repeat aspect-video bg-cover"
               style={{
-                backgroundImage: `linear-gradient(rgba(32, 125, 130, 0.2), rgba(0, 0, 0, 0.4)), url("/hero-bg.png")`
+                background: `linear-gradient(135deg, #207D82 0%, #1c2127 100%)`
               }}
             />
             <div className="flex w-full lg:w-1/2 grow flex-col items-start justify-center gap-6 p-8 lg:p-12">
