@@ -1,79 +1,59 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+
+// Logo SVG component matching the design
+const LogoSVG = () => (
+  <svg className="h-6 w-6" fill="none" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <path d="M50 15L15 45H25V85H75V45H85L50 15Z" fill="url(#footer-gradient)" />
+    <defs>
+      <linearGradient gradientUnits="userSpaceOnUse" id="footer-gradient" x1="15" x2="85" y1="15" y2="85">
+        <stop offset="0%" stopColor="#F28C38" />
+        <stop offset="100%" stopColor="#207D82" />
+      </linearGradient>
+    </defs>
+  </svg>
+);
 
 export default function Footer() {
-  const [email, setEmail] = useState('');
-  const [subscribed, setSubscribed] = useState(false);
-
-  const handleSubscribe = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email) return;
-
-    // TODO: Implement newsletter subscription with Supabase
-    console.log('Subscribe:', email);
-    setSubscribed(true);
-    setEmail('');
-  };
-
   return (
     <footer className="footer">
       <div className="footer-grid">
         <div className="footer-brand">
           <div className="logo">
-            <span className="logo-icon"></span> ThermoDesk
+            <LogoSVG />
+            <span className="logo-text-primary">Thermo</span>
+            <span className="logo-text-secondary">Desk</span>
           </div>
           <p>
-            ThermoDesk – Padlásfödém szigetelési projektek kezelése.
-            A legmodernebb digitális asszisztens padlásfödém szigetelő vállalkozásoknak.
+            A legmodernebb digitális asszisztens padlásfödém szigetelő vállalkozásoknak. Optimalizálja profitját kevesebb adminisztrációval.
           </p>
         </div>
 
         <div>
-          <h4>Termék</h4>
+          <h5>Termék</h5>
           <ul>
-            <li><Link href="/#funkciok">Funkciók</Link></li>
-            <li><Link href="/arazas">Árazás</Link></li>
-            <li><Link href="/esettanulmanyok">Esettanulmányok</Link></li>
+            <li><Link href="#funkciok">Funkciók</Link></li>
+            <li><Link href="#">Árazás</Link></li>
+            <li><Link href="#">Esettanulmányok</Link></li>
           </ul>
         </div>
 
         <div>
-          <h4>Vállalat</h4>
+          <h5>Vállalat</h5>
           <ul>
-            <li><Link href="/rolunk">Rólunk</Link></li>
+            <li><Link href="#">Rólunk</Link></li>
             <li><Link href="/kapcsolat">Kapcsolat</Link></li>
-            <li><Link href="/karrier">Karrier</Link></li>
           </ul>
-        </div>
-
-        <div className="newsletter">
-          <label htmlFor="footer-email">Iratkozzon fel</label>
-          {subscribed ? (
-            <p className="text-sm text-green-400">Köszönjük a feliratkozást!</p>
-          ) : (
-            <form onSubmit={handleSubscribe} className="newsletter-input-wrap">
-              <input
-                type="email"
-                id="footer-email"
-                placeholder="Email cím"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-              <button type="submit" aria-label="Feliratkozás">➤</button>
-            </form>
-          )}
         </div>
       </div>
 
       <div className="footer-bottom">
-        <span>© {new Date().getFullYear()} ThermoDesk SaaS. Minden jog fenntartva.</span>
+        <span>© 2024 ThermoDesk SaaS. Minden jog fenntartva.</span>
         <div className="footer-legal">
           <Link href="/adatkezeles">Adatkezelés</Link>
           <Link href="/aszf">ÁSZF</Link>
-          <Link href="/sutik">Sütik</Link>
+          <Link href="#">Sütik</Link>
         </div>
       </div>
     </footer>
