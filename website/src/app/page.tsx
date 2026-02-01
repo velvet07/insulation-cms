@@ -11,7 +11,7 @@ export default function HomePage() {
             <div
               className="flex min-h-[580px] flex-col gap-6 md:gap-8 rounded-xl items-center justify-center p-8 relative overflow-hidden shadow-2xl bg-cover bg-center bg-no-repeat"
               style={{
-                background: `linear-gradient(135deg, #101922 0%, #1c2127 50%, #207D82 100%)`
+                backgroundImage: `linear-gradient(rgba(16, 25, 34, 0.75), rgba(16, 25, 34, 0.75)), url("/hero.jpeg")`
               }}
             >
               <div className="flex flex-col gap-4 text-center max-w-[850px] relative z-10">
