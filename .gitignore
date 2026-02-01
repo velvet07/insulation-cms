@@ -62,6 +62,7 @@ Icon
 logs/
 *.log
 *.sql
+!website/supabase/**/*.sql
 *.sqlite
 *.sqlite3
 
