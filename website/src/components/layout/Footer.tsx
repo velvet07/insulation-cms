@@ -1,16 +1,5 @@
 import Link from 'next/link';
-
-const LogoSVG = () => (
-  <svg className="h-6 w-6" fill="none" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-    <path d="M50 15L15 45H25V85H75V45H85L50 15Z" fill="url(#footer-gradient)" />
-    <defs>
-      <linearGradient gradientUnits="userSpaceOnUse" id="footer-gradient" x1="15" x2="85" y1="15" y2="85">
-        <stop offset="0%" stopColor="#F28C38" />
-        <stop offset="100%" stopColor="#207D82" />
-      </linearGradient>
-    </defs>
-  </svg>
-);
+import Image from 'next/image';
 
 export default function Footer() {
   return (
@@ -20,9 +9,13 @@ export default function Footer() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12 mb-16">
             <div className="flex flex-col gap-6">
               <div className="flex items-center gap-3 text-white">
-                <div className="size-8 text-[#F28C38] flex items-center justify-center">
-                  <LogoSVG />
-                </div>
+                <Image
+                  src="/logo_thermodesk.png"
+                  alt="ThermoDesk Logo"
+                  width={32}
+                  height={32}
+                  className="h-8 w-auto"
+                />
                 <h2 className="text-xl font-black">
                   <span className="text-[#F28C38]">Thermo</span>
                   <span className="text-[#207D82]">Desk</span>

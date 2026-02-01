@@ -1,19 +1,8 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useState } from 'react';
-
-const LogoSVG = () => (
-  <svg className="h-8 w-8" fill="none" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-    <path d="M50 15L15 45H25V85H75V45H85L50 15Z" fill="url(#logo-gradient)" />
-    <defs>
-      <linearGradient gradientUnits="userSpaceOnUse" id="logo-gradient" x1="15" x2="85" y1="15" y2="85">
-        <stop offset="0%" stopColor="#F28C38" />
-        <stop offset="100%" stopColor="#207D82" />
-      </linearGradient>
-    </defs>
-  </svg>
-);
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -23,14 +12,18 @@ export default function Header() {
       <div className="lg:px-40 flex flex-1 justify-center py-5 border-b border-solid border-white/10">
         <div className="flex flex-col max-w-[1200px] flex-1 px-4">
           <header className="flex items-center justify-between whitespace-nowrap py-3">
-            <Link href="/" className="flex items-center gap-4 text-white">
-              <div className="h-10 w-auto flex items-center">
-                <LogoSVG />
-                <h2 className="text-white text-xl font-black leading-tight tracking-tight ml-2">
-                  <span className="text-[#F28C38]">Thermo</span>
-                  <span className="text-[#207D82]">Desk</span>
-                </h2>
-              </div>
+            <Link href="/" className="flex items-center gap-3 text-white">
+              <Image
+                src="/logo_thermodesk.png"
+                alt="ThermoDesk Logo"
+                width={40}
+                height={40}
+                className="h-10 w-auto"
+              />
+              <h2 className="text-white text-xl font-black leading-tight tracking-tight">
+                <span className="text-[#F28C38]">Thermo</span>
+                <span className="text-[#207D82]">Desk</span>
+              </h2>
             </Link>
 
             {/* Mobile menu button */}

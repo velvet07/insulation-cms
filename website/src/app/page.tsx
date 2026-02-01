@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function HomePage() {
   return (
@@ -153,12 +154,14 @@ export default function HomePage() {
       <div className="lg:px-40 flex flex-1 justify-center py-5">
         <div className="flex flex-col max-w-[1200px] flex-1 px-4">
           <div className="flex flex-col items-center justify-start rounded-xl overflow-hidden lg:flex-row lg:items-stretch shadow-2xl bg-[#1c2127] border border-white/10">
-            <div
-              className="w-full lg:w-1/2 bg-center bg-no-repeat aspect-video bg-cover"
-              style={{
-                background: `linear-gradient(135deg, #207D82 0%, #1c2127 100%)`
-              }}
-            />
+            <div className="w-full lg:w-1/2 relative aspect-video">
+              <Image
+                src="/fovallalkozoi.jpeg"
+                alt="Fővállalkozói megoldások"
+                fill
+                className="object-cover"
+              />
+            </div>
             <div className="flex w-full lg:w-1/2 grow flex-col items-start justify-center gap-6 p-8 lg:p-12">
               <div className="flex flex-col gap-2">
                 <span className="text-[#207D82] font-bold text-sm tracking-widest uppercase">Menedzsment</span>
