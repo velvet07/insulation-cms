@@ -56,7 +56,7 @@ export default function Footer() {
               <Link href="/aszf" className="text-white/30 hover:text-white text-xs transition-colors">
                 ÁSZF
               </Link>
-              <Link href="#" className="text-white/30 hover:text-white text-xs transition-colors">
+              <Link href="/sutik" className="text-white/30 hover:text-white text-xs transition-colors">
                 Sütik
               </Link>
             </div>

@@ -57,12 +57,12 @@ export default function Header() {
                 </Link>
               </nav>
               <div className="flex items-center gap-2">
-                <Link
-                  href="/demo"
+                <a
+                  href="https://app.thermodesk.eu"
                   className="flex min-w-[120px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-5 bg-white/10 text-white text-sm font-bold tracking-tight hover:bg-white/20 transition-colors"
                 >
                   Belépés
-                </Link>
+                </a>
               </div>
             </div>
           </header>
@@ -82,13 +82,13 @@ export default function Header() {
               <Link href="#elonyok" className="text-white/80 hover:text-[#F28C38] text-sm font-medium transition-colors" onClick={() => setMobileMenuOpen(false)}>
                 Előnyök
               </Link>
-              <Link
-                href="/demo"
+              <a
+                href="https://app.thermodesk.eu"
                 className="flex w-full cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-5 bg-white/10 text-white text-sm font-bold tracking-tight hover:bg-white/20 transition-colors"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 Belépés
-              </Link>
+              </a>
             </nav>
           )}
         </div>
