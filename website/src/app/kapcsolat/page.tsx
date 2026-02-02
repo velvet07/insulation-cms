@@ -21,7 +21,24 @@ export default function ContactPage() {
     setError('');
 
     try {
+      // Save to Supabase
       await submitContactMessage(formData);
+
+      // Send email notification via API
+      try {
+        await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'contact',
+            ...formData,
+          }),
+        });
+      } catch (emailErr) {
+        // Email sending is not critical - log but don't fail
+        console.warn('Email notification failed:', emailErr);
+      }
+
       setSuccess(true);
       setFormData({ name: '', email: '', subject: '', message: '' });
     } catch (err) {

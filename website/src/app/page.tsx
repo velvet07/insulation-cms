@@ -26,9 +26,6 @@ export default function HomePage() {
                 <h2 className="text-white/90 text-base font-normal leading-relaxed md:text-xl px-10">
                   Modernizálja munkafolyamatait az ajánlattételtől a kivitelezésig. Kevesebb adminisztráció, több elvégzett munka.
                 </h2>
-                <p className="text-[#207D82] font-bold text-sm tracking-widest uppercase mt-2">
-                  Digital survey sheet coming soon
-                </p>
               </div>
               <div className="flex-wrap gap-4 flex justify-center relative z-10 mt-4">
                 <Link
@@ -132,6 +129,33 @@ export default function HomePage() {
                     <h3 className="text-white text-xl font-bold leading-tight">Strukturált fotók</h3>
                     <p className="text-[#9dabb9] text-base font-normal leading-relaxed">
                       Rendszerezett feltöltés és kötelező fotók készítése a beküldés előtt.
+                    </p>
+                  </div>
+                </div>
+                {/* Card 7 */}
+                <div className="flex flex-1 gap-5 rounded-xl border border-white/10 bg-[#1c2127] p-8 flex-col hover:border-[#207D82] transition-colors group">
+                  <div className="text-[#207D82] group-hover:scale-110 transition-transform">
+                    <span className="material-symbols-outlined text-4xl">table_view</span>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <h3 className="text-white text-xl font-bold leading-tight">Projekt import Excelből</h3>
+                    <p className="text-[#9dabb9] text-base font-normal leading-relaxed">
+                      Tömeges projektadatok importálása Excel táblázatból gyors és egyszerű adatfeltöltéshez.
+                    </p>
+                  </div>
+                </div>
+                {/* Card 8 - Coming Soon */}
+                <div className="flex flex-1 gap-5 rounded-xl border border-[#F28C38]/30 bg-[#1c2127] p-8 flex-col hover:border-[#F28C38] transition-colors group relative overflow-hidden">
+                  <div className="absolute top-3 right-3 bg-[#F28C38] text-white text-xs font-bold px-2 py-1 rounded">
+                    Hamarosan
+                  </div>
+                  <div className="text-[#F28C38] group-hover:scale-110 transition-transform">
+                    <span className="material-symbols-outlined text-4xl">assignment</span>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <h3 className="text-white text-xl font-bold leading-tight">Digitális felmérőlap</h3>
+                    <p className="text-[#9dabb9] text-base font-normal leading-relaxed">
+                      Online felmérőlap kitöltés helyszínen, automatikus adatátvitel a projektekhez.
                     </p>
                   </div>
                 </div>
