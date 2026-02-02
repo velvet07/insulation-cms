@@ -27,21 +27,15 @@ export default function Footer() {
             </div>
             <div className="flex flex-col gap-4">
               <h5 className="font-bold text-white">Termék</h5>
-              <Link href="#funkciok" className="text-white/50 hover:text-[#F28C38] text-sm transition-colors">
+              <Link href="/#funkciok" className="text-white/50 hover:text-[#F28C38] text-sm transition-colors">
                 Funkciók
               </Link>
-              <Link href="#" className="text-white/50 hover:text-[#F28C38] text-sm transition-colors">
-                Árazás
-              </Link>
-              <Link href="#" className="text-white/50 hover:text-[#F28C38] text-sm transition-colors">
-                Esettanulmányok
+              <Link href="/#elonyok" className="text-white/50 hover:text-[#F28C38] text-sm transition-colors">
+                Előnyök
               </Link>
             </div>
             <div className="flex flex-col gap-4">
               <h5 className="font-bold text-white">Vállalat</h5>
-              <Link href="#" className="text-white/50 hover:text-[#F28C38] text-sm transition-colors">
-                Rólunk
-              </Link>
               <Link href="/kapcsolat" className="text-white/50 hover:text-[#F28C38] text-sm transition-colors">
                 Kapcsolat
               </Link>

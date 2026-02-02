@@ -43,16 +43,16 @@ export default function Header() {
 
             <div className="hidden md:flex flex-1 justify-end gap-8 items-center">
               <nav className="flex items-center gap-9">
-                <Link href="#mukodes" className="text-white/80 hover:text-[#F28C38] text-sm font-medium transition-colors">
+                <Link href="/#mukodes" className="text-white/80 hover:text-[#F28C38] text-sm font-medium transition-colors">
                   Hogyan működik
                 </Link>
-                <Link href="#funkciok" className="text-white/80 hover:text-[#F28C38] text-sm font-medium transition-colors">
+                <Link href="/#funkciok" className="text-white/80 hover:text-[#F28C38] text-sm font-medium transition-colors">
                   Funkciók
                 </Link>
-                <Link href="#vallalkozok" className="text-white/80 hover:text-[#F28C38] text-sm font-medium transition-colors">
+                <Link href="/#vallalkozok" className="text-white/80 hover:text-[#F28C38] text-sm font-medium transition-colors">
                   Fővállalkozóknak
                 </Link>
-                <Link href="#elonyok" className="text-white/80 hover:text-[#F28C38] text-sm font-medium transition-colors">
+                <Link href="/#elonyok" className="text-white/80 hover:text-[#F28C38] text-sm font-medium transition-colors">
                   Előnyök
                 </Link>
               </nav>
@@ -70,16 +70,16 @@ export default function Header() {
           {/* Mobile menu */}
           {mobileMenuOpen && (
             <nav className="md:hidden flex flex-col gap-4 py-4 border-t border-white/10">
-              <Link href="#mukodes" className="text-white/80 hover:text-[#F28C38] text-sm font-medium transition-colors" onClick={() => setMobileMenuOpen(false)}>
+              <Link href="/#mukodes" className="text-white/80 hover:text-[#F28C38] text-sm font-medium transition-colors" onClick={() => setMobileMenuOpen(false)}>
                 Hogyan működik
               </Link>
-              <Link href="#funkciok" className="text-white/80 hover:text-[#F28C38] text-sm font-medium transition-colors" onClick={() => setMobileMenuOpen(false)}>
+              <Link href="/#funkciok" className="text-white/80 hover:text-[#F28C38] text-sm font-medium transition-colors" onClick={() => setMobileMenuOpen(false)}>
                 Funkciók
               </Link>
-              <Link href="#vallalkozok" className="text-white/80 hover:text-[#F28C38] text-sm font-medium transition-colors" onClick={() => setMobileMenuOpen(false)}>
+              <Link href="/#vallalkozok" className="text-white/80 hover:text-[#F28C38] text-sm font-medium transition-colors" onClick={() => setMobileMenuOpen(false)}>
                 Fővállalkozóknak
               </Link>
-              <Link href="#elonyok" className="text-white/80 hover:text-[#F28C38] text-sm font-medium transition-colors" onClick={() => setMobileMenuOpen(false)}>
+              <Link href="/#elonyok" className="text-white/80 hover:text-[#F28C38] text-sm font-medium transition-colors" onClick={() => setMobileMenuOpen(false)}>
                 Előnyök
               </Link>
               <a
