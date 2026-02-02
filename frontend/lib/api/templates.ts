@@ -4,6 +4,7 @@ import type { Template, StrapiResponse } from '@/types';
 export interface TemplateFilters {
   type?: Template['type'];
   tenant?: number;
+  company?: string | number;
 }
 
 export const templatesApi = {
@@ -16,7 +17,11 @@ export const templatesApi = {
     if (filters?.tenant) {
       params.append('filters[tenant][id][$eq]', filters.tenant.toString());
     }
-    
+    if (filters?.company) {
+      // Strapi v5: filter by company documentId or id
+      params.append('filters[company][documentId][$eq]', filters.company.toString());
+    }
+
     params.append('populate', '*');
     params.append('sort', 'name:asc');
     
@@ -99,6 +104,11 @@ export const templatesApi = {
 
       if (templateFileId) {
         templateData.template_file = templateFileId;
+      }
+
+      // Fővállalkozóhoz kötés
+      if (data.company) {
+        templateData.company = data.company;
       }
 
       const response = await strapiApi.post<StrapiResponse<Template>>('/templates', { data: templateData });

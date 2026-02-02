@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAuthStore } from '@/lib/store/auth';
 import { usePermission } from '@/lib/contexts/permission-context';
+import { isAdminRole } from '@/lib/utils/user-role';
 import type { Company } from '@/types';
 import { Input } from '@/components/ui/input';
 import {
@@ -95,10 +96,30 @@ export default function TemplatesPage() {
 
   // Check if user can manage templates
   const canManageTemplates = can('documents', 'manage_templates');
+  const isAdmin = isAdminRole(user);
 
+  // Get user's company (for filtering and creating templates)
+  const getUserCompanyId = (): string | undefined => {
+    if (!user?.company) return undefined;
+    if (typeof user.company === 'object' && user.company !== null) {
+      return (user.company as Company).documentId || String((user.company as Company).id);
+    }
+    return String(user.company);
+  };
+
+  const userCompanyId = getUserCompanyId();
+  const userCompanyName = typeof user?.company === 'object' ? (user.company as Company)?.name : undefined;
+
+  // Fetch templates - filter by user's company if not admin
   const { data: templates = [], isLoading } = useQuery({
-    queryKey: ['templates'],
-    queryFn: () => templatesApi.getAll(),
+    queryKey: ['templates', userCompanyId, isAdmin],
+    queryFn: () => {
+      // Admin sees all templates, others see only their company's templates
+      if (isAdmin) {
+        return templatesApi.getAll();
+      }
+      return templatesApi.getAll(userCompanyId ? { company: userCompanyId } : undefined);
+    },
   });
 
   const form = useForm<TemplateFormValues>({
@@ -115,6 +136,7 @@ export default function TemplatesPage() {
         name: data.name,
         type: data.type,
         tokens: [], // Alapértelmezett tokenek listája
+        company: userCompanyId, // Automatikusan a user cégéhez kötjük
       }, selectedFile || undefined);
     },
     onSuccess: () => {
@@ -426,6 +448,7 @@ export default function TemplatesPage() {
                   <TableRow>
                     <TableHead>Név</TableHead>
                     <TableHead>Típus</TableHead>
+                    {isAdmin && <TableHead>Fővállalkozó</TableHead>}
                     <TableHead>Fájl</TableHead>
                     <TableHead>Tokenek</TableHead>
                     <TableHead className="text-right">Műveletek</TableHead>
@@ -436,6 +459,13 @@ export default function TemplatesPage() {
                     <TableRow key={template.id}>
                       <TableCell className="font-medium">{template.name}</TableCell>
                       <TableCell>{TEMPLATE_TYPE_LABELS[template.type as TemplateType] || template.type}</TableCell>
+                      {isAdmin && (
+                        <TableCell>
+                          {template.company && typeof template.company === 'object'
+                            ? (template.company as Company).name
+                            : <span className="text-gray-400">-</span>}
+                        </TableCell>
+                      )}
                       <TableCell>
                         {template.template_file ? (
                           <span className="text-green-600 dark:text-green-400">

@@ -202,6 +202,7 @@ export interface Template extends StrapiEntity {
   };
   tokens?: string[]; // Elérhető tokenek listája
   tenant?: Tenant;
+  company?: Company | string | number; // Fővállalkozó (main_contractor)
 }
 
 export const TEMPLATE_TYPE_LABELS: Record<TemplateType, string> = {

@@ -41,6 +41,11 @@
       "relation": "manyToOne",
       "target": "api::tenant.tenant"
     },
+    "company": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::company.company"
+    },
     "template_file": {
       "type": "media",
       "multiple": false,
