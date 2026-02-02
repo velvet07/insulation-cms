@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -14,9 +15,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-  FormDescription,
 } from '@/components/ui/form';
-
 import {
   Card,
   CardContent,
@@ -24,6 +23,11 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { ProtectedRoute } from '@/components/auth/protected-route';
+import { DashboardLayout } from '@/components/layout/dashboard-layout';
+import { useAuthStore } from '@/lib/store/auth';
+import { isAdminRole } from '@/lib/utils/user-role';
+import { ArrowLeft, ShieldAlert } from 'lucide-react';
 
 const createUserSchema = z.object({
   username: z.string().min(3, 'A felhasználónév legalább 3 karakter hosszú kell legyen'),
@@ -34,11 +38,24 @@ const createUserSchema = z.object({
 type CreateUserFormValues = z.infer<typeof createUserSchema>;
 
 export default function CreateUserPage() {
+  const router = useRouter();
+  const { user } = useAuthStore();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [isCheckingAdmin, setIsCheckingAdmin] = useState(true);
 
+  const isAdmin = isAdminRole(user);
 
+  // Check admin permission
+  useEffect(() => {
+    if (user) {
+      setIsCheckingAdmin(false);
+      if (!isAdmin) {
+        router.push('/dashboard');
+      }
+    }
+  }, [user, isAdmin, router]);
 
   const form = useForm<CreateUserFormValues>({
     resolver: zodResolver(createUserSchema),
@@ -83,109 +100,149 @@ export default function CreateUserPage() {
     }
   };
 
+  // Show access denied if not admin
+  if (!isCheckingAdmin && !isAdmin) {
+    return (
+      <ProtectedRoute>
+        <DashboardLayout>
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <Card className="w-full max-w-md">
+              <CardHeader className="text-center">
+                <ShieldAlert className="w-16 h-16 mx-auto text-destructive mb-4" />
+                <CardTitle className="text-xl text-destructive">Hozzáférés megtagadva</CardTitle>
+                <CardDescription>
+                  Ez az oldal csak adminisztrátorok számára érhető el.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => router.push('/dashboard')}
+                >
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Vissza a vezérlőpultra
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        </DashboardLayout>
+      </ProtectedRoute>
+    );
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">
-            Felhasználó létrehozása
-          </CardTitle>
-          <CardDescription className="text-center">
-            Hozzon létre egy normál felhasználót a bejelentkezéshez
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              {error && (
-                <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
-                  {error}
-                </div>
-              )}
+    <ProtectedRoute>
+      <DashboardLayout>
+        <div className="mb-6">
+          <Button
+            variant="ghost"
+            onClick={() => router.push('/dashboard/settings')}
+            className="mb-4"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Vissza a beállításokhoz
+          </Button>
+          <h1 className="text-2xl font-bold">Felhasználó létrehozása</h1>
+          <p className="text-muted-foreground">
+            Új felhasználó manuális létrehozása (csak adminisztrátoroknak)
+          </p>
+        </div>
 
-              {success && (
-                <div className="rounded-md bg-green-500/15 p-3 text-sm text-green-700 dark:text-green-300">
-                  ✅ Felhasználó sikeresen létrehozva! Most már be tud jelentkezni a login oldalon.
-                </div>
-              )}
-
-              <FormField
-                control={form.control}
-                name="username"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Felhasználónév</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="text"
-                        placeholder="felhasznalo"
-                        autoComplete="username"
-                        disabled={isLoading}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+        <Card className="max-w-md">
+          <CardHeader>
+            <CardTitle>Új felhasználó adatai</CardTitle>
+            <CardDescription>
+              A létrehozott felhasználó a megadott email címmel és jelszóval tud bejelentkezni.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                {error && (
+                  <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
+                    {error}
+                  </div>
                 )}
-              />
 
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email cím</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="email"
-                        placeholder="email@example.com"
-                        autoComplete="email"
-                        disabled={isLoading}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+                {success && (
+                  <div className="rounded-md bg-green-500/15 p-3 text-sm text-green-700 dark:text-green-300">
+                    Felhasználó sikeresen létrehozva! A felhasználó most már be tud jelentkezni.
+                  </div>
                 )}
-              />
 
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Jelszó</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="password"
-                        placeholder="••••••••"
-                        autoComplete="new-password"
-                        disabled={isLoading}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                <FormField
+                  control={form.control}
+                  name="username"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Felhasználónév</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="text"
+                          placeholder="felhasznalo"
+                          autoComplete="username"
+                          disabled={isLoading}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={isLoading}
-              >
-                {isLoading ? 'Létrehozás...' : 'Felhasználó létrehozása'}
-              </Button>
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email cím</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="email"
+                          placeholder="email@example.com"
+                          autoComplete="email"
+                          disabled={isLoading}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-              <div className="text-center text-sm">
-                <a href="/login" className="text-primary hover:underline">
-                  Vissza a bejelentkezéshez
-                </a>
-              </div>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
-    </div>
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Jelszó</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="password"
+                          placeholder="••••••••"
+                          autoComplete="new-password"
+                          disabled={isLoading}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={isLoading}
+                >
+                  {isLoading ? 'Létrehozás...' : 'Felhasználó létrehozása'}
+                </Button>
+              </form>
+            </Form>
+          </CardContent>
+        </Card>
+      </DashboardLayout>
+    </ProtectedRoute>
   );
 }
