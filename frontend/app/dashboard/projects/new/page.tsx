@@ -102,10 +102,7 @@ export default function NewProjectPage() {
         status: 'pending',
         client_email: data.client_email || undefined,
         client_phone: data.client_phone || undefined,
-        // Note: audit_log frissítés ideiglenesen kikapcsolva, amíg a Strapi szerver
-        // nem lett újraindítva az audit_log mezőt tartalmazó schema-val
-        // TODO: Engedélyezni az audit_log frissítést, miután a Strapi szerver újraindult
-        // audit_log: [auditLogEntry],
+        audit_log: [auditLogEntry],
       };
 
       // Automatikusan beállítjuk a company mezőt a user cégére alapozva

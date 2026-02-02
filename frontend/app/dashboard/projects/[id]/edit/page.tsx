@@ -172,15 +172,20 @@ export default function EditProjectPage() {
       // Összeállítjuk a client_address mezőt a kompatibilitás miatt (ha még használjuk)
       const client_address = `${data.client_street}, ${data.client_city}, ${data.client_zip}`;
 
-      // Note: audit_log frissítés ideiglenesen kikapcsolva, amíg a Strapi szerver
-      // nem lett újraindítva az audit_log mezőt tartalmazó schema-val
-      // TODO: Engedélyezni az audit_log frissítést, miután a Strapi szerver újraindult
+      // Audit log bejegyzés a projekt szerkesztéséhez
+      const auditLogEntry = createAuditLogEntry(
+        'project_modified',
+        user,
+        `Projekt szerkesztve: ${project?.client_name || 'Ismeretlen'}`
+      );
+      auditLogEntry.module = 'Projekt';
 
       const updateData: any = {
         ...data,
         client_address, // Kompatibilitás miatt
         client_email: data.client_email || undefined,
         client_phone: data.client_phone || undefined,
+        audit_log: addAuditLogEntry(project?.audit_log, auditLogEntry),
       };
 
       // Remove subcontractor from data spread, handle separately

@@ -68,6 +68,7 @@ export default function ProjectsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
+  const isAdmin = isAdminRole(user);
   const { can } = usePermission();
   const canExportZip = can('projects', 'export_zip');
   const canViewList = can('projects', 'view_list');
@@ -90,7 +91,7 @@ export default function ProjectsPage() {
   debug('🔧 [FILTER] Building filters...');
   debug('  User:', { id: user?.id, email: user?.email, role: user?.role });
   debug('  User Company:', user?.company);
-  debug('  Is Admin:', isAdminRole(user));
+  debug('  Is Admin:', isAdmin);
   debug('  Is Main Contractor:', isMainContractor(user));
 
   const filters: ProjectFilters = {
@@ -101,7 +102,7 @@ export default function ProjectsPage() {
   };
 
   // If user is not admin (or role is undefined), filter by company or assigned_to
-  if (!isAdminRole(user)) {
+  if (!isAdmin) {
     debug('  User is NOT admin, applying company/user filters...');
     if (user?.company) {
       const company = user.company as any;
@@ -163,10 +164,10 @@ export default function ProjectsPage() {
     debug('\n========================================');
     debug('👤 [USER INFO] Current User:', user);
     debug('👤 [USER INFO] User Company (Combined):', userCompany);
-    debug('👤 [USER INFO] Is Admin:', isAdminRole(user));
+    debug('👤 [USER INFO] Is Admin:', isAdmin);
     debug('👤 [USER INFO] Is Main Contractor:', isMainContractor(user));
     debug('========================================\n');
-  }, [user, userCompany]);
+  }, [user, userCompany, isAdmin]);
 
   // Frontend filtering for main contractors - show projects where they are company OR subcontractor OR project subcontractor is theirs
   const filteredProjects = useMemo(() => {
@@ -181,9 +182,9 @@ export default function ProjectsPage() {
     debug('🔍 [FRONTEND FILTER] User Company Type:', userCompany?.type);
 
     // Admin sees all, subcontractors already filtered by backend, no company = no filter
-    if (isAdminRole(user) || !userCompanyId || isSubcontractor) {
+    if (isAdmin || !userCompanyId || isSubcontractor) {
       debug('✅ [FRONTEND FILTER] Returning ALL projects (Admin/NoCompany/Subcontractor)');
-      debug('   Reason:', isAdminRole(user) ? 'Admin' : !userCompanyId ? 'No Company' : 'Subcontractor');
+      debug('   Reason:', isAdmin ? 'Admin' : !userCompanyId ? 'No Company' : 'Subcontractor');
       return allProjects;
     }
 
@@ -213,7 +214,7 @@ export default function ProjectsPage() {
     debug('\n📦 [FRONTEND FILTER] Filtered projects count:', filtered.length);
     debug('========================================\n');
     return filtered;
-  }, [allProjects, user, userCompany, userCompanyId]);
+  }, [allProjects, user, userCompany, userCompanyId, isAdmin]);
 
   // Extract unique owners from FILTERED projects
   const uniqueOwners = useMemo(() => {
@@ -403,7 +404,7 @@ export default function ProjectsPage() {
                 <SelectItem value="archived">Archivált</SelectItem>
               </SelectContent>
             </Select>
-            {isAdminRole(user) && uniqueOwners.length > 0 && (
+            {isAdmin && uniqueOwners.length > 0 && (
               <Select value={ownerFilter} onValueChange={setOwnerFilter}>
                 <SelectTrigger className="w-[250px]">
                   <SelectValue placeholder="Tulajdonos szűrő" />
@@ -464,6 +465,7 @@ export default function ProjectsPage() {
                   <TableHead>Szigetelés</TableHead>
                   <TableHead>Státusz</TableHead>
                   <TableHead>Tulajdonos</TableHead>
+                  {isAdmin && <TableHead>Fővállalkozó</TableHead>}
                   <TableHead className="text-right">Műveletek</TableHead>
                 </TableRow>
               </TableHeader>
@@ -505,6 +507,11 @@ export default function ProjectsPage() {
                     <TableCell>
                       {project.subcontractor?.name || project.company?.name || '-'}
                     </TableCell>
+                    {isAdmin && (
+                      <TableCell>
+                        {project.subcontractor ? (project.subcontractor.parent_company?.name ?? '-') : '-'}
+                      </TableCell>
+                    )}
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Button
