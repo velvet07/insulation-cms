@@ -115,11 +115,12 @@ export default function CalendarPage() {
   }, [canViewCalendar, user, userCompanyId, fetchedCompany]);
 
   // Projektek lekérése (csak a látható halmazhoz szükségesek)
-  const { data: allProjects = [], isLoading } = useQuery({
+  const { data: projectsResponse, isLoading } = useQuery({
     queryKey: ['calendar-projects', baseFilters],
     queryFn: () => projectsApi.getAll(baseFilters),
     enabled: canQueryProjects,
   });
+  const allProjects = projectsResponse?.data || [];
 
   const userCompany = fetchedCompany || (typeof user?.company === 'object' ? user.company : null);
 

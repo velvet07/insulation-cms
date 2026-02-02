@@ -44,10 +44,11 @@ export default function DashboardPage() {
     // Main contractor: NO backend filter
   }
 
-  const { data: allProjects = [], isLoading } = useQuery({
+  const { data: projectsResponse, isLoading } = useQuery({
     queryKey: ['projects', filters],
     queryFn: () => projectsApi.getAll(filters),
   });
+  const allProjects = projectsResponse?.data || [];
 
   // Fetch user's company details to get subcontractors list (for Main Contractor visibility)
   const { data: userCompanyDetails } = useQuery({

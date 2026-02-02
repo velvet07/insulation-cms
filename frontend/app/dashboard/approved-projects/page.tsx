@@ -64,11 +64,12 @@ export default function ApprovedProjectsPage() {
   }, [can, router]);
 
   // Fetch approved projects - hooks must be called before any conditional returns
-  const { data: approvedProjects = [], isLoading } = useQuery({
+  const { data: approvedProjectsResponse, isLoading } = useQuery({
     queryKey: ['projects', 'approved'],
     queryFn: () => projectsApi.getAll({ status: 'approved' }),
     enabled: can('approved_projects', 'view_list'),
   });
+  const approvedProjects = approvedProjectsResponse?.data || [];
 
   const completeProjectsMutation = useMutation({
     mutationFn: async (projects: Project[]) => {

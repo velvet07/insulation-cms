@@ -47,10 +47,26 @@ export interface ProjectFilters {
   company?: number | string;
   subcontractor?: number | string; // Support both numeric id and documentId (Strapi v5)
   search?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface PaginationMeta {
+  page: number;
+  pageSize: number;
+  pageCount: number;
+  total: number;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  meta: {
+    pagination: PaginationMeta;
+  };
 }
 
 export const projectsApi = {
-  getAll: async (filters?: ProjectFilters) => {
+  getAll: async (filters?: ProjectFilters): Promise<PaginatedResponse<Project>> => {
     debugLog('projects', 'projectsApi.getAll called with filters:', filters);
     const params = new URLSearchParams();
 
@@ -114,6 +130,13 @@ export const projectsApi = {
       debugLog('projects', '✓ Added search filter:', filters.search);
     }
 
+    // Pagination parameters
+    const page = filters?.page || 1;
+    const pageSize = filters?.pageSize || 25;
+    params.append('pagination[page]', page.toString());
+    params.append('pagination[pageSize]', pageSize.toString());
+    debugLog('projects', '✓ Added pagination:', { page, pageSize });
+
     params.append('populate', '*');
     params.append('sort', 'createdAt:desc');
 
@@ -127,20 +150,45 @@ export const projectsApi = {
         isArray: Array.isArray(response.data),
         hasDataData: response.data && Array.isArray(response.data.data),
         dataDataLength: response.data && Array.isArray(response.data.data) ? response.data.data.length : 0,
-        dataLength: Array.isArray(response.data) ? response.data.length : 0
+        dataLength: Array.isArray(response.data) ? response.data.length : 0,
+        meta: (response.data as any)?.meta
       });
 
-      // Handle both Strapi v4 and v5 response formats
-      if (response.data && Array.isArray(response.data.data)) {
-        debugLog('projects', 'Returning', response.data.data.length, 'projects (v4/v5 format)');
-        return response.data.data;
+      // Handle both Strapi v4 and v5 response formats with pagination metadata
+      const payload = response.data as any;
+
+      // Extract pagination metadata from Strapi response
+      const paginationMeta: PaginationMeta = payload?.meta?.pagination || {
+        page,
+        pageSize,
+        pageCount: 1,
+        total: 0,
+      };
+
+      let data: Project[] = [];
+      if (payload && Array.isArray(payload.data)) {
+        data = payload.data;
+        // Update total if not in meta
+        if (!payload?.meta?.pagination) {
+          paginationMeta.total = data.length;
+          paginationMeta.pageCount = Math.ceil(data.length / pageSize);
+        }
+        debugLog('projects', 'Returning', data.length, 'projects (v4/v5 format)', paginationMeta);
+      } else if (Array.isArray(payload)) {
+        data = payload;
+        paginationMeta.total = data.length;
+        paginationMeta.pageCount = Math.ceil(data.length / pageSize);
+        debugLog('projects', 'Returning', data.length, 'projects (array format)', paginationMeta);
+      } else {
+        debugLog('projects', 'Unexpected response format, returning empty array');
       }
-      if (Array.isArray(response.data)) {
-        debugLog('projects', 'Returning', response.data.length, 'projects (array format)');
-        return response.data;
-      }
-      debugLog('projects', 'Unexpected response format, returning empty array');
-      return [];
+
+      return {
+        data,
+        meta: {
+          pagination: paginationMeta,
+        },
+      };
     } catch (error) {
       console.error('❌ [API] Error fetching projects:', error);
       throw error;

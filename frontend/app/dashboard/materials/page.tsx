@@ -351,10 +351,11 @@ export default function MaterialsPage() {
   });
 
   // Projektek lekérése (anyagigény számításhoz)
-  const { data: projects = [] } = useQuery({
+  const { data: projectsResponse } = useQuery({
     queryKey: ['projects'],
     queryFn: () => projectsApi.getAll(),
   });
+  const projects = projectsResponse?.data || [];
 
   // Material Transactions lekérése (cég alapú - elérhető anyagok számításhoz)
   const { data: transactions = [] } = useQuery({
@@ -714,7 +715,8 @@ export default function MaterialsPage() {
 
       // Audit log hozzáadása minden projekthez
       try {
-        const allProjects = await projectsApi.getAll();
+        const allProjectsResponse = await projectsApi.getAll();
+        const allProjects = allProjectsResponse?.data || [];
         const auditLogEntry = createAuditLogEntry(
           'material_added',
           user,
@@ -1116,7 +1118,8 @@ export default function MaterialsPage() {
 
       // Audit log hozzáadása minden projekthez
       try {
-        const allProjects = await projectsApi.getAll();
+        const allProjectsResponse = await projectsApi.getAll();
+        const allProjects = allProjectsResponse?.data || [];
         const materialName = transaction.material?.name || 'Ismeretlen anyag';
         const pickupDate = transaction.pickup_date
           ? new Date(transaction.pickup_date).toLocaleDateString('hu-HU')
@@ -1195,7 +1198,8 @@ export default function MaterialsPage() {
 
       // Audit log hozzáadása minden projekthez
       try {
-        const allProjects = await projectsApi.getAll();
+        const allProjectsResponse = await projectsApi.getAll();
+        const allProjects = allProjectsResponse?.data || [];
         const materialName = oldTransaction.material?.name || 'Ismeretlen anyag';
         const oldPallets = oldTransaction.quantity_pallets || 0;
         const oldRolls = oldTransaction.quantity_rolls || 0;

@@ -22,13 +22,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { projectsApi, type ProjectFilters } from '@/lib/api/projects';
+import { projectsApi, type ProjectFilters, type PaginationMeta } from '@/lib/api/projects';
 import type { Project, Company } from '@/types';
 import { companiesApi } from '@/lib/api/companies';
 import { useAuthStore } from '@/lib/store/auth';
 import { isAdminRole, isMainContractor } from '@/lib/utils/user-role';
 import { usePermission } from '@/lib/contexts/permission-context';
-import { Plus, Search, Eye, Edit, Trash2, Download } from 'lucide-react';
+import { Plus, Search, Eye, Edit, Trash2, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 
 const statusLabels: Record<Project['status'], string> = {
@@ -50,6 +50,43 @@ const statusColors: Record<Project['status'], string> = {
   completed: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400',
   archived: 'bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-400',
 };
+
+// Generate page numbers with ellipsis for pagination
+function generatePageNumbers(currentPage: number, pageCount: number): (number | string)[] {
+  if (pageCount <= 7) {
+    return Array.from({ length: pageCount }, (_, i) => i + 1);
+  }
+
+  const pages: (number | string)[] = [];
+
+  // Always show first page
+  pages.push(1);
+
+  if (currentPage > 3) {
+    pages.push('...');
+  }
+
+  // Show pages around current page
+  const start = Math.max(2, currentPage - 1);
+  const end = Math.min(pageCount - 1, currentPage + 1);
+
+  for (let i = start; i <= end; i++) {
+    if (!pages.includes(i)) {
+      pages.push(i);
+    }
+  }
+
+  if (currentPage < pageCount - 2) {
+    pages.push('...');
+  }
+
+  // Always show last page
+  if (!pages.includes(pageCount)) {
+    pages.push(pageCount);
+  }
+
+  return pages;
+}
 
 export default function ProjectsPage() {
   const debugLogs =
@@ -84,6 +121,8 @@ export default function ProjectsPage() {
   const [ownerFilter, setOwnerFilter] = useState<string>('all');
   const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(new Set());
   const [isExporting, setIsExporting] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   // Build filters - if user is not admin, filter by company or assigned_to
   // Note: Owner filter is applied on frontend because "owner" can be either subcontractor or company
@@ -99,6 +138,8 @@ export default function ProjectsPage() {
     ...(search && { search }),
     // Exclude archived by default - only show if explicitly filtered
     ...(statusFilter !== 'archived' && { status_not: 'archived' }),
+    page: currentPage,
+    pageSize,
   };
 
   // If user is not admin (or role is undefined), filter by company or assigned_to
@@ -129,10 +170,23 @@ export default function ProjectsPage() {
 
   debug('🎯 [FILTER] Final filters to send to API:', filters);
 
-  const { data: allProjects = [], isLoading, error } = useQuery({
+  const { data: projectsResponse, isLoading, error } = useQuery({
     queryKey: ['projects', filters],
     queryFn: () => projectsApi.getAll(filters),
   });
+
+  const allProjects = projectsResponse?.data || [];
+  const paginationMeta: PaginationMeta = projectsResponse?.meta?.pagination || {
+    page: currentPage,
+    pageSize,
+    pageCount: 1,
+    total: 0,
+  };
+
+  // Reset to page 1 when filters change (except page itself)
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, statusFilter, ownerFilter]);
 
   // Get user company ID
   const userCompanyId = useMemo(() => {
@@ -551,10 +605,90 @@ export default function ProjectsPage() {
           </div>
         )}
 
-        {/* Pagination - TODO: implement later */}
-        {projects.length > 0 && (
-          <div className="mt-4 text-sm text-gray-500 text-center">
-            {projects.length} projekt találat
+        {/* Pagination */}
+        {paginationMeta.total > 0 && (
+          <div className="mt-4 flex items-center justify-between">
+            <div className="text-sm text-gray-500">
+              Összesen {paginationMeta.total} projekt
+              {paginationMeta.pageCount > 1 && (
+                <span> • {currentPage}. oldal / {paginationMeta.pageCount}</span>
+              )}
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500">Oldalméret:</span>
+                <Select value={pageSize.toString()} onValueChange={(value) => { setPageSize(Number(value)); setCurrentPage(1); }}>
+                  <SelectTrigger className="w-[80px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {paginationMeta.pageCount > 1 && (
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setCurrentPage(1)}
+                    disabled={currentPage === 1}
+                    title="Első oldal"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    <ChevronLeft className="h-4 w-4 -ml-3" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                    title="Előző oldal"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <div className="flex items-center gap-1 px-2">
+                    {generatePageNumbers(currentPage, paginationMeta.pageCount).map((pageNum, idx) => (
+                      pageNum === '...' ? (
+                        <span key={`ellipsis-${idx}`} className="px-2 text-gray-400">...</span>
+                      ) : (
+                        <Button
+                          key={pageNum}
+                          variant={currentPage === pageNum ? 'default' : 'outline'}
+                          size="icon"
+                          onClick={() => setCurrentPage(pageNum as number)}
+                          className="w-8 h-8"
+                        >
+                          {pageNum}
+                        </Button>
+                      )
+                    ))}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setCurrentPage((prev) => Math.min(paginationMeta.pageCount, prev + 1))}
+                    disabled={currentPage === paginationMeta.pageCount}
+                    title="Következő oldal"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setCurrentPage(paginationMeta.pageCount)}
+                    disabled={currentPage === paginationMeta.pageCount}
+                    title="Utolsó oldal"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                    <ChevronRight className="h-4 w-4 -ml-3" />
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </DashboardLayout>
