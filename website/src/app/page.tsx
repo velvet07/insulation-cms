@@ -15,10 +15,14 @@ export default function HomePage() {
               }}
             >
               <div className="flex flex-col gap-4 text-center max-w-[850px] relative z-10">
-                <div className="flex justify-center mb-2">
-                  <div className="bg-[#207D82]/80 backdrop-blur-sm p-3 rounded-full inline-flex items-center justify-center shadow-lg border border-white/10">
-                    <span className="material-symbols-outlined text-white text-3xl">hvac</span>
-                  </div>
+                <div className="flex justify-center mb-4">
+                  <Image
+                    src="/logo_thermodesk.png"
+                    alt="ThermoDesk Logo"
+                    width={80}
+                    height={80}
+                    className="h-20 w-auto drop-shadow-2xl"
+                  />
                 </div>
                 <h1 className="text-white text-4xl font-black leading-tight tracking-[-0.033em] md:text-6xl">
                   <span className="text-[#F28C38]">ThermoDesk</span> – A profi szigetelők digitális társa
