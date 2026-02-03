@@ -225,11 +225,22 @@ export default function ProjectsPage() {
 
   // Frontend filtering for main contractors - show projects where they are company OR subcontractor OR project subcontractor is theirs
   const filteredProjects = useMemo(() => {
+    // TEMP DEBUG - always log
+    console.log('[PROJECTS DEBUG] ====== FILTERING START ======');
+    console.log('[PROJECTS DEBUG] allProjects.length:', allProjects.length);
+    console.log('[PROJECTS DEBUG] userCompanyId:', userCompanyId);
+    console.log('[PROJECTS DEBUG] userCompany:', userCompany);
+    console.log('[PROJECTS DEBUG] userCompany.type:', userCompany?.type);
+    console.log('[PROJECTS DEBUG] userCompany.subcontractors:', userCompany?.subcontractors);
+    console.log('[PROJECTS DEBUG] isAdmin:', isAdmin);
+
     debug('\n🔍 [FRONTEND FILTER] Starting frontend filtering...');
     debug('📊 [FRONTEND FILTER] Total projects from API:', allProjects.length);
 
     // userCompanyId is already calculated above
     const isSubcontractor = userCompany?.type === 'subcontractor' || (userCompany?.type as any) === 'Alvállalkozó';
+
+    console.log('[PROJECTS DEBUG] isSubcontractor:', isSubcontractor);
 
     debug('🔍 [FRONTEND FILTER] User Company ID:', userCompanyId);
     debug('🔍 [FRONTEND FILTER] Is Subcontractor:', isSubcontractor);
@@ -237,13 +248,26 @@ export default function ProjectsPage() {
 
     // Admin sees all, subcontractors already filtered by backend, no company = no filter
     if (isAdmin || !userCompanyId || isSubcontractor) {
+      console.log('[PROJECTS DEBUG] Returning ALL - reason:', isAdmin ? 'admin' : !userCompanyId ? 'no company' : 'subcontractor');
       debug('✅ [FRONTEND FILTER] Returning ALL projects (Admin/NoCompany/Subcontractor)');
       debug('   Reason:', isAdmin ? 'Admin' : !userCompanyId ? 'No Company' : 'Subcontractor');
       return allProjects;
     }
 
+    console.log('[PROJECTS DEBUG] Main contractor filtering...');
     debug('🔍 [FRONTEND FILTER] Main Contractor detected - filtering projects...');
     debug('🔍 [FRONTEND FILTER] Available subcontractors:', userCompany?.subcontractors?.length || 0);
+
+    // Log first project details
+    if (allProjects.length > 0) {
+      const p = allProjects[0];
+      console.log('[PROJECTS DEBUG] First project:', {
+        id: p.id,
+        company: p.company,
+        subcontractor: p.subcontractor,
+        'subcontractor.parent_company': (p.subcontractor as any)?.parent_company
+      });
+    }
 
     // Main contractor: show projects where:
     // 1. They are the project's company
@@ -255,6 +279,13 @@ export default function ProjectsPage() {
       const projSubcontractorId = project.subcontractor?.documentId || project.subcontractor?.id;
       const projSubcontractorParentId = project.subcontractor?.parent_company?.documentId ||
         project.subcontractor?.parent_company?.id;
+
+      console.log(`[PROJECTS DEBUG] Project ${project.id}:`, {
+        projCompanyId,
+        projSubcontractorId,
+        projSubcontractorParentId,
+        userCompanyId: userCompanyId?.toString()
+      });
 
       // Check if main contractor is directly assigned as company or subcontractor
       const isDirectlyAssigned = projCompanyId?.toString() === userCompanyId.toString() ||
@@ -272,10 +303,13 @@ export default function ProjectsPage() {
       }
 
       const shouldInclude = isDirectlyAssigned || isSubcontractorBelongsToUs || isInOurSubcontractorsList;
+      console.log(`[PROJECTS DEBUG] Project ${project.id}: ${shouldInclude ? 'INCLUDED' : 'EXCLUDED'} (direct=${isDirectlyAssigned}, parent=${isSubcontractorBelongsToUs}, list=${isInOurSubcontractorsList})`);
 
       return shouldInclude;
     });
 
+    console.log('[PROJECTS DEBUG] Filtered count:', filtered.length);
+    console.log('[PROJECTS DEBUG] ====== FILTERING END ======');
     debug('\n📦 [FRONTEND FILTER] Filtered projects count:', filtered.length);
     debug('========================================\n');
     return filtered;
