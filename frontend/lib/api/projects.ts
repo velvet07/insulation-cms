@@ -143,16 +143,9 @@ export const projectsApi = {
     debugLog('projects', '✓ Added pagination:', { page, pageSize });
 
     // Populate all direct relations plus nested parent_company for subcontractor
-    // Using deep populate syntax for Strapi v5
-    params.append('populate[company][populate]', '*');
-    params.append('populate[subcontractor][populate]', '*');
-    params.append('populate[subcontractor][populate][parent_company][populate]', '*');
-    params.append('populate[assigned_to][populate]', '*');
-    params.append('populate[approved_by][populate]', '*');
-    params.append('populate[sent_back_by][populate]', '*');
-    params.append('populate[tenant][populate]', '*');
-    params.append('populate[documents][populate]', '*');
-    params.append('populate[photos][populate]', '*');
+    // Backend controller (project.ts) will force the full populate object, 
+    // but we send a simple list here as a baseline.
+    params.append('populate', 'company,subcontractor,assigned_to,approved_by,sent_back_by,tenant,documents,photos');
     params.append('sort', 'createdAt:desc');
 
     const apiUrl = `/projects?${params.toString()}`;

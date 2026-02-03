@@ -41,31 +41,32 @@ function formatTimestampForFile(date: any) {
   return `${yyyy}_${mm}_${dd}_${hh}${mi}`;
 }
 
-const PROJECT_LIST_POPULATE = [
-  'company',
-  'company.parent_company',
-  'subcontractor',
-  'subcontractor.parent_company',
-  'assigned_to',
-];
+const PROJECT_LIST_POPULATE = {
+  company: { populate: '*' },
+  subcontractor: { 
+    populate: {
+      parent_company: { populate: '*' }
+    }
+  },
+  assigned_to: { populate: '*' },
+  approved_by: { populate: '*' },
+  sent_back_by: { populate: '*' },
+  tenant: { populate: '*' },
+  documents: { populate: '*' },
+  photos: { populate: '*' }
+};
 
 export default factories.createCoreController('api::project.project', ({ strapi }) => ({
   /**
-   * Override find so the list always includes subcontractor.parent_company (Fővállalkozó oszlop).
+   * Override find so the list always includes essential relations.
    */
   async find(ctx: any) {
     const query = { ...ctx.query };
-    query.populate = query.populate ?? PROJECT_LIST_POPULATE;
-    if (query.populate === '*' || (Array.isArray(query.populate) && query.populate.length === 0)) {
-      query.populate = PROJECT_LIST_POPULATE;
-    } else if (Array.isArray(query.populate)) {
-      const hasSubParent = query.populate.some(
-        (p: any) => p === 'subcontractor.parent_company' || (typeof p === 'object' && p?.subcontractor?.populate?.includes?.('parent_company'))
-      );
-      if (!hasSubParent) {
-        query.populate = [...query.populate, 'subcontractor.parent_company'];
-      }
-    }
+    
+    // Force essential populates to ensure frontend filtering works
+    // and to bypass potential permission stripping issues if possible
+    query.populate = PROJECT_LIST_POPULATE;
+    
     ctx.query = query;
     return (strapi as any).service('api::project.project').find(ctx);
   },
