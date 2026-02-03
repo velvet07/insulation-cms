@@ -25,7 +25,6 @@ import {
 import { projectsApi, type ProjectFilters, type PaginationMeta } from '@/lib/api/projects';
 import type { Project, Company } from '@/types';
 import { companiesApi } from '@/lib/api/companies';
-import { getRelationId } from '@/lib/utils/relation-id';
 import { useAuthStore } from '@/lib/store/auth';
 import { isAdminRole, isMainContractor } from '@/lib/utils/user-role';
 import { usePermission } from '@/lib/contexts/permission-context';
@@ -242,18 +241,10 @@ export default function ProjectsPage() {
       return allProjects;
     }
 
-    // Subcontractor: only show projects where they are subcontractor or company (safety filter; use getRelationId for Strapi v5 relation shape)
+    // Subcontractor: backend already filters by (company OR subcontractor) = userCompanyId; show all returned (no frontend re-filter to avoid relation-shape issues).
     if (isSubcontractorCompany) {
-      const ourDocId = userCompanyId.toString();
-      const ourNumericId = (userCompany as any)?.id != null ? String((userCompany as any).id) : null;
-      const filtered = allProjects.filter((project) => {
-        const projCompanyId = getRelationId(project.company);
-        const projSubcontractorId = getRelationId(project.subcontractor);
-        const match = (id: string | null) => id === ourDocId || (ourNumericId && id === ourNumericId);
-        return match(projSubcontractorId) || match(projCompanyId);
-      });
-      console.log('✅ [FRONTEND FILTER] Subcontractor safety filter:', filtered.length, 'of', allProjects.length);
-      return filtered;
+      console.log('✅ [FRONTEND FILTER] Subcontractor: showing all projects from API (backend filtered):', allProjects.length);
+      return allProjects;
     }
 
     // Main contractor: filter to show only projects related to them
