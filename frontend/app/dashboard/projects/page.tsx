@@ -118,25 +118,14 @@ export default function ProjectsPage() {
 
   // Get user company ID
   const userCompanyId = useMemo(() => {
-    if (!user?.company) {
-      debug('💼 [COMPANY] User has no company');
-      return null;
-    }
-    const id = typeof user.company === 'object' ? (user.company as any).documentId || (user.company as any).id : user.company;
-    debug('💼 [COMPANY] userCompanyId calculated:', id, 'from user.company:', user?.company);
-    return id;
+    if (!user?.company) return null;
+    return typeof user.company === 'object' ? (user.company as any).documentId || (user.company as any).id : user.company;
   }, [user]);
 
   // Fetch user's company details to get subcontractors list and type
   const { data: fetchedCompany, isLoading: isLoadingCompany } = useQuery({
     queryKey: ['company', userCompanyId, 'with-subs'],
-    queryFn: async () => {
-      debug('🏢 [COMPANY] Fetching company details for:', userCompanyId);
-      const res = await companiesApi.getOne(userCompanyId!, 'subcontractors');
-      debug('🏢 [COMPANY] Fetched company details:', res);
-      debug('🏢 [COMPANY] Subcontractors count:', res?.subcontractors?.length || 0);
-      return res;
-    },
+    queryFn: () => companiesApi.getOne(userCompanyId!, 'subcontractors'),
     enabled: !!userCompanyId,
   });
 
