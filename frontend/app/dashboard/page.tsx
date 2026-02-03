@@ -39,7 +39,7 @@ export default function DashboardPage() {
 
   // Use fetched company data, falling back to user.company from auth store
   const userCompany = fetchedCompany || (typeof user?.company === 'object' ? user.company : null);
-  const isSubcontractorCompany = userCompany?.type === 'subcontractor' || userCompany?.type === 'Alvállalkozó';
+  const isSubcontractorCompany = (userCompany as any)?.type === 'subcontractor';
 
   // Build filters for data isolation
   const filters: any = {};
