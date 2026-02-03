@@ -725,7 +725,17 @@ export interface ApiProjectProject extends Struct.CollectionTypeSchema {
     publishedAt: Schema.Attribute.DateTime;
     scheduled_date: Schema.Attribute.Date;
     status: Schema.Attribute.Enumeration<
-      ['pending', 'in_progress', 'ready_for_review', 'approved', 'completed']
+      [
+        'pending',
+        'in_progress',
+        'scheduled',
+        'execution_completed',
+        'ready_for_review',
+        'sent_back_for_revision',
+        'approved',
+        'completed',
+        'archived'
+      ]
     > &
       Schema.Attribute.DefaultTo<'pending'>;
     tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'>;
