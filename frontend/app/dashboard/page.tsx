@@ -123,6 +123,8 @@ export default function DashboardPage() {
         const p0 = allProjects[0] as any;
         console.log('  [DEBUG] First project raw:', p0);
         console.log('  [DEBUG] First project .company:', p0?.company, '.subcontractor:', p0?.subcontractor);
+        console.log('  [DEBUG] First project keys:', Object.keys(p0));
+        if (p0.attributes) console.log('  [DEBUG] Attributes keys:', Object.keys(p0.attributes));
       }
       const filtered = allProjects.filter((project: Project) => {
         const projSubcontractorId = getProjectRelationId(project as any, 'subcontractor');

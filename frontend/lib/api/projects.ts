@@ -144,15 +144,15 @@ export const projectsApi = {
 
     // Populate all direct relations plus nested parent_company for subcontractor
     // Using deep populate syntax for Strapi v5
-    params.append('populate[company]', '*');
-    params.append('populate[subcontractor]', '*');
-    params.append('populate[subcontractor][populate][parent_company]', '*');
-    params.append('populate[assigned_to]', '*');
-    params.append('populate[approved_by]', '*');
-    params.append('populate[sent_back_by]', '*');
-    params.append('populate[tenant]', '*');
-    params.append('populate[documents]', '*');
-    params.append('populate[photos]', '*');
+    params.append('populate[company][populate]', '*');
+    params.append('populate[subcontractor][populate]', '*');
+    params.append('populate[subcontractor][populate][parent_company][populate]', '*');
+    params.append('populate[assigned_to][populate]', '*');
+    params.append('populate[approved_by][populate]', '*');
+    params.append('populate[sent_back_by][populate]', '*');
+    params.append('populate[tenant][populate]', '*');
+    params.append('populate[documents][populate]', '*');
+    params.append('populate[photos][populate]', '*');
     params.append('sort', 'createdAt:desc');
 
     const apiUrl = `/projects?${params.toString()}`;
