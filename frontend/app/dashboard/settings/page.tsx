@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -74,6 +75,7 @@ const companySchema = z.object({
 type CompanyFormValues = z.infer<typeof companySchema>;
 
 export default function SettingsPage() {
+  const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const { can } = usePermission();
   const queryClient = useQueryClient();
@@ -684,12 +686,20 @@ export default function SettingsPage() {
                     Felhasználók kezelése
                   </CardTitle>
                 </div>
-                {can('settings', 'manage_users') && (
-                  <Button onClick={() => { setIsUserDialogOpen(true); setEditingUser(null); }}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Új felhasználó
-                  </Button>
-                )}
+                <div className="flex gap-2">
+                  {isAdmin && (
+                    <Button variant="outline" onClick={() => router.push('/create-user')}>
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      Regisztráció oldal
+                    </Button>
+                  )}
+                  {can('settings', 'manage_users') && (
+                    <Button onClick={() => { setIsUserDialogOpen(true); setEditingUser(null); }}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Új felhasználó
+                    </Button>
+                  )}
+                </div>
               </div>
             </CardHeader>
             <CardContent>

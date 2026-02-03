@@ -7,7 +7,7 @@ export default [
       contentSecurityPolicy: {
         useDefaults: true,
         directives: {
-          'frame-ancestors': ["'self'", 'http://localhost:3000', 'http://localhost:3001', 'https://cms.emermedia.eu', /^https:\/\/.*\.emermedia\.eu$/, 'https://app.thermodesk.eu', /^https:\/\/.*\.thermodesk\.eu$/],
+          'frame-ancestors': ["'self'", 'http://localhost:3000', 'http://localhost:3001', 'https://cms.emermedia.eu', 'https://app.thermodesk.eu', 'https://thermodesk.eu', 'https://www.thermodesk.eu'],
         },
       },
       frameguard: {
@@ -18,6 +18,7 @@ export default [
   {
     name: 'strapi::cors',
     config: {
+      enabled: true,
       origin: [
         'http://localhost:3000',
         'http://localhost:3001',
@@ -25,18 +26,18 @@ export default [
         'https://thermodesk.vercel.app',
         'https://app.thermodesk.eu',
         'https://thermodesk.eu',
-        /^https:\/\/.*\.emermedia\.eu$/,
-        /^https:\/\/.*\.vercel\.app$/,
-        /^https:\/\/.*\.thermodesk\.eu$/,
+        'https://www.thermodesk.eu',
       ],
       headers: [
         'Content-Type',
         'Authorization',
         'Origin',
         'Accept',
+        'X-Requested-With',
       ],
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'],
       credentials: true,
+      keepHeaderOnError: true,
     },
   },
   'strapi::poweredBy',

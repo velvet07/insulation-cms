@@ -116,10 +116,6 @@ export default function LoginPage() {
             <CardDescription className="text-center text-base">
               Adja meg az email címét vagy felhasználónevét és jelszavát
             </CardDescription>
-            <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-xs text-blue-700 dark:text-blue-300 text-center border border-blue-200 dark:border-blue-800">
-              <strong>Megjegyzés:</strong> Admin felhasználók nem használhatják ezt az oldalt. 
-              Kérjük, használjon normál felhasználói fiókot.
-            </div>
           </CardHeader>
           <CardContent>
             <Form {...form}>
@@ -179,18 +175,6 @@ export default function LoginPage() {
                 >
                   {isLoading ? 'Bejelentkezés...' : 'Bejelentkezés'}
                 </Button>
-
-                <div className="text-center text-sm space-y-2 pt-2">
-                  <p className="text-gray-600 dark:text-gray-400">
-                    Nincs még felhasználói fiókod?
-                  </p>
-                  <a 
-                    href="/create-user" 
-                    className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline font-medium transition-colors"
-                  >
-                    Felhasználó létrehozása
-                  </a>
-                </div>
               </form>
             </Form>
           </CardContent>
