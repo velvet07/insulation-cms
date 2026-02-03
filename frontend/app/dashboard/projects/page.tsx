@@ -28,7 +28,7 @@ import { companiesApi } from '@/lib/api/companies';
 import { useAuthStore } from '@/lib/store/auth';
 import { isAdminRole, isMainContractor } from '@/lib/utils/user-role';
 import { usePermission } from '@/lib/contexts/permission-context';
-import { Plus, Search, Eye, Edit, Trash2, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, Eye, Edit, Trash2, Download, ChevronLeft, ChevronRight, Upload } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 
 const statusLabels: Record<Project['status'], string> = {
@@ -425,10 +425,16 @@ export default function ProjectsPage() {
                 </Button>
               )}
               {can('projects', 'create') && (
-                <Button onClick={() => router.push('/dashboard/projects/new')}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Új projekt
-                </Button>
+                <>
+                  <Button variant="outline" onClick={() => router.push('/dashboard/projects/import')}>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Import
+                  </Button>
+                  <Button onClick={() => router.push('/dashboard/projects/new')}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Új projekt
+                  </Button>
+                </>
               )}
             </div>
           </div>
