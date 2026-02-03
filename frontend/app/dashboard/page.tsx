@@ -30,120 +30,80 @@ export default function DashboardPage() {
     return user.company;
   }, [user]);
 
-  // Fetch user's company details to get subcontractors list
-  const { data: fetchedCompany } = useQuery({
+  // Fetch user's company details to get subcontractors list and type
+  const { data: fetchedCompany, isLoading: isLoadingCompany } = useQuery({
     queryKey: ['company', userCompanyId, 'with-subs'],
     queryFn: () => companiesApi.getOne(userCompanyId!, 'subcontractors'),
     enabled: !!userCompanyId,
   });
 
-  // Use fetched company data, falling back to user.company from auth store
+  // Use fetched company data (has type field), falling back to user.company from auth store
   const userCompany = fetchedCompany || (typeof user?.company === 'object' ? user.company : null);
   const isSubcontractorCompany = (userCompany as any)?.type === 'subcontractor';
-  const isMainContractorCompany = (userCompany as any)?.type === 'main_contractor';
-
-  // DEBUG: Log company info
-  console.log('[DASHBOARD DEBUG] userCompanyId:', userCompanyId);
-  console.log('[DASHBOARD DEBUG] userCompany:', userCompany);
-  console.log('[DASHBOARD DEBUG] userCompany.type:', (userCompany as any)?.type);
-  console.log('[DASHBOARD DEBUG] isSubcontractorCompany:', isSubcontractorCompany);
-  console.log('[DASHBOARD DEBUG] isMainContractorCompany:', isMainContractorCompany);
-  console.log('[DASHBOARD DEBUG] isAdmin:', isAdmin);
-  console.log('[DASHBOARD DEBUG] fetchedCompany:', fetchedCompany);
-  console.log('[DASHBOARD DEBUG] fetchedCompany.subcontractors:', (fetchedCompany as any)?.subcontractors);
 
   // Build filters for data isolation
-  const filters: any = {};
-  if (!isAdmin) {
-    if (isSubcontractorCompany && userCompanyId) {
-      filters.subcontractor = userCompanyId;
-    } else if (!userCompanyId && user?.id) {
-      filters.assigned_to = user.id;
+  const filters: any = useMemo(() => {
+    const f: any = {};
+    if (!isAdmin) {
+      if (isSubcontractorCompany && userCompanyId) {
+        f.subcontractor = userCompanyId;
+      } else if (!userCompanyId && user?.id) {
+        f.assigned_to = user.id;
+      }
+      // Main contractor: NO backend filter - gets all projects, filtered on frontend
     }
-    // Main contractor: NO backend filter - gets all projects, filtered on frontend
-  }
+    return f;
+  }, [isAdmin, isSubcontractorCompany, userCompanyId, user?.id]);
 
-  console.log('[DASHBOARD DEBUG] filters being sent to API:', filters);
+  // Wait for company data to load before fetching projects (to apply correct filters)
+  // Admin or users without company can proceed immediately
+  const canFetchProjects = isAdmin || !userCompanyId || !isLoadingCompany;
 
   const { data: projectsResponse, isLoading } = useQuery({
     queryKey: ['projects', filters],
     queryFn: () => projectsApi.getAll(filters),
+    enabled: canFetchProjects,
   });
   const allProjects = projectsResponse?.data || [];
 
-  console.log('[DASHBOARD DEBUG] allProjects from API:', allProjects.length);
-  if (allProjects.length > 0) {
-    console.log('[DASHBOARD DEBUG] First project:', allProjects[0]);
-    console.log('[DASHBOARD DEBUG] First project company:', allProjects[0]?.company);
-    console.log('[DASHBOARD DEBUG] First project subcontractor:', allProjects[0]?.subcontractor);
-  }
-
   // Frontend filtering for main contractors
   const projects = useMemo(() => {
-    console.log('[DASHBOARD FILTER] Starting filter...');
-    console.log('[DASHBOARD FILTER] isAdmin:', isAdmin);
-    console.log('[DASHBOARD FILTER] userCompanyId:', userCompanyId);
-    console.log('[DASHBOARD FILTER] isSubcontractorCompany:', isSubcontractorCompany);
-    console.log('[DASHBOARD FILTER] allProjects.length:', allProjects.length);
-
-    // Admin, main contractor, and users without company see all projects
-    // Main contractor sees all because they need oversight of all work
-    // Subcontractor projects are filtered by backend
-    if (isAdmin || !userCompanyId || isSubcontractorCompany || isMainContractorCompany) {
-      console.log('[DASHBOARD FILTER] Returning all projects - reason:',
-        isAdmin ? 'admin' :
-        isMainContractorCompany ? 'main contractor (sees all)' :
-        !userCompanyId ? 'no company' : 'subcontractor');
+    // Admin sees all, subcontractor projects filtered by backend
+    if (isAdmin || !userCompanyId || isSubcontractorCompany) {
       return allProjects;
     }
 
-    // Main contractor: filter to show projects where they are company OR subcontractor OR project subcontractor is theirs
-    console.log('[DASHBOARD FILTER] Main contractor filtering...');
-    console.log('[DASHBOARD FILTER] userCompany.subcontractors:', (userCompany as any)?.subcontractors);
-
-    const filtered = allProjects.filter((project: Project) => {
+    // Main contractor: filter to show projects where:
+    // 1. They are the project's company
+    // 2. They are the project's subcontractor
+    // 3. The project's subcontractor belongs to them (subcontractor.parent_company matches)
+    // 4. The project's subcontractor is in their subcontractors list
+    return allProjects.filter((project: Project) => {
       const projCompanyId = project.company?.documentId || project.company?.id;
       const projSubcontractorId = project.subcontractor?.documentId || project.subcontractor?.id;
       const projSubcontractorParentId = (project.subcontractor as any)?.parent_company?.documentId ||
         (project.subcontractor as any)?.parent_company?.id;
 
-      console.log(`[DASHBOARD FILTER] Project ${project.id}:`, {
-        projCompanyId,
-        projSubcontractorId,
-        projSubcontractorParentId,
-        userCompanyId: userCompanyId?.toString()
-      });
-
       // Direct assignment
       if (projCompanyId?.toString() === userCompanyId.toString() ||
         projSubcontractorId?.toString() === userCompanyId.toString()) {
-        console.log(`[DASHBOARD FILTER] Project ${project.id}: INCLUDED (direct assignment)`);
         return true;
       }
 
       // Check if project subcontractor's parent_company is this main contractor
       if (projSubcontractorParentId?.toString() === userCompanyId.toString()) {
-        console.log(`[DASHBOARD FILTER] Project ${project.id}: INCLUDED (subcontractor parent_company)`);
         return true;
       }
 
       // Check if project subcontractor is in our subcontractors list (fallback)
       if ((userCompany as any)?.subcontractors && projSubcontractorId) {
-        const found = (userCompany as any).subcontractors.some((sub: any) =>
+        return (userCompany as any).subcontractors.some((sub: any) =>
           (sub.documentId || sub.id)?.toString() === projSubcontractorId.toString()
         );
-        if (found) {
-          console.log(`[DASHBOARD FILTER] Project ${project.id}: INCLUDED (in subcontractors list)`);
-          return true;
-        }
       }
 
-      console.log(`[DASHBOARD FILTER] Project ${project.id}: EXCLUDED`);
       return false;
     });
-
-    console.log('[DASHBOARD FILTER] Filtered count:', filtered.length);
-    return filtered;
   }, [allProjects, isAdmin, userCompanyId, isSubcontractorCompany, userCompany]);
 
   // Számoljuk a projekteket státusz szerint

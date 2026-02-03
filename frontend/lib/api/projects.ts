@@ -111,23 +111,28 @@ export const projectsApi = {
         debugLog('projects', '✓ Added company filter (id):', companyId);
       }
     }
+    // Track $and index for combining multiple OR conditions
+    let andIndex = 0;
+
     if (filters?.subcontractor) {
       // Strapi v5 uses documentId, try both id and documentId
+      // For subcontractor users: show projects where company OR subcontractor matches their company
       const subcontractorId = filters.subcontractor.toString();
-      if (subcontractorId.includes('-') || subcontractorId.length > 10 || isNaN(Number(subcontractorId))) {
-        // It's a documentId (string)
-        params.append('filters[subcontractor][documentId][$eq]', subcontractorId);
-        debugLog('projects', '✓ Added subcontractor filter (documentId):', subcontractorId);
-      } else {
-        // It's a numeric id
-        params.append('filters[subcontractor][id][$eq]', subcontractorId);
-        debugLog('projects', '✓ Added subcontractor filter (id):', subcontractorId);
-      }
+      const isDocumentId = subcontractorId.includes('-') || subcontractorId.length > 10 || isNaN(Number(subcontractorId));
+      const idField = isDocumentId ? 'documentId' : 'id';
+
+      // Use $and[$or] to match either company OR subcontractor
+      params.append(`filters[$and][${andIndex}][$or][0][company][${idField}][$eq]`, subcontractorId);
+      params.append(`filters[$and][${andIndex}][$or][1][subcontractor][${idField}][$eq]`, subcontractorId);
+      debugLog('projects', '✓ Added OR filter (company OR subcontractor):', subcontractorId);
+      andIndex++;
     }
     if (filters?.search) {
-      params.append('filters[$or][0][client_name][$contains]', filters.search);
-      params.append('filters[$or][1][client_address][$contains]', filters.search);
+      // Use $and[$or] for search to not conflict with subcontractor filter
+      params.append(`filters[$and][${andIndex}][$or][0][client_name][$contains]`, filters.search);
+      params.append(`filters[$and][${andIndex}][$or][1][client_address][$contains]`, filters.search);
       debugLog('projects', '✓ Added search filter:', filters.search);
+      andIndex++;
     }
 
     // Pagination parameters
