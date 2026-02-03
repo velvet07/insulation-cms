@@ -14,6 +14,7 @@ import { useAuthStore } from '@/lib/store/auth';
 import { isAdminRole } from '@/lib/utils/user-role';
 import { usePermission } from '@/lib/contexts/permission-context';
 import { companiesApi } from '@/lib/api/companies';
+import { getRelationId } from '@/lib/utils/relation-id';
 import { Plus, Eye } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -113,13 +114,15 @@ export default function DashboardPage() {
       return allProjects;
     }
 
-    // Subcontractor: only show projects where they are the subcontractor or company (safety filter even if backend filtered)
+    // Subcontractor: only show projects where they are the subcontractor or company (safety filter; use getRelationId for Strapi v5 relation shape)
     if (isSubcontractorCompany) {
+      const ourDocId = userCompanyId.toString();
+      const ourNumericId = (userCompany as any)?.id != null ? String((userCompany as any).id) : null;
       const filtered = allProjects.filter((project: Project) => {
-        const projCompanyId = (project.company as any)?.documentId || (project.company as any)?.id;
-        const projSubcontractorId = (project.subcontractor as any)?.documentId || (project.subcontractor as any)?.id;
-        const ourId = userCompanyId.toString();
-        return projSubcontractorId?.toString() === ourId || projCompanyId?.toString() === ourId;
+        const projCompanyId = getRelationId(project.company);
+        const projSubcontractorId = getRelationId(project.subcontractor);
+        const match = (id: string | null) => id === ourDocId || (ourNumericId && id === ourNumericId);
+        return match(projSubcontractorId) || match(projCompanyId);
       });
       console.log('  → Subcontractor safety filter:', filtered.length, 'of', allProjects.length);
       return filtered;
