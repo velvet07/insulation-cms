@@ -69,7 +69,15 @@ export default {
     try {
       // Létrehozzuk a default fénykép kategóriákat, ha még nem léteznek
       const photoCategoryService = strapi.documents('api::photo-category.photo-category');
-      
+
+      // Helper to generate slug from name
+      const generateSlug = (name: string) => name
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '') // Remove accents
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '');
+
       for (const categoryData of defaultPhotoCategories) {
         try {
           // Ellenőrizzük, hogy létezik-e már ilyen névvel
@@ -78,18 +86,20 @@ export default {
             limit: 1,
           });
 
-          if (existing.results && existing.results.length > 0) {
+          // findMany returns array directly in Strapi v5
+          if (existing && existing.length > 0) {
             console.log(`⏭️  Photo category "${categoryData.name}" already exists, skipping...`);
             continue;
           }
 
-          // Létrehozzuk a kategóriát
+          // Létrehozzuk a kategóriát (slug required)
           await photoCategoryService.create({
             data: {
               name: categoryData.name,
+              slug: generateSlug(categoryData.name),
               order: categoryData.order,
               required: categoryData.required,
-            },
+            } as any, // Cast to any to bypass strict typing
           });
 
           console.log(`✅ Created default photo category: "${categoryData.name}"`);
