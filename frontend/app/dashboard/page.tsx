@@ -86,9 +86,14 @@ export default function DashboardPage() {
     console.log('[DASHBOARD FILTER] isSubcontractorCompany:', isSubcontractorCompany);
     console.log('[DASHBOARD FILTER] allProjects.length:', allProjects.length);
 
-    // Admin and subcontractor see all their projects (already filtered by backend for subcontractor)
-    if (isAdmin || !userCompanyId || isSubcontractorCompany) {
-      console.log('[DASHBOARD FILTER] Returning all projects - reason:', isAdmin ? 'admin' : !userCompanyId ? 'no company' : 'subcontractor');
+    // Admin, main contractor, and users without company see all projects
+    // Main contractor sees all because they need oversight of all work
+    // Subcontractor projects are filtered by backend
+    if (isAdmin || !userCompanyId || isSubcontractorCompany || isMainContractorCompany) {
+      console.log('[DASHBOARD FILTER] Returning all projects - reason:',
+        isAdmin ? 'admin' :
+        isMainContractorCompany ? 'main contractor (sees all)' :
+        !userCompanyId ? 'no company' : 'subcontractor');
       return allProjects;
     }
 

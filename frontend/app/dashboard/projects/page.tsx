@@ -246,11 +246,19 @@ export default function ProjectsPage() {
     debug('🔍 [FRONTEND FILTER] Is Subcontractor:', isSubcontractor);
     debug('🔍 [FRONTEND FILTER] User Company Type:', userCompany?.type);
 
-    // Admin sees all, subcontractors already filtered by backend, no company = no filter
-    if (isAdmin || !userCompanyId || isSubcontractor) {
-      console.log('[PROJECTS DEBUG] Returning ALL - reason:', isAdmin ? 'admin' : !userCompanyId ? 'no company' : 'subcontractor');
-      debug('✅ [FRONTEND FILTER] Returning ALL projects (Admin/NoCompany/Subcontractor)');
-      debug('   Reason:', isAdmin ? 'Admin' : !userCompanyId ? 'No Company' : 'Subcontractor');
+    // Check if user is main contractor
+    const isMainContractor = userCompany?.type === 'main_contractor';
+
+    // Admin, main contractor, and users without company see all projects
+    // Main contractor sees all because they need oversight of all work
+    // Subcontractor projects are filtered by backend
+    if (isAdmin || !userCompanyId || isSubcontractor || isMainContractor) {
+      console.log('[PROJECTS DEBUG] Returning ALL - reason:',
+        isAdmin ? 'admin' :
+        isMainContractor ? 'main contractor (sees all)' :
+        !userCompanyId ? 'no company' : 'subcontractor');
+      debug('✅ [FRONTEND FILTER] Returning ALL projects (Admin/NoCompany/Subcontractor/MainContractor)');
+      debug('   Reason:', isAdmin ? 'Admin' : isMainContractor ? 'Main Contractor' : !userCompanyId ? 'No Company' : 'Subcontractor');
       return allProjects;
     }
 
