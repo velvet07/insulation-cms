@@ -1,40 +1,24 @@
 // Helper function to check if user has admin role
 export function isAdminRole(user: any): boolean {
-  if (!user) {
+  if (!user || !user.role) {
     return false;
   }
 
-  // Check role if present
-  if (user.role) {
-    // If role is a string - case insensitive check
-    if (typeof user.role === 'string') {
-      const roleLower = user.role.toLowerCase();
-      // Accept common admin-like role strings (e.g. "Admin", "Administrator", "Super Admin")
-      if (roleLower === 'admin' || roleLower.includes('admin')) {
-        return true;
-      }
-    }
-
-    // If role is an object (Strapi role relation)
-    if (typeof user.role === 'object' && user.role !== null) {
-      const roleName = (user.role as any).name?.toLowerCase() || '';
-      const roleType = (user.role as any).type?.toLowerCase() || '';
-      // IMPORTANT:
-      // - users-permissions "Authenticated" is NOT an admin role
-      // - numeric role IDs (e.g. 1/2) are not reliable indicators of admin
-      if (roleName === 'admin' || roleType === 'admin' || roleName.includes('admin')) {
-        return true;
-      }
-    }
+  // If role is a string - case insensitive check
+  if (typeof user.role === 'string') {
+    const roleLower = user.role.toLowerCase();
+    // Accept common admin-like role strings (e.g. "Admin", "Administrator", "Super Admin")
+    return roleLower === 'admin' || roleLower.includes('admin');
   }
 
-  // Fallback: check if username contains 'admin' (case insensitive)
-  // This helps when role detection fails but user is named as admin
-  if (user.username) {
-    const usernameLower = user.username.toLowerCase();
-    if (usernameLower.includes('admin')) {
-      return true;
-    }
+  // If role is an object (Strapi role relation)
+  if (typeof user.role === 'object' && user.role !== null) {
+    const roleName = (user.role as any).name?.toLowerCase() || '';
+    const roleType = (user.role as any).type?.toLowerCase() || '';
+    // IMPORTANT:
+    // - users-permissions "Authenticated" is NOT an admin role
+    // - numeric role IDs (e.g. 1/2) are not reliable indicators of admin
+    return roleName === 'admin' || roleType === 'admin' || roleName.includes('admin');
   }
 
   return false;
