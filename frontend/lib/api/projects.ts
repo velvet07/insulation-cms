@@ -155,7 +155,10 @@ export const projectsApi = {
     console.log('📡 [PROJECTS API] Filters received:', filters);
 
     try {
-      const response = await strapiApi.get<StrapiResponse<Project[]>>(apiUrl);
+      const response = await strapiApi.get<StrapiResponse<Project[]>>(apiUrl, {
+        // Prefer user JWT so relations aren't stripped by API token permissions.
+        _useJwtToken: true,
+      } as any);
       debugLog('projects', 'Response received:', {
         hasData: !!response.data,
         isArray: Array.isArray(response.data),
