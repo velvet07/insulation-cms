@@ -173,14 +173,28 @@ export const projectsApi = {
           paginationMeta.total = data.length;
           paginationMeta.pageCount = Math.ceil(data.length / pageSize);
         }
-        debugLog('projects', 'Returning', data.length, 'projects (v4/v5 format)', paginationMeta);
+        debugLog('projects', 'Returning', data.length, 'projects (v4/v5 data format)', paginationMeta);
+      } else if (payload && Array.isArray(payload.results)) {
+        // Strapi v5 document service format uses "results" instead of "data"
+        data = payload.results;
+        // Update pagination from response if available
+        if (payload.pagination) {
+          paginationMeta.page = payload.pagination.page || page;
+          paginationMeta.pageSize = payload.pagination.pageSize || pageSize;
+          paginationMeta.pageCount = payload.pagination.pageCount || 1;
+          paginationMeta.total = payload.pagination.total || data.length;
+        } else {
+          paginationMeta.total = data.length;
+          paginationMeta.pageCount = Math.ceil(data.length / pageSize);
+        }
+        debugLog('projects', 'Returning', data.length, 'projects (v5 results format)', paginationMeta);
       } else if (Array.isArray(payload)) {
         data = payload;
         paginationMeta.total = data.length;
         paginationMeta.pageCount = Math.ceil(data.length / pageSize);
         debugLog('projects', 'Returning', data.length, 'projects (array format)', paginationMeta);
       } else {
-        debugLog('projects', 'Unexpected response format, returning empty array');
+        debugLog('projects', 'Unexpected response format, returning empty array', payload);
       }
 
       return {
