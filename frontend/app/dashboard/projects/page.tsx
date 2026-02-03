@@ -25,7 +25,7 @@ import {
 import { projectsApi, type ProjectFilters, type PaginationMeta } from '@/lib/api/projects';
 import type { Project, Company } from '@/types';
 import { companiesApi } from '@/lib/api/companies';
-import { getRelationId } from '@/lib/utils/relation-id';
+import { getProjectRelationId } from '@/lib/utils/relation-id';
 import { useAuthStore } from '@/lib/store/auth';
 import { isAdminRole, isMainContractor } from '@/lib/utils/user-role';
 import { usePermission } from '@/lib/contexts/permission-context';
@@ -248,8 +248,8 @@ export default function ProjectsPage() {
       const myNumericId = (userCompany as any)?.id != null ? String((userCompany as any).id) : null;
       const match = (id: string | null) => !!(id && (id === myDocId || (myNumericId && id === myNumericId)));
       const filtered = allProjects.filter((project) => {
-        const projSubcontractorId = getRelationId(project.subcontractor);
-        const projCompanyId = getRelationId(project.company);
+        const projSubcontractorId = getProjectRelationId(project as any, 'subcontractor');
+        const projCompanyId = getProjectRelationId(project as any, 'company');
         const hasSubcontractor = projSubcontractorId != null && projSubcontractorId !== '';
         if (hasSubcontractor) return match(projSubcontractorId);
         return match(projCompanyId);

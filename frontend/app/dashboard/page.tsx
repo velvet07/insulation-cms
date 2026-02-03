@@ -14,7 +14,7 @@ import { useAuthStore } from '@/lib/store/auth';
 import { isAdminRole } from '@/lib/utils/user-role';
 import { usePermission } from '@/lib/contexts/permission-context';
 import { companiesApi } from '@/lib/api/companies';
-import { getRelationId } from '@/lib/utils/relation-id';
+import { getProjectRelationId } from '@/lib/utils/relation-id';
 import { Plus, Eye } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -120,8 +120,8 @@ export default function DashboardPage() {
       const myNumericId = (userCompany as any)?.id != null ? String((userCompany as any).id) : null;
       const match = (id: string | null) => !!(id && (id === myDocId || (myNumericId && id === myNumericId)));
       const filtered = allProjects.filter((project: Project) => {
-        const projSubcontractorId = getRelationId(project.subcontractor);
-        const projCompanyId = getRelationId(project.company);
+        const projSubcontractorId = getProjectRelationId(project as any, 'subcontractor');
+        const projCompanyId = getProjectRelationId(project as any, 'company');
         const hasSubcontractor = projSubcontractorId != null && projSubcontractorId !== '';
         if (hasSubcontractor) return match(projSubcontractorId);
         return match(projCompanyId);

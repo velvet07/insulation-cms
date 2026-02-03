@@ -18,3 +18,27 @@ export function getRelationId(rel: unknown): string | null {
     attrs?.id;
   return id != null ? String(id) : null;
 }
+
+/**
+ * Get company or subcontractor id from a project, trying all common Strapi response shapes
+ * (root field, attributes, nested data).
+ */
+export function getProjectRelationId(
+  project: Record<string, unknown>,
+  field: 'company' | 'subcontractor'
+): string | null {
+  const direct = project[field];
+  const fromDirect = getRelationId(direct);
+  if (fromDirect) return fromDirect;
+  const attrs = project.attributes as Record<string, unknown> | undefined;
+  if (attrs) {
+    const fromAttrs = getRelationId(attrs[field]);
+    if (fromAttrs) return fromAttrs;
+  }
+  const relations = project.relations as Record<string, unknown> | undefined;
+  if (relations) {
+    const fromRels = getRelationId(relations[field]);
+    if (fromRels) return fromRels;
+  }
+  return null;
+}
