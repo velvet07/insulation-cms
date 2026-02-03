@@ -44,7 +44,7 @@ const projectSchema = z.object({
   client_zip: z.string().min(1, 'Az irányítószám kötelező'),
   client_phone: z.string().optional(),
   client_email: z.string().email('Érvényes email cím szükséges').optional().or(z.literal('')),
-  status: z.enum(['pending', 'in_progress', 'ready_for_review', 'sent_back_for_revision', 'approved', 'completed', 'archived']),
+  status: z.enum(['pending', 'in_progress', 'scheduled', 'execution_completed', 'ready_for_review', 'sent_back_for_revision', 'approved', 'completed', 'archived']),
   subcontractor: z.string().optional(),
 });
 
@@ -419,6 +419,8 @@ export default function EditProjectPage() {
                           <SelectContent>
                             <SelectItem value="pending">Függőben</SelectItem>
                             <SelectItem value="in_progress">Folyamatban</SelectItem>
+                            <SelectItem value="scheduled">Ütemezve</SelectItem>
+                            <SelectItem value="execution_completed">Kivitelezés elkészült</SelectItem>
                             <SelectItem value="ready_for_review">Átnézésre vár</SelectItem>
                             <SelectItem value="sent_back_for_revision">Visszaküldve javításra</SelectItem>
                             <SelectItem value="approved">Jóváhagyva</SelectItem>

@@ -76,7 +76,7 @@
     },
     "status": {
       "type": "enumeration",
-      "enum": ["pending", "in_progress", "ready_for_review", "sent_back_for_revision", "approved", "completed", "archived"],
+      "enum": ["pending", "in_progress", "scheduled", "execution_completed", "ready_for_review", "sent_back_for_revision", "approved", "completed", "archived"],
       "default": "pending"
     },
     "insulation_option": {

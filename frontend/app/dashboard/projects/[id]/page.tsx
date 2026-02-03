@@ -40,6 +40,7 @@ import { photoCategoriesApi } from '@/lib/api/photo-categories';
 import { documentsApi } from '@/lib/api/documents';
 import { companiesApi } from '@/lib/api/companies';
 import { isAdminRole } from '@/lib/utils/user-role';
+import { isContractDataComplete } from '@/lib/utils/project-contract';
 import {
   ArrowLeft,
   Edit,
@@ -82,6 +83,8 @@ import {
 const statusLabels: Record<Project['status'], string> = {
   pending: 'Függőben',
   in_progress: 'Folyamatban',
+  scheduled: 'Ütemezve',
+  execution_completed: 'Kivitelezés elkészült',
   ready_for_review: 'Átnézésre vár',
   sent_back_for_revision: 'Visszaküldve javításra',
   approved: 'Jóváhagyva',
@@ -92,6 +95,8 @@ const statusLabels: Record<Project['status'], string> = {
 const statusColors: Record<Project['status'], string> = {
   pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
   in_progress: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+  scheduled: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400',
+  execution_completed: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400',
   ready_for_review: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
   sent_back_for_revision: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
   approved: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
@@ -154,6 +159,22 @@ export default function ProjectDetailPage() {
       setScheduleEndTime('16:00');
     }
   }, [project?.scheduled_date]);
+
+  // Ütemezett dátum túlhaladása: scheduled → execution_completed
+  useEffect(() => {
+    if (!project || (!(project as any).documentId && (project as any).id == null)) return;
+    if (project.status !== 'scheduled' || !project.scheduled_date) return;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const scheduledDay = new Date(project.scheduled_date);
+    scheduledDay.setHours(0, 0, 0, 0);
+    if (scheduledDay >= today) return;
+    const id = (project as any).documentId || String((project as any).id);
+    projectsApi.update(id, { status: 'execution_completed' }).then(() => {
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+    }).catch(() => {});
+  }, [project?.id, project?.documentId, project?.status, project?.scheduled_date, projectId, queryClient]);
 
   const { data: documents = [] } = useQuery({
     queryKey: ['documents', projectId],
@@ -527,16 +548,22 @@ export default function ProjectDetailPage() {
     }
   };
 
-  // Ütemezés mentése
+  // Ütemezés mentése: szerződés adatok kötelezőek; státusz = Ütemezve (jövőbeli) vagy Kivitelezés elkészült (múltbeli)
   const saveScheduleMutation = useMutation({
     mutationFn: async () => {
       if (!scheduleDate) {
         throw new Error('Dátum megadása kötelező');
       }
+      if (!project) throw new Error('Projekt nem található');
+      if (!isContractDataComplete(project)) {
+        throw new Error('Ütemezés csak teljes szerződés adatokkal lehetséges. Töltse ki a Szerződés adatok fület.');
+      }
 
-      // Dátum és idő kombinálása
-      const [startHour, startMinute] = scheduleStartTime.split(':').map(Number);
-      const scheduledDateTime = new Date(`${scheduleDate}T${scheduleStartTime}:00`);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const scheduledDay = new Date(scheduleDate);
+      scheduledDay.setHours(0, 0, 0, 0);
+      const newStatus = scheduledDay > today ? 'scheduled' : 'execution_completed';
 
       const auditLogEntry = createAuditLogEntry(
         project?.scheduled_date ? 'scheduled_date_modified' : 'scheduled_date_set',
@@ -545,11 +572,11 @@ export default function ProjectDetailPage() {
       );
 
       const updateData: any = {
-        scheduled_date: scheduleDate, // Csak dátumot küldünk (date típus)
+        scheduled_date: scheduleDate,
+        status: newStatus,
         audit_log: addAuditLogEntry(project?.audit_log || [], auditLogEntry),
       };
 
-      // Szűrjük ki a szerveren még nem létező mezőket
       const fieldsNotOnServer = ['audit_log'];
       const cleanUpdateData = Object.fromEntries(
         Object.entries(updateData).filter(([key]) => !fieldsNotOnServer.includes(key))
@@ -732,7 +759,8 @@ export default function ProjectDetailPage() {
   const photosReady = requiredCategories.length > 0 &&
     categoriesWithPhotos.length === requiredCategories.length;
 
-  const canBeSentForReview = project.status === 'in_progress' &&
+  // Átnézésre küldés: folyamatban vagy kivitelezés elkészült, és az Összesítő OK (szerződés + doksi + fotó)
+  const canBeSentForReview = (project.status === 'in_progress' || project.status === 'execution_completed') &&
     contractFilled &&
     docsReady &&
     photosReady;
@@ -794,7 +822,7 @@ export default function ProjectDetailPage() {
                   Munka megkezdése
                 </Button>
               )}
-              {project.status === 'in_progress' && can('projects', 'edit') && (
+              {canBeSentForReview && !isMainContractor && !isAdmin && can('projects', 'edit') && (
                 <Button
                   size="sm"
                   variant="secondary"
@@ -802,6 +830,17 @@ export default function ProjectDetailPage() {
                   disabled={isUpdatingStatus}
                 >
                   Átnézésre küldés
+                </Button>
+              )}
+              {project.status === 'ready_for_review' && !isMainContractor && !isAdmin && can('projects', 'edit') && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-amber-600 border-amber-200 hover:bg-amber-50"
+                  onClick={() => handleStatusChange('in_progress')}
+                  disabled={isUpdatingStatus}
+                >
+                  Visszavonás átnézésről
                 </Button>
               )}
               {project.status === 'ready_for_review' && (isMainContractor || isAdmin) && can('projects', 'approve') && (
@@ -1280,10 +1319,15 @@ export default function ProjectDetailPage() {
                   </div>
                 </div>
 
+                {!contractFilled && (
+                  <p className="text-sm text-amber-600 dark:text-amber-400 mb-2">
+                    Ütemezés csak teljes szerződés adatokkal lehetséges. Töltse ki a „Szerződés adatok” fület.
+                  </p>
+                )}
                 <div className="flex items-center gap-3 pt-2 border-t">
                   <Button
                     onClick={handleSaveSchedule}
-                    disabled={isSavingSchedule || !scheduleDate}
+                    disabled={isSavingSchedule || !scheduleDate || !contractFilled}
                     size="sm"
                   >
                     <Save className="mr-2 h-4 w-4" />

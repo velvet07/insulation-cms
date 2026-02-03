@@ -67,7 +67,7 @@ export interface Project extends StrapiEntity {
   client_email?: string;
   title: string;
   area_sqm?: number;
-  status: 'pending' | 'in_progress' | 'ready_for_review' | 'sent_back_for_revision' | 'approved' | 'completed' | 'archived';
+  status: 'pending' | 'in_progress' | 'scheduled' | 'execution_completed' | 'ready_for_review' | 'sent_back_for_revision' | 'approved' | 'completed' | 'archived';
   insulation_option?: 'A' | 'B';
   assigned_to?: User;
   tenant?: Tenant;

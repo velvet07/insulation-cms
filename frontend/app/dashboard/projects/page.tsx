@@ -35,6 +35,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 const statusLabels: Record<Project['status'], string> = {
   pending: 'Függőben',
   in_progress: 'Folyamatban',
+  scheduled: 'Ütemezve',
+  execution_completed: 'Kivitelezés elkészült',
   ready_for_review: 'Átnézésre vár',
   sent_back_for_revision: 'Visszaküldve javításra',
   approved: 'Jóváhagyva',
@@ -45,6 +47,8 @@ const statusLabels: Record<Project['status'], string> = {
 const statusColors: Record<Project['status'], string> = {
   pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
   in_progress: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+  scheduled: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400',
+  execution_completed: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400',
   ready_for_review: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
   sent_back_for_revision: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
   approved: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
@@ -484,6 +488,8 @@ export default function ProjectsPage() {
                 <SelectItem value="all">Összes státusz</SelectItem>
                 <SelectItem value="pending">Függőben</SelectItem>
                 <SelectItem value="in_progress">Folyamatban</SelectItem>
+                <SelectItem value="scheduled">Ütemezve</SelectItem>
+                <SelectItem value="execution_completed">Kivitelezés elkészült</SelectItem>
                 <SelectItem value="ready_for_review">Átnézésre vár</SelectItem>
                 <SelectItem value="approved">Jóváhagyva</SelectItem>
                 <SelectItem value="completed">Befejezve</SelectItem>

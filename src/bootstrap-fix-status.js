@@ -7,6 +7,8 @@
 const VALID_STATUSES = [
   'pending',
   'in_progress',
+  'scheduled',
+  'execution_completed',
   'ready_for_review',
   'sent_back_for_revision',
   'approved',

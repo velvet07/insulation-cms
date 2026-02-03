@@ -34,6 +34,7 @@ import {
 import { useAuthStore } from '@/lib/store/auth';
 import { companiesApi } from '@/lib/api/companies';
 import { isAdminRole, isMainContractor } from '@/lib/utils/user-role';
+import { isContractDataComplete } from '@/lib/utils/project-contract';
 
 // Moment magyar nyelv beállítása
 import 'moment/locale/hu';
@@ -184,6 +185,8 @@ export default function CalendarPage() {
     const statusColors: Record<Project['status'], string> = {
       pending: '#f59e0b', // yellow
       in_progress: '#3b82f6', // blue
+      scheduled: '#6366f1', // indigo
+      execution_completed: '#14b8a6', // teal
       ready_for_review: '#8b5cf6', // purple
       sent_back_for_revision: '#ef4444', // red
       approved: '#10b981', // green
@@ -275,20 +278,26 @@ export default function CalendarPage() {
     setIsExportDialogOpen(false);
   };
 
-  // Ütemezés mentése
+  // Ütemezés mentése: szerződés adatok kötelezőek; státusz = Ütemezve (jövőbeli) vagy Kivitelezés elkészült (múltbeli)
   const saveScheduleMutation = useMutation({
     mutationFn: async () => {
       if (!selectedEvent || !scheduleDate) {
         throw new Error('Dátum megadása kötelező');
       }
+      if (!isContractDataComplete(selectedEvent.project)) {
+        throw new Error('Ütemezés csak teljes szerződés adatokkal lehetséges. Töltse ki a projekt Szerződés adatait.');
+      }
 
       const projectId = selectedEvent.project.documentId || selectedEvent.project.id;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const scheduledDay = new Date(scheduleDate);
+      scheduledDay.setHours(0, 0, 0, 0);
+      const newStatus: Project['status'] = scheduledDay > today ? 'scheduled' : 'execution_completed';
 
-      // Dátum és idő kombinálása - az időt is eltároljuk a scheduled_date-ben
-      // A Strapi date mező fogadja el a datetime formátumot is, de csak a dátum részt használja
-      // Az időt a frontend-en kezeljük
-      const updateData = {
-        scheduled_date: scheduleDate, // Dátum formátum: YYYY-MM-DD
+      const updateData: Partial<Project> = {
+        scheduled_date: scheduleDate,
+        status: newStatus,
       };
 
       await projectsApi.update(projectId, updateData);
@@ -313,12 +322,14 @@ export default function CalendarPage() {
     setIsSavingSchedule(true);
     try {
       await saveScheduleMutation.mutateAsync();
-    } catch (error) {
-      // Hiba kezelés már a mutation-ben van
+    } catch (error: any) {
+      alert(error?.message || 'Hiba az ütemezés mentésekor.');
     } finally {
       setIsSavingSchedule(false);
     }
   };
+
+  const canScheduleSelected = selectedEvent && isContractDataComplete(selectedEvent.project);
 
   return (
     <ProtectedRoute>
@@ -384,6 +395,14 @@ export default function CalendarPage() {
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 rounded bg-blue-500"></div>
                 <span className="text-sm">Folyamatban</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-indigo-500"></div>
+                <span className="text-sm">Ütemezve</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-teal-500"></div>
+                <span className="text-sm">Kivitelezés elkészült</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 rounded bg-purple-500"></div>
@@ -458,15 +477,22 @@ export default function CalendarPage() {
                     </div>
                   </div>
                   {can('calendar', 'manage_schedule') && (
-                    <Button
-                      onClick={handleSaveSchedule}
-                      disabled={isSavingSchedule || !scheduleDate}
-                      size="sm"
-                      className="w-full sm:w-auto flex items-center justify-center"
-                    >
-                      <Save className="mr-2 h-4 w-4 shrink-0" />
-                      <span>{isSavingSchedule ? 'Mentés...' : 'Ütemezés mentése'}</span>
-                    </Button>
+                    <>
+                      {selectedEvent && !canScheduleSelected && (
+                        <p className="text-sm text-amber-600 dark:text-amber-400 col-span-full">
+                          Ütemezés csak teljes szerződés adatokkal lehetséges. Töltse ki a projekt Szerződés adatait a Projekt részletei oldalon.
+                        </p>
+                      )}
+                      <Button
+                        onClick={handleSaveSchedule}
+                        disabled={isSavingSchedule || !scheduleDate || !canScheduleSelected}
+                        size="sm"
+                        className="w-full sm:w-auto flex items-center justify-center"
+                      >
+                        <Save className="mr-2 h-4 w-4 shrink-0" />
+                        <span>{isSavingSchedule ? 'Mentés...' : 'Ütemezés mentése'}</span>
+                      </Button>
+                    </>
                   )}
                 </div>
 
