@@ -167,13 +167,19 @@ export default function ProjectsPage() {
       if (isSubcontractorCompany && userCompanyId) {
         // Subcontractor: see projects where company OR subcontractor is their company
         f.subcontractor = userCompanyId;
+        console.log('🔒 [FILTERS] Subcontractor filter applied:', userCompanyId);
       } else if (!userCompanyId && user?.id) {
         // User without company: only see projects assigned to them
         f.assigned_to = user.id;
+        console.log('🔒 [FILTERS] Assigned_to filter applied:', user.id);
+      } else {
+        console.log('🔒 [FILTERS] Main contractor - no backend filter (frontend filtering will be used)');
       }
-      // Main contractor: no backend filter, will filter on frontend
+    } else {
+      console.log('🔒 [FILTERS] Admin - no filters applied');
     }
 
+    console.log('🔒 [FILTERS] Final filters object:', f);
     return f;
   }, [statusFilter, search, currentPage, pageSize, isAdmin, isSubcontractorCompany, userCompanyId, user?.id]);
 
@@ -200,35 +206,45 @@ export default function ProjectsPage() {
     setCurrentPage(1);
   }, [search, statusFilter, ownerFilter]);
 
+  // Always-on debug for subcontractor issue diagnosis
   useEffect(() => {
-    debug('\n========================================');
-    debug('👤 [USER INFO] Current User:', user);
-    debug('👤 [USER INFO] User Company (Combined):', userCompany);
-    debug('👤 [USER INFO] Is Admin:', isAdmin);
-    debug('👤 [USER INFO] Is Main Contractor:', isMainContractor(user));
-    debug('========================================\n');
-  }, [user, userCompany, isAdmin]);
+    console.log('\n========================================');
+    console.log('👤 [USER INFO] Current User:', user);
+    console.log('👤 [USER INFO] user.company (raw from auth):', user?.company);
+    console.log('👤 [USER INFO] user.company.type (raw):', typeof user?.company === 'object' ? (user.company as any)?.type : 'N/A');
+    console.log('👤 [USER INFO] User Company ID:', userCompanyId);
+    console.log('👤 [USER INFO] Fetched Company:', fetchedCompany);
+    console.log('👤 [USER INFO] Fetched Company Type:', (fetchedCompany as any)?.type);
+    console.log('👤 [USER INFO] User Company (Combined):', userCompany);
+    console.log('👤 [USER INFO] User Company Type:', (userCompany as any)?.type);
+    console.log('👤 [USER INFO] Is Subcontractor Company:', isSubcontractorCompany);
+    console.log('👤 [USER INFO] Is Admin:', isAdmin);
+    console.log('👤 [USER INFO] Is Main Contractor:', isMainContractor(user));
+    console.log('👤 [USER INFO] Is Loading Company:', isLoadingCompany);
+    console.log('👤 [USER INFO] Can Fetch Projects:', canFetchProjects);
+    console.log('========================================\n');
+  }, [user, userCompany, userCompanyId, fetchedCompany, isAdmin, isSubcontractorCompany, isLoadingCompany, canFetchProjects]);
 
   // Frontend filtering for main contractors - show projects where they are company OR subcontractor OR project subcontractor is theirs
   const filteredProjects = useMemo(() => {
-    debug('\n🔍 [FRONTEND FILTER] Starting frontend filtering...');
-    debug('📊 [FRONTEND FILTER] Total projects from API:', allProjects.length);
-    debug('🔍 [FRONTEND FILTER] User Company ID:', userCompanyId);
-    debug('🔍 [FRONTEND FILTER] Is Subcontractor Company:', isSubcontractorCompany);
-    debug('🔍 [FRONTEND FILTER] User Company Type:', userCompany?.type);
+    console.log('\n🔍 [FRONTEND FILTER] Starting frontend filtering...');
+    console.log('📊 [FRONTEND FILTER] Total projects from API:', allProjects.length);
+    console.log('🔍 [FRONTEND FILTER] User Company ID:', userCompanyId);
+    console.log('🔍 [FRONTEND FILTER] Is Subcontractor Company:', isSubcontractorCompany);
+    console.log('🔍 [FRONTEND FILTER] User Company Type:', (userCompany as any)?.type);
 
     // Admin sees all projects (no filter)
     // Subcontractor projects are already filtered by backend - just return what we got
     // Users without company see all projects (no filter)
     if (isAdmin || !userCompanyId || isSubcontractorCompany) {
-      debug('✅ [FRONTEND FILTER] Returning ALL projects from API');
-      debug('   Reason:', isAdmin ? 'Admin' : !userCompanyId ? 'No Company' : 'Subcontractor (backend filtered)');
+      console.log('✅ [FRONTEND FILTER] Returning ALL projects from API');
+      console.log('   Reason:', isAdmin ? 'Admin' : !userCompanyId ? 'No Company' : 'Subcontractor (backend filtered)');
       return allProjects;
     }
 
     // Main contractor: filter to show only projects related to them
-    debug('🔍 [FRONTEND FILTER] Main Contractor detected - filtering projects...');
-    debug('🔍 [FRONTEND FILTER] Available subcontractors:', userCompany?.subcontractors?.length || 0);
+    console.log('🔍 [FRONTEND FILTER] Main Contractor detected - filtering projects...');
+    console.log('🔍 [FRONTEND FILTER] Available subcontractors:', (userCompany as any)?.subcontractors?.length || 0);
 
     // Main contractor: show projects where:
     // 1. They are the project's company
@@ -259,8 +275,8 @@ export default function ProjectsPage() {
       return isDirectlyAssigned || isSubcontractorBelongsToUs || isInOurSubcontractorsList;
     });
 
-    debug('\n📦 [FRONTEND FILTER] Filtered projects count:', filtered.length);
-    debug('========================================\n');
+    console.log('\n📦 [FRONTEND FILTER] Filtered projects count:', filtered.length);
+    console.log('========================================\n');
     return filtered;
   }, [allProjects, userCompany, userCompanyId, isAdmin, isSubcontractorCompany]);
 

@@ -156,6 +156,9 @@ export const projectsApi = {
 
     const apiUrl = `/projects?${params.toString()}`;
     debugLog('projects', 'Calling Strapi API:', apiUrl);
+    // Always log for debugging subcontractor filter issue
+    console.log('📡 [PROJECTS API] Calling:', apiUrl);
+    console.log('📡 [PROJECTS API] Filters received:', filters);
 
     try {
       const response = await strapiApi.get<StrapiResponse<Project[]>>(apiUrl);
@@ -211,6 +214,7 @@ export const projectsApi = {
         debugLog('projects', 'Unexpected response format, returning empty array', payload);
       }
 
+      console.log('📡 [PROJECTS API] Returning', data.length, 'projects');
       return {
         data,
         meta: {
