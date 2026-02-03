@@ -25,6 +25,47 @@ export default {
    * run jobs, or perform some special logic.
    */
   async bootstrap({ strapi }: { strapi: Core.Strapi }) {
+    // ONE-TIME FIX: Fix invalid project statuses
+    // This can be removed after running once successfully
+    try {
+      const VALID_STATUSES = [
+        'pending',
+        'in_progress',
+        'ready_for_review',
+        'sent_back_for_revision',
+        'approved',
+        'completed',
+        'archived'
+      ];
+
+      const knex = strapi.db.connection;
+
+      // Check for projects with null or invalid status
+      const invalidProjects = await knex('projects')
+        .whereNull('status')
+        .orWhere('status', '')
+        .orWhereNotIn('status', VALID_STATUSES);
+
+      const invalidCount = invalidProjects.length;
+
+      if (invalidCount > 0) {
+        console.log(`🔧 Found ${invalidCount} projects with invalid status, fixing...`);
+
+        // Fix all invalid statuses to 'pending'
+        const fixed = await knex('projects')
+          .whereNull('status')
+          .orWhere('status', '')
+          .orWhereNotIn('status', VALID_STATUSES)
+          .update({ status: 'pending' });
+
+        console.log(`✅ Fixed ${fixed} projects - set status to 'pending'`);
+      } else {
+        console.log('✅ All project statuses are valid');
+      }
+    } catch (error: any) {
+      console.error('⚠️  Could not fix project statuses:', error.message);
+    }
+
     try {
       // Létrehozzuk a default fénykép kategóriákat, ha még nem léteznek
       const photoCategoryService = strapi.documents('api::photo-category.photo-category');
