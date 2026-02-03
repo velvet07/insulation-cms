@@ -11,7 +11,7 @@ import { useQuery } from '@tanstack/react-query';
 import { projectsApi } from '@/lib/api/projects';
 import type { Project } from '@/types';
 import { useAuthStore } from '@/lib/store/auth';
-import { isAdminRole, isMainContractor } from '@/lib/utils/user-role';
+import { isAdminRole } from '@/lib/utils/user-role';
 import { usePermission } from '@/lib/contexts/permission-context';
 import { companiesApi } from '@/lib/api/companies';
 import { Plus, Eye } from 'lucide-react';
@@ -23,18 +23,26 @@ export default function DashboardPage() {
   const { can } = usePermission();
   const isAdmin = isAdminRole(user);
 
-  // Build filters for data isolation
-  const filters: any = {};
-
-  const userCompany = user?.company as any;
+  // Get user company ID
   const userCompanyId = useMemo(() => {
     if (!user?.company) return null;
     if (typeof user.company === 'object') return (user.company as any).documentId || (user.company as any).id;
     return user.company;
   }, [user]);
 
+  // Fetch user's company details to get subcontractors list
+  const { data: fetchedCompany } = useQuery({
+    queryKey: ['company', userCompanyId, 'with-subs'],
+    queryFn: () => companiesApi.getOne(userCompanyId!, 'subcontractors'),
+    enabled: !!userCompanyId,
+  });
+
+  // Use fetched company data, falling back to user.company from auth store
+  const userCompany = fetchedCompany || (typeof user?.company === 'object' ? user.company : null);
   const isSubcontractorCompany = userCompany?.type === 'subcontractor' || userCompany?.type === 'Alvállalkozó';
 
+  // Build filters for data isolation
+  const filters: any = {};
   if (!isAdmin) {
     if (isSubcontractorCompany && userCompanyId) {
       filters.subcontractor = userCompanyId;
@@ -49,13 +57,6 @@ export default function DashboardPage() {
     queryFn: () => projectsApi.getAll(filters),
   });
   const allProjects = projectsResponse?.data || [];
-
-  // Fetch user's company details to get subcontractors list (for Main Contractor visibility)
-  const { data: userCompanyDetails } = useQuery({
-    queryKey: ['company', userCompanyId, 'with-subs'],
-    queryFn: () => companiesApi.getOne(userCompanyId!, 'subcontractors'),
-    enabled: !!userCompanyId && isMainContractor(user),
-  });
 
   // Frontend filtering for main contractors
   const projects = useMemo(() => {
@@ -82,15 +83,15 @@ export default function DashboardPage() {
       }
 
       // Check if project subcontractor is one of my subcontractors (fallback)
-      if (userCompanyDetails?.subcontractors && projSubcontractorId) {
-        return userCompanyDetails.subcontractors.some((sub: any) =>
+      if ((userCompany as any)?.subcontractors && projSubcontractorId) {
+        return (userCompany as any).subcontractors.some((sub: any) =>
           (sub.documentId || sub.id)?.toString() === projSubcontractorId.toString()
         );
       }
 
       return false;
     });
-  }, [allProjects, user, isAdmin, userCompanyId, isSubcontractorCompany, userCompanyDetails]);
+  }, [allProjects, isAdmin, userCompanyId, isSubcontractorCompany, userCompany]);
 
   // Számoljuk a projekteket státusz szerint
   const totalProjects = projects.length;

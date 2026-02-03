@@ -138,8 +138,9 @@ export const projectsApi = {
     debugLog('projects', '✓ Added pagination:', { page, pageSize });
 
     // Populate all direct relations plus nested parent_company for subcontractor
+    // Using deep populate syntax for Strapi v5
     params.append('populate[company]', '*');
-    params.append('populate[subcontractor][populate][0]', 'parent_company');
+    params.append('populate[subcontractor][populate]', '*');
     params.append('populate[assigned_to]', '*');
     params.append('populate[approved_by]', '*');
     params.append('populate[sent_back_by]', '*');
