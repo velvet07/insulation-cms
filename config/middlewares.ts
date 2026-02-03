@@ -7,7 +7,7 @@ export default [
       contentSecurityPolicy: {
         useDefaults: true,
         directives: {
-          'frame-ancestors': ["'self'", 'http://localhost:3000', 'http://localhost:3001', 'https://cms.emermedia.eu', /^https:\/\/.*\.emermedia\.eu$/],
+          'frame-ancestors': ["'self'", 'http://localhost:3000', 'http://localhost:3001', 'https://cms.emermedia.eu', /^https:\/\/.*\.emermedia\.eu$/, 'https://app.thermodesk.eu', /^https:\/\/.*\.thermodesk\.eu$/],
         },
       },
       frameguard: {
@@ -23,8 +23,11 @@ export default [
         'http://localhost:3001',
         'https://cms.emermedia.eu',
         'https://thermodesk.vercel.app',
+        'https://app.thermodesk.eu',
+        'https://thermodesk.eu',
         /^https:\/\/.*\.emermedia\.eu$/,
         /^https:\/\/.*\.vercel\.app$/,
+        /^https:\/\/.*\.thermodesk\.eu$/,
       ],
       headers: [
         'Content-Type',
