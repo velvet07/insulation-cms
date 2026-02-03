@@ -245,22 +245,33 @@ export default function ProjectsPage() {
     debug('🔍 [FRONTEND FILTER] Main Contractor detected - filtering projects...');
     debug('🔍 [FRONTEND FILTER] Available subcontractors:', userCompany?.subcontractors?.length || 0);
 
-    // Main contractor: show projects where they are company OR subcontractor OR project subcontractor is one of their subcontractors
+    // Main contractor: show projects where:
+    // 1. They are the project's company
+    // 2. They are the project's subcontractor (rare but possible)
+    // 3. The project's subcontractor belongs to them (subcontractor.parent_company matches)
+    // 4. The project's subcontractor is in their subcontractors list
     const filtered = allProjects.filter((project) => {
       const projCompanyId = project.company?.documentId || project.company?.id;
       const projSubcontractorId = project.subcontractor?.documentId || project.subcontractor?.id;
+      const projSubcontractorParentId = project.subcontractor?.parent_company?.documentId ||
+        project.subcontractor?.parent_company?.id;
 
+      // Check if main contractor is directly assigned as company or subcontractor
       const isDirectlyAssigned = projCompanyId?.toString() === userCompanyId.toString() ||
         projSubcontractorId?.toString() === userCompanyId.toString();
 
-      let isSubcontractorAssigned = false;
+      // Check if project's subcontractor belongs to this main contractor (via parent_company)
+      const isSubcontractorBelongsToUs = projSubcontractorParentId?.toString() === userCompanyId.toString();
+
+      // Check if project's subcontractor is in our subcontractors list
+      let isInOurSubcontractorsList = false;
       if (userCompany?.subcontractors && projSubcontractorId) {
-        isSubcontractorAssigned = userCompany.subcontractors.some((sub: any) =>
+        isInOurSubcontractorsList = userCompany.subcontractors.some((sub: any) =>
           (sub.documentId || sub.id)?.toString() === projSubcontractorId.toString()
         );
       }
 
-      const shouldInclude = isDirectlyAssigned || isSubcontractorAssigned;
+      const shouldInclude = isDirectlyAssigned || isSubcontractorBelongsToUs || isInOurSubcontractorsList;
 
       return shouldInclude;
     });
@@ -484,23 +495,6 @@ export default function ProjectsPage() {
             )}
           </div>
         </div>
-
-        {/* Debug Info (only shown when debug is enabled) */}
-        {debugLogs && (
-          <div className="mb-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded-lg text-sm">
-            <h4 className="font-bold text-yellow-800 dark:text-yellow-300 mb-2">🔧 Debug Info</h4>
-            <ul className="space-y-1 text-yellow-700 dark:text-yellow-400">
-              <li><strong>User ID:</strong> {user?.id || 'undefined'}</li>
-              <li><strong>User Role:</strong> {typeof user?.role === 'object' ? JSON.stringify(user?.role) : user?.role || 'undefined'}</li>
-              <li><strong>isAdmin:</strong> {isAdmin ? '✅ YES' : '❌ NO'}</li>
-              <li><strong>User Company:</strong> {userCompany?.name || 'undefined'} (type: {userCompany?.type || 'undefined'})</li>
-              <li><strong>API-tól kapott projektek:</strong> {allProjects.length}</li>
-              <li><strong>Frontend filter után:</strong> {filteredProjects.length}</li>
-              <li><strong>Megjelenített projektek:</strong> {projects.length}</li>
-              <li><strong>Pagination:</strong> Page {paginationMeta.page}/{paginationMeta.pageCount}, Total: {paginationMeta.total}</li>
-            </ul>
-          </div>
-        )}
 
         {/* Projects Table */}
         {isLoading ? (
