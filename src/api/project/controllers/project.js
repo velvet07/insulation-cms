@@ -53,7 +53,32 @@ function formatTimestampForFile(date) {
   return `${yyyy}_${mm}_${dd}_${hh}${mi}`;
 }
 
+const PROJECT_LIST_POPULATE = {
+  company: { populate: '*' },
+  subcontractor: {
+    populate: {
+      parent_company: { populate: '*' },
+    },
+  },
+  assigned_to: { populate: '*' },
+  approved_by: { populate: '*' },
+  sent_back_by: { populate: '*' },
+  tenant: { populate: '*' },
+  documents: { populate: '*' },
+  photos: { populate: '*' },
+};
+
 module.exports = createCoreController('api::project.project', ({ strapi }) => ({
+  /**
+   * Override find so the list always includes essential relations.
+   */
+  async find(ctx) {
+    const query = { ...ctx.query };
+    query.populate = PROJECT_LIST_POPULATE;
+    ctx.query = query;
+    return strapi.service('api::project.project').find(ctx);
+  },
+
   /**
    * Bulk export: több projekt dokumentumai + fotói ZIP-ben, könyvtárstruktúrában.
    *
