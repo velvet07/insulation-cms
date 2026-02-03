@@ -137,7 +137,15 @@ export const projectsApi = {
     params.append('pagination[pageSize]', pageSize.toString());
     debugLog('projects', '✓ Added pagination:', { page, pageSize });
 
-    params.append('populate', '*');
+    // Populate all direct relations plus nested parent_company for subcontractor
+    params.append('populate[company]', '*');
+    params.append('populate[subcontractor][populate][0]', 'parent_company');
+    params.append('populate[assigned_to]', '*');
+    params.append('populate[approved_by]', '*');
+    params.append('populate[sent_back_by]', '*');
+    params.append('populate[tenant]', '*');
+    params.append('populate[documents]', '*');
+    params.append('populate[photos]', '*');
     params.append('sort', 'createdAt:desc');
 
     const apiUrl = `/projects?${params.toString()}`;

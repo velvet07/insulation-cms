@@ -67,6 +67,8 @@ export default function DashboardPage() {
     return allProjects.filter((project: Project) => {
       const projCompanyId = project.company?.documentId || project.company?.id;
       const projSubcontractorId = project.subcontractor?.documentId || project.subcontractor?.id;
+      const projSubcontractorParentId = (project.subcontractor as any)?.parent_company?.documentId ||
+        (project.subcontractor as any)?.parent_company?.id;
 
       // Direct assignment
       if (projCompanyId?.toString() === userCompanyId.toString() ||
@@ -74,7 +76,12 @@ export default function DashboardPage() {
         return true;
       }
 
-      // Check if project subcontractor is one of my subcontractors
+      // Check if project subcontractor's parent_company is this main contractor
+      if (projSubcontractorParentId?.toString() === userCompanyId.toString()) {
+        return true;
+      }
+
+      // Check if project subcontractor is one of my subcontractors (fallback)
       if (userCompanyDetails?.subcontractors && projSubcontractorId) {
         return userCompanyDetails.subcontractors.some((sub: any) =>
           (sub.documentId || sub.id)?.toString() === projSubcontractorId.toString()
