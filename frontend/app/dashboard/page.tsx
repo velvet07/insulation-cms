@@ -121,6 +121,7 @@ export default function DashboardPage() {
       const match = (id: string | null) => !!(id && (id === myDocId || (myNumericId && id === myNumericId)));
       if (allProjects.length > 0) {
         const p0 = allProjects[0] as any;
+        console.log('  [DEBUG] First project raw:', p0);
         console.log('  [DEBUG] First project .company:', p0?.company, '.subcontractor:', p0?.subcontractor);
       }
       const filtered = allProjects.filter((project: Project) => {
