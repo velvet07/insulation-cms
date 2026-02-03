@@ -61,14 +61,47 @@ export default factories.createCoreController('api::project.project', ({ strapi 
    * Override find so the list always includes essential relations.
    */
   async find(ctx: any) {
-    const query = { ...ctx.query };
-    
-    // Force essential populates to ensure frontend filtering works
-    // and to bypass potential permission stripping issues if possible
-    query.populate = PROJECT_LIST_POPULATE;
-    
-    ctx.query = query;
-    return (strapi as any).service('api::project.project').find(ctx);
+    const query = { ...(ctx.query || {}) };
+    const pagination = query.pagination || {};
+    const page = Number(pagination.page) || 1;
+    const pageSize = Number(pagination.pageSize) || 25;
+    const start = (page - 1) * pageSize;
+
+    const filters = query.filters || undefined;
+    const sort = query.sort || undefined;
+
+    const data = await (strapi as any).entityService.findMany('api::project.project', {
+      filters,
+      sort,
+      populate: PROJECT_LIST_POPULATE,
+      start,
+      limit: pageSize,
+    });
+
+    let total = Array.isArray(data) ? data.length : 0;
+    try {
+      if (typeof (strapi as any).entityService.count === 'function') {
+        total = await (strapi as any).entityService.count('api::project.project', { filters });
+      } else if ((strapi as any).db?.query) {
+        total = await (strapi as any).db.query('api::project.project').count({ where: filters });
+      }
+    } catch {
+      // Keep fallback total based on current page size
+    }
+
+    const pageCount = pageSize > 0 ? Math.max(1, Math.ceil(total / pageSize)) : 1;
+
+    ctx.body = {
+      data: data || [],
+      meta: {
+        pagination: {
+          page,
+          pageSize,
+          pageCount,
+          total,
+        },
+      },
+    };
   },
 
   /**
