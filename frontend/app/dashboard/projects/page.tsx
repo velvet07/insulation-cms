@@ -25,6 +25,7 @@ import {
 import { projectsApi, type ProjectFilters, type PaginationMeta } from '@/lib/api/projects';
 import type { Project, Company } from '@/types';
 import { companiesApi } from '@/lib/api/companies';
+import { getRelationId } from '@/lib/utils/relation-id';
 import { useAuthStore } from '@/lib/store/auth';
 import { isAdminRole, isMainContractor } from '@/lib/utils/user-role';
 import { usePermission } from '@/lib/contexts/permission-context';
@@ -241,10 +242,20 @@ export default function ProjectsPage() {
       return allProjects;
     }
 
-    // Subcontractor: backend already filters by (company OR subcontractor) = userCompanyId; show all returned (no frontend re-filter to avoid relation-shape issues).
+    // Subcontractor: show only (1) where subcontractor = my company, or (2) where subcontractor is empty and company = my company.
     if (isSubcontractorCompany) {
-      console.log('✅ [FRONTEND FILTER] Subcontractor: showing all projects from API (backend filtered):', allProjects.length);
-      return allProjects;
+      const myDocId = userCompanyId.toString();
+      const myNumericId = (userCompany as any)?.id != null ? String((userCompany as any).id) : null;
+      const match = (id: string | null) => !!(id && (id === myDocId || (myNumericId && id === myNumericId)));
+      const filtered = allProjects.filter((project) => {
+        const projSubcontractorId = getRelationId(project.subcontractor);
+        const projCompanyId = getRelationId(project.company);
+        const hasSubcontractor = projSubcontractorId != null && projSubcontractorId !== '';
+        if (hasSubcontractor) return match(projSubcontractorId);
+        return match(projCompanyId);
+      });
+      console.log('✅ [FRONTEND FILTER] Subcontractor filter:', filtered.length, 'of', allProjects.length);
+      return filtered;
     }
 
     // Main contractor: filter to show only projects related to them
