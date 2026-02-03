@@ -36,6 +36,7 @@ import {
   getSheetData,
   suggestColumnMapping,
   generatePreview,
+  downloadImportTemplate,
   IMPORTABLE_FIELDS,
   type ColumnMapping,
   type PreviewRow,
@@ -217,39 +218,7 @@ export default function ProjectImportPage() {
 
   // Download sample template
   const handleDownloadTemplate = useCallback(() => {
-    const templateData = [
-      IMPORTABLE_FIELDS.map(f => f.label),
-      IMPORTABLE_FIELDS.map(f => f.description || ''),
-      // Example row
-      [
-        'Példa projekt',
-        'Kovács János',
-        '1234 Budapest, Példa utca 1.',
-        '85',
-        'Példa utca 1.',
-        'Budapest',
-        '1234',
-        '+36 30 123 4567',
-        'pelda@email.hu',
-        'Budapest',
-        '1990-01-15',
-        'Példa Éva',
-        '12345678-1-41',
-        '',
-        '',
-        '',
-        'wood',
-        '',
-        'A',
-        '2025-03-15',
-        '',
-      ],
-    ];
-
-    const ws = XLSX.utils.aoa_to_sheet(templateData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Projektek');
-    XLSX.writeFile(wb, 'projekt_import_sablon.xlsx');
+    downloadImportTemplate();
   }, []);
 
   // Render step content

@@ -322,3 +322,179 @@ export const FLOOR_MATERIAL_LABELS: Record<string, string> = {
   hollow_block: 'Üreges blokk',
   other: 'Egyéb',
 };
+
+/**
+ * Minta Excel sablon generálása és letöltése
+ * Tartalmazza az összes mezőt, leírásokat és példa adatokat
+ */
+export function downloadImportTemplate(): void {
+  // Fejléc sor - mező címkék (kötelező mezők *-gal jelölve)
+  const headers = IMPORTABLE_FIELDS.map(f => f.required ? `${f.label} *` : f.label);
+
+  // Leírás sor - magyarázatok minden mezőhöz
+  const descriptions = IMPORTABLE_FIELDS.map(f => {
+    let desc = f.description || '';
+    if (f.type === 'enum' && f.enumValues) {
+      desc = desc || `Értékek: ${f.enumValues.join(', ')}`;
+    }
+    if (f.type === 'date') {
+      desc = (desc ? desc + ' - ' : '') + 'Formátum: ÉÉÉÉ-HH-NN';
+    }
+    if (f.type === 'number') {
+      desc = (desc ? desc + ' - ' : '') + 'Szám';
+    }
+    if (f.type === 'email') {
+      desc = (desc ? desc + ' - ' : '') + 'E-mail formátum';
+    }
+    if (f.required) {
+      desc = (desc ? desc + ' - ' : '') + 'KÖTELEZŐ';
+    }
+    return desc;
+  });
+
+  // Példa adatok - 3 minta sor
+  const exampleRows = [
+    [
+      'Kovács család szigetelés',
+      'Kovács János',
+      '1234 Budapest, Példa utca 1.',
+      '85',
+      'Példa utca 1.',
+      'Budapest',
+      '1234',
+      '+36 30 123 4567',
+      'kovacs.janos@email.hu',
+      'Budapest',
+      '1975-03-15',
+      'Kovács Mária',
+      '8123456789',
+      '',
+      '',
+      '',
+      'wood',
+      '',
+      'A',
+      '2025-04-15',
+      '150000',
+    ],
+    [
+      'Nagy Péter lakás',
+      'Nagy Péter',
+      '5600 Békéscsaba, Kossuth u. 22.',
+      '62,5',
+      'Kossuth u. 22.',
+      'Békéscsaba',
+      '5600',
+      '+36 20 987 6543',
+      'nagy.peter@gmail.com',
+      'Gyula',
+      '1982-08-22',
+      'Kiss Erzsébet',
+      '8987654321',
+      'Petőfi u. 5.',
+      'Békéscsaba',
+      '5600',
+      'prefab_rc',
+      '',
+      'B',
+      '2025-04-20',
+      '120000',
+    ],
+    [
+      'Szabó ház felújítás',
+      'Szabó László',
+      '3000 Hatvan, Rákóczi út 100.',
+      '120',
+      'Rákóczi út 100.',
+      'Hatvan',
+      '3000',
+      '06-37-123-456',
+      'szabo.laszlo@freemail.hu',
+      'Hatvan',
+      '1968-12-01',
+      'Tóth Anna',
+      '',
+      '',
+      '',
+      '',
+      'monolithic_rc',
+      '',
+      'A',
+      '2025-05-01',
+      '',
+    ],
+  ];
+
+  // Worksheet létrehozása
+  const wsData = [
+    headers,
+    descriptions,
+    ...exampleRows,
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+  // Oszlopszélességek beállítása
+  const colWidths = IMPORTABLE_FIELDS.map(f => {
+    const labelLen = f.label.length;
+    const descLen = (f.description || '').length;
+    return { wch: Math.max(labelLen, descLen / 2, 15) };
+  });
+  ws['!cols'] = colWidths;
+
+  // Fejléc sor formázása (félkövér) - XLSX nem támogatja közvetlenül, de a sheet struktúrában jelezhetjük
+  // A valódi formázást a letöltés után Excel-ben kell alkalmazni
+
+  // Workbook létrehozása
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Projektek');
+
+  // Útmutató sheet hozzáadása
+  const guideData = [
+    ['PROJEKT IMPORT ÚTMUTATÓ'],
+    [''],
+    ['Ez a sablon fájl segít a projektek tömeges importálásában.'],
+    [''],
+    ['HASZNÁLAT:'],
+    ['1. Töltse ki a "Projektek" munkalapot az adataival'],
+    ['2. A *-gal jelölt mezők kötelezőek'],
+    ['3. A 2. sor tartalmazza a mezők leírását - ezt törölje importálás előtt!'],
+    ['4. A 3-5. sorok példa adatok - ezeket is törölje'],
+    ['5. Mentse el a fájlt és töltse fel az import oldalon'],
+    [''],
+    ['KÖTELEZŐ MEZŐK:'],
+    ['• Projekt neve * - A projekt megnevezése'],
+    ['• Ügyfél neve * - Az ügyfél teljes neve'],
+    ['• Ügyfél címe (teljes) * - Teljes cím egy mezőben (pl. "1234 Budapest, Példa u. 1.")'],
+    ['• Terület (m²) * - Padlásfödém területe négyzetméterben'],
+    [''],
+    ['DÁTUM FORMÁTUMOK:'],
+    ['• 2025-04-15 (ajánlott)'],
+    ['• 2025.04.15.'],
+    ['• 15.04.2025'],
+    [''],
+    ['FÖDÉM ANYAG ÉRTÉKEK:'],
+    ['• wood - Fa'],
+    ['• prefab_rc - Előregyártott vasbeton'],
+    ['• monolithic_rc - Monolit vasbeton'],
+    ['• rc_slab - Vasbeton lemez'],
+    ['• hollow_block - Üreges blokk'],
+    ['• other - Egyéb'],
+    [''],
+    ['SZIGETELÉS TÍPUS:'],
+    ['• A - A típusú szigetelés'],
+    ['• B - B típusú szigetelés'],
+    [''],
+    ['TIPPEK:'],
+    ['• A terület mezőben használhat vesszőt vagy pontot tizedesjelként'],
+    ['• A telefonszám bármilyen formátumú lehet'],
+    ['• Ha az ingatlan címe megegyezik az ügyfél címével, hagyja üresen az ingatlan mezőket'],
+  ];
+
+  const wsGuide = XLSX.utils.aoa_to_sheet(guideData);
+  wsGuide['!cols'] = [{ wch: 80 }];
+  XLSX.utils.book_append_sheet(wb, wsGuide, 'Útmutató');
+
+  // Fájl letöltése
+  XLSX.writeFile(wb, 'projekt_import_sablon.xlsx');
+}
