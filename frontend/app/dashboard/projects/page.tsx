@@ -183,9 +183,11 @@ export default function ProjectsPage() {
     return f;
   }, [statusFilter, search, currentPage, pageSize, isAdmin, isSubcontractorCompany, userCompanyId, user?.id]);
 
-  // Wait for company data to load before fetching projects (to apply correct filters)
-  // Admin or users without company can proceed immediately
-  const canFetchProjects = isAdmin || !userCompanyId || !isLoadingCompany;
+  // Only fetch when we can build a safe filter (never empty filters for non-admin).
+  const canFetchProjects =
+    isAdmin ||
+    (userCompanyId != null && !isLoadingCompany) ||
+    (userCompanyId == null && !!user?.id);
 
   const { data: projectsResponse, isLoading, error } = useQuery({
     queryKey: ['projects', filters],
@@ -233,13 +235,22 @@ export default function ProjectsPage() {
     console.log('🔍 [FRONTEND FILTER] Is Subcontractor Company:', isSubcontractorCompany);
     console.log('🔍 [FRONTEND FILTER] User Company Type:', (userCompany as any)?.type);
 
-    // Admin sees all projects (no filter)
-    // Subcontractor projects are already filtered by backend - just return what we got
-    // Users without company see all projects (no filter)
-    if (isAdmin || !userCompanyId || isSubcontractorCompany) {
+    if (isAdmin || !userCompanyId) {
       console.log('✅ [FRONTEND FILTER] Returning ALL projects from API');
-      console.log('   Reason:', isAdmin ? 'Admin' : !userCompanyId ? 'No Company' : 'Subcontractor (backend filtered)');
+      console.log('   Reason:', isAdmin ? 'Admin' : 'No Company');
       return allProjects;
+    }
+
+    // Subcontractor: only show projects where they are subcontractor or company (safety filter)
+    if (isSubcontractorCompany) {
+      const filtered = allProjects.filter((project) => {
+        const projCompanyId = project.company?.documentId || project.company?.id;
+        const projSubcontractorId = project.subcontractor?.documentId || project.subcontractor?.id;
+        const ourId = userCompanyId.toString();
+        return projSubcontractorId?.toString() === ourId || projCompanyId?.toString() === ourId;
+      });
+      console.log('✅ [FRONTEND FILTER] Subcontractor safety filter:', filtered.length, 'of', allProjects.length);
+      return filtered;
     }
 
     // Main contractor: filter to show only projects related to them

@@ -71,9 +71,12 @@ export default function DashboardPage() {
     return f;
   }, [isAdmin, isSubcontractorCompany, userCompanyId, user?.id]);
 
-  // Wait for company data to load before fetching projects (to apply correct filters)
-  // Admin or users without company can proceed immediately
-  const canFetchProjects = isAdmin || !userCompanyId || !isLoadingCompany;
+  // Only fetch when we can build a safe filter (never empty filters for non-admin).
+  // Admin: always. With company: when company loaded so we know type (subcontractor vs main). Without company: when we have user.id for assigned_to.
+  const canFetchProjects =
+    isAdmin ||
+    (userCompanyId != null && !isLoadingCompany) ||
+    (userCompanyId == null && !!user?.id);
 
   // Debug: log key state changes
   useEffect(() => {
@@ -105,10 +108,21 @@ export default function DashboardPage() {
     console.log('  userCompanyId:', userCompanyId);
     console.log('  isSubcontractorCompany:', isSubcontractorCompany);
 
-    // Admin sees all, subcontractor projects filtered by backend
-    if (isAdmin || !userCompanyId || isSubcontractorCompany) {
-      console.log('  → Returning ALL projects (reason:', isAdmin ? 'Admin' : !userCompanyId ? 'No Company' : 'Subcontractor', ')');
+    if (isAdmin || !userCompanyId) {
+      console.log('  → Returning ALL projects (reason:', isAdmin ? 'Admin' : 'No Company', ')');
       return allProjects;
+    }
+
+    // Subcontractor: only show projects where they are the subcontractor or company (safety filter even if backend filtered)
+    if (isSubcontractorCompany) {
+      const filtered = allProjects.filter((project: Project) => {
+        const projCompanyId = (project.company as any)?.documentId || (project.company as any)?.id;
+        const projSubcontractorId = (project.subcontractor as any)?.documentId || (project.subcontractor as any)?.id;
+        const ourId = userCompanyId.toString();
+        return projSubcontractorId?.toString() === ourId || projCompanyId?.toString() === ourId;
+      });
+      console.log('  → Subcontractor safety filter:', filtered.length, 'of', allProjects.length);
+      return filtered;
     }
 
     // Main contractor: filter to show projects where:
