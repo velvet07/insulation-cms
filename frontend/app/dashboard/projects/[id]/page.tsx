@@ -234,8 +234,6 @@ export default function ProjectDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       setIsSubcontractorDialogOpen(false);
-      // Sikeres frissítés - nincs felugró ablak
-      console.log('Kivitelező sikeresen frissítve');
     },
     onError: (error: any) => {
       console.error('Error updating subcontractor:', error);
@@ -512,8 +510,6 @@ export default function ProjectDetailPage() {
         })
       );
 
-      console.log('[handleSendBackForRevision] Sending update data:', JSON.stringify(cleanUpdateData, null, 2));
-
       await projectsApi.update(projectId, cleanUpdateData);
 
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
@@ -587,7 +583,6 @@ export default function ProjectDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
-      console.log('Ütemezés sikeresen mentve');
     },
     onError: (error: any) => {
       console.error('Hiba az ütemezés mentésekor:', error);

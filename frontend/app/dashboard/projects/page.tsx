@@ -94,19 +94,6 @@ function generatePageNumbers(currentPage: number, pageCount: number): (number | 
 }
 
 export default function ProjectsPage() {
-  const debugLogs =
-    typeof window !== 'undefined' &&
-    (localStorage.getItem('debug_projects') === '1' || localStorage.getItem('debug') === '1');
-
-  const debug = (...args: unknown[]) => {
-    if (!debugLogs) return;
-    // Using console.debug so it can be filtered in DevTools.
-    console.debug(...args);
-  };
-
-  if (typeof window !== 'undefined') {
-    debug('🔴 [DEBUG] FRONTEND KÓD FUT! Ha ezt látod, a logolás működik.');
-  }
   const router = useRouter();
   const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
@@ -172,19 +159,11 @@ export default function ProjectsPage() {
       if (isSubcontractorCompany && userCompanyId) {
         // Subcontractor: see projects where company OR subcontractor is their company
         f.subcontractor = userCompanyId;
-        console.log('🔒 [FILTERS] Subcontractor filter applied:', userCompanyId);
       } else if (!userCompanyId && user?.id) {
         // User without company: only see projects assigned to them
         f.assigned_to = user.id;
-        console.log('🔒 [FILTERS] Assigned_to filter applied:', user.id);
-      } else {
-        console.log('🔒 [FILTERS] Main contractor - no backend filter (frontend filtering will be used)');
       }
-    } else {
-      console.log('🔒 [FILTERS] Admin - no filters applied');
     }
-
-    console.log('🔒 [FILTERS] Final filters object:', f);
     return f;
   }, [statusFilter, search, currentPage, pageSize, isAdmin, isSubcontractorCompany, userCompanyId, user?.id]);
 
@@ -213,36 +192,9 @@ export default function ProjectsPage() {
     setCurrentPage(1);
   }, [search, statusFilter, ownerFilter]);
 
-  // Always-on debug for subcontractor issue diagnosis
-  useEffect(() => {
-    console.log('\n========================================');
-    console.log('👤 [USER INFO] Current User:', user);
-    console.log('👤 [USER INFO] user.company (raw from auth):', user?.company);
-    console.log('👤 [USER INFO] user.company.type (raw):', typeof user?.company === 'object' ? (user.company as any)?.type : 'N/A');
-    console.log('👤 [USER INFO] User Company ID:', userCompanyId);
-    console.log('👤 [USER INFO] Fetched Company:', fetchedCompany);
-    console.log('👤 [USER INFO] Fetched Company Type:', (fetchedCompany as any)?.type);
-    console.log('👤 [USER INFO] User Company (Combined):', userCompany);
-    console.log('👤 [USER INFO] User Company Type:', (userCompany as any)?.type);
-    console.log('👤 [USER INFO] Is Subcontractor Company:', isSubcontractorCompany);
-    console.log('👤 [USER INFO] Is Admin:', isAdmin);
-    console.log('👤 [USER INFO] Is Main Contractor:', isMainContractor(user));
-    console.log('👤 [USER INFO] Is Loading Company:', isLoadingCompany);
-    console.log('👤 [USER INFO] Can Fetch Projects:', canFetchProjects);
-    console.log('========================================\n');
-  }, [user, userCompany, userCompanyId, fetchedCompany, isAdmin, isSubcontractorCompany, isLoadingCompany, canFetchProjects]);
-
   // Frontend filtering for main contractors - show projects where they are company OR subcontractor OR project subcontractor is theirs
   const filteredProjects = useMemo(() => {
-    console.log('\n🔍 [FRONTEND FILTER] Starting frontend filtering...');
-    console.log('📊 [FRONTEND FILTER] Total projects from API:', allProjects.length);
-    console.log('🔍 [FRONTEND FILTER] User Company ID:', userCompanyId);
-    console.log('🔍 [FRONTEND FILTER] Is Subcontractor Company:', isSubcontractorCompany);
-    console.log('🔍 [FRONTEND FILTER] User Company Type:', (userCompany as any)?.type);
-
     if (isAdmin || !userCompanyId) {
-      console.log('✅ [FRONTEND FILTER] Returning ALL projects from API');
-      console.log('   Reason:', isAdmin ? 'Admin' : 'No Company');
       return allProjects;
     }
 
@@ -251,27 +203,17 @@ export default function ProjectsPage() {
       const myDocId = userCompanyId.toString();
       const myNumericId = (userCompany as any)?.id != null ? String((userCompany as any).id) : null;
       const match = (id: string | null) => !!(id && (id === myDocId || (myNumericId && id === myNumericId)));
-      const filtered = allProjects.filter((project) => {
+      return allProjects.filter((project) => {
         const projSubcontractorId = getProjectRelationId(project as any, 'subcontractor');
         const projCompanyId = getProjectRelationId(project as any, 'company');
         const hasSubcontractor = projSubcontractorId != null && projSubcontractorId !== '';
         if (hasSubcontractor) return match(projSubcontractorId);
         return match(projCompanyId);
       });
-      console.log('✅ [FRONTEND FILTER] Subcontractor filter:', filtered.length, 'of', allProjects.length);
-      return filtered;
     }
 
-    // Main contractor: filter to show only projects related to them
-    console.log('🔍 [FRONTEND FILTER] Main Contractor detected - filtering projects...');
-    console.log('🔍 [FRONTEND FILTER] Available subcontractors:', (userCompany as any)?.subcontractors?.length || 0);
-
-    // Main contractor: show projects where:
-    // 1. They are the project's company
-    // 2. They are the project's subcontractor (rare but possible)
-    // 3. The project's subcontractor belongs to them (subcontractor.parent_company matches)
-    // 4. The project's subcontractor is in their subcontractors list
-    const filtered = allProjects.filter((project) => {
+    // Main contractor: show projects where they are company OR subcontractor OR project subcontractor is theirs
+    return allProjects.filter((project) => {
       const projCompanyId = project.company?.documentId || project.company?.id;
       const projSubcontractorId = project.subcontractor?.documentId || project.subcontractor?.id;
       const projSubcontractorParentId = project.subcontractor?.parent_company?.documentId ||
@@ -294,10 +236,6 @@ export default function ProjectsPage() {
 
       return isDirectlyAssigned || isSubcontractorBelongsToUs || isInOurSubcontractorsList;
     });
-
-    console.log('\n📦 [FRONTEND FILTER] Filtered projects count:', filtered.length);
-    console.log('========================================\n');
-    return filtered;
   }, [allProjects, userCompany, userCompanyId, isAdmin, isSubcontractorCompany]);
 
   // Extract unique owners from FILTERED projects

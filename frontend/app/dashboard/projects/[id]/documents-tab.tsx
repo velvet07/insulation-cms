@@ -476,8 +476,6 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
     // Eltávolítjuk a dupla slash-okat
     const cleanUrl = fileUrl.startsWith('/') ? fileUrl : `/${fileUrl}`;
     const fullUrl = `${strapiUrl}${cleanUrl}`;
-    
-    console.log('Generated PDF URL:', fullUrl, 'from fileUrl:', fileUrl);
     return fullUrl;
   };
 
@@ -1039,8 +1037,6 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
                       </div>
                     );
                   }
-                  
-                  console.log('PDF URL:', documentUrl);
                   
                   // PDF megjelenítés react-pdf-vel (PDF.js)
                   return (

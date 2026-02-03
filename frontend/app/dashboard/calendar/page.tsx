@@ -308,7 +308,6 @@ export default function CalendarPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project', selectedEvent?.project.documentId || selectedEvent?.project.id] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
-      console.log('Ütemezés sikeresen mentve');
       setIsExportDialogOpen(false);
     },
     onError: (error: any) => {

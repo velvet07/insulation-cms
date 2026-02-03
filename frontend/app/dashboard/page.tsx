@@ -44,31 +44,14 @@ export default function DashboardPage() {
 
   // Build filters for data isolation
   const filters: any = useMemo(() => {
-    console.log('\n========================================');
-    console.log('📊 [DASHBOARD] Building filters...');
-    console.log('📊 [DASHBOARD] userCompanyId:', userCompanyId);
-    console.log('📊 [DASHBOARD] fetchedCompany type:', (fetchedCompany as any)?.type);
-    console.log('📊 [DASHBOARD] userCompany type:', (userCompany as any)?.type);
-    console.log('📊 [DASHBOARD] isSubcontractorCompany:', isSubcontractorCompany);
-    console.log('📊 [DASHBOARD] isAdmin:', isAdmin);
-    console.log('📊 [DASHBOARD] isLoadingCompany:', isLoadingCompany);
-    console.log('========================================\n');
-
     const f: any = {};
     if (!isAdmin) {
       if (isSubcontractorCompany && userCompanyId) {
         f.subcontractor = userCompanyId;
-        console.log('🔒 [DASHBOARD FILTERS] Subcontractor filter applied:', userCompanyId);
       } else if (!userCompanyId && user?.id) {
         f.assigned_to = user.id;
-        console.log('🔒 [DASHBOARD FILTERS] Assigned_to filter applied:', user.id);
-      } else {
-        console.log('🔒 [DASHBOARD FILTERS] Main contractor - no backend filter');
       }
-    } else {
-      console.log('🔒 [DASHBOARD FILTERS] Admin - no filters applied');
     }
-    console.log('🔒 [DASHBOARD FILTERS] Final filters:', f);
     return f;
   }, [isAdmin, isSubcontractorCompany, userCompanyId, user?.id]);
 
@@ -79,21 +62,6 @@ export default function DashboardPage() {
     (userCompanyId != null && !isLoadingCompany) ||
     (userCompanyId == null && !!user?.id);
 
-  // Debug: log key state changes
-  useEffect(() => {
-    console.log('\n🏠 [DASHBOARD STATE UPDATE]');
-    console.log('  user.company (raw from auth):', user?.company);
-    console.log('  user.company.type (raw):', typeof user?.company === 'object' ? (user.company as any)?.type : 'N/A');
-    console.log('  userCompanyId:', userCompanyId);
-    console.log('  fetchedCompany:', fetchedCompany);
-    console.log('  fetchedCompany.type:', (fetchedCompany as any)?.type);
-    console.log('  userCompany (combined):', userCompany);
-    console.log('  userCompany.type:', (userCompany as any)?.type);
-    console.log('  isSubcontractorCompany:', isSubcontractorCompany);
-    console.log('  isLoadingCompany:', isLoadingCompany);
-    console.log('  canFetchProjects:', canFetchProjects);
-  }, [user, userCompanyId, fetchedCompany, userCompany, isSubcontractorCompany, isLoadingCompany, canFetchProjects]);
-
   const { data: projectsResponse, isLoading } = useQuery({
     queryKey: ['projects', filters],
     queryFn: () => projectsApi.getAll(filters),
@@ -103,14 +71,7 @@ export default function DashboardPage() {
 
   // Frontend filtering for main contractors
   const projects = useMemo(() => {
-    console.log('\n🏠 [DASHBOARD FRONTEND FILTER]');
-    console.log('  Total projects from API:', allProjects.length);
-    console.log('  isAdmin:', isAdmin);
-    console.log('  userCompanyId:', userCompanyId);
-    console.log('  isSubcontractorCompany:', isSubcontractorCompany);
-
     if (isAdmin || !userCompanyId) {
-      console.log('  → Returning ALL projects (reason:', isAdmin ? 'Admin' : 'No Company', ')');
       return allProjects;
     }
 
@@ -119,22 +80,13 @@ export default function DashboardPage() {
       const myDocId = userCompanyId.toString();
       const myNumericId = (userCompany as any)?.id != null ? String((userCompany as any).id) : null;
       const match = (id: string | null) => !!(id && (id === myDocId || (myNumericId && id === myNumericId)));
-      if (allProjects.length > 0) {
-        const p0 = allProjects[0] as any;
-        console.log('  [DEBUG] First project raw:', p0);
-        console.log('  [DEBUG] First project .company:', p0?.company, '.subcontractor:', p0?.subcontractor);
-        console.log('  [DEBUG] First project keys:', Object.keys(p0));
-        if (p0.attributes) console.log('  [DEBUG] Attributes keys:', Object.keys(p0.attributes));
-      }
-      const filtered = allProjects.filter((project: Project) => {
+      return allProjects.filter((project: Project) => {
         const projSubcontractorId = getProjectRelationId(project as any, 'subcontractor');
         const projCompanyId = getProjectRelationId(project as any, 'company');
         const hasSubcontractor = projSubcontractorId != null && projSubcontractorId !== '';
         if (hasSubcontractor) return match(projSubcontractorId);
         return match(projCompanyId);
       });
-      console.log('  → Subcontractor filter:', filtered.length, 'of', allProjects.length);
-      return filtered;
     }
 
     // Main contractor: filter to show projects where:
@@ -142,8 +94,7 @@ export default function DashboardPage() {
     // 2. They are the project's subcontractor
     // 3. The project's subcontractor belongs to them (subcontractor.parent_company matches)
     // 4. The project's subcontractor is in their subcontractors list
-    console.log('  → Main contractor filtering...');
-    const filtered = allProjects.filter((project: Project) => {
+    return allProjects.filter((project: Project) => {
       const projCompanyId = project.company?.documentId || project.company?.id;
       const projSubcontractorId = project.subcontractor?.documentId || project.subcontractor?.id;
       const projSubcontractorParentId = (project.subcontractor as any)?.parent_company?.documentId ||
@@ -169,8 +120,6 @@ export default function DashboardPage() {
 
       return false;
     });
-    console.log('  → Main contractor filtered count:', filtered.length);
-    return filtered;
   }, [allProjects, isAdmin, userCompanyId, isSubcontractorCompany, userCompany]);
 
   // Számoljuk a projekteket státusz szerint

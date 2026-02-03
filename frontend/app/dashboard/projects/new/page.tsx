@@ -115,11 +115,9 @@ export default function NewProjectPage() {
             if (typeof companyId === 'string') {
               // If it's a string (documentId), use as-is (even if it doesn't contain hyphens)
               projectData.company = companyId;
-              console.log('Setting company for main contractor (documentId):', projectData.company);
             } else {
               // If it's a number, use as-is
               projectData.company = companyId;
-              console.log('Setting company for main contractor (numeric id):', projectData.company);
             }
           }
         } else if (userCompany.type === 'subcontractor') {
@@ -135,10 +133,8 @@ export default function NewProjectPage() {
               // Strapi v5: use documentId if it's a string, otherwise numeric id
               if (typeof parentId === 'string') {
                 projectData.company = parentId;
-                console.log('Setting company (parent) for subcontractor (documentId):', projectData.company);
               } else {
                 projectData.company = parentId;
-                console.log('Setting company (parent) for subcontractor (numeric id):', projectData.company);
               }
             }
           }
@@ -147,28 +143,19 @@ export default function NewProjectPage() {
             // Strapi v5: use documentId if it's a string, otherwise numeric id
             if (typeof subcontractorId === 'string') {
               projectData.subcontractor = subcontractorId;
-              console.log('Setting subcontractor (documentId):', projectData.subcontractor);
             } else {
               projectData.subcontractor = subcontractorId;
-              console.log('Setting subcontractor (numeric id):', projectData.subcontractor);
             }
           }
         }
       } else {
-        console.warn('User company not found or not properly populated. User:', user);
-        console.warn('User company type:', typeof user?.company);
-        console.warn('User company value:', user?.company);
-
         // If user has no company, assign the project to this user
         // This ensures the user can see their own projects even without a company
         const userId = user?.documentId || user?.id;
         if (userId) {
           projectData.assigned_to = userId;
-          console.log('Setting assigned_to to user (no company):', userId);
         }
       }
-
-      console.log('Final project data before creation:', JSON.stringify(projectData, null, 2));
 
       return projectsApi.create(projectData);
     },
