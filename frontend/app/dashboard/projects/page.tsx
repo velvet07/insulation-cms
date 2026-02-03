@@ -485,6 +485,23 @@ export default function ProjectsPage() {
           </div>
         </div>
 
+        {/* Debug Info (only shown when debug is enabled) */}
+        {debugLogs && (
+          <div className="mb-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded-lg text-sm">
+            <h4 className="font-bold text-yellow-800 dark:text-yellow-300 mb-2">🔧 Debug Info</h4>
+            <ul className="space-y-1 text-yellow-700 dark:text-yellow-400">
+              <li><strong>User ID:</strong> {user?.id || 'undefined'}</li>
+              <li><strong>User Role:</strong> {typeof user?.role === 'object' ? JSON.stringify(user?.role) : user?.role || 'undefined'}</li>
+              <li><strong>isAdmin:</strong> {isAdmin ? '✅ YES' : '❌ NO'}</li>
+              <li><strong>User Company:</strong> {userCompany?.name || 'undefined'} (type: {userCompany?.type || 'undefined'})</li>
+              <li><strong>API-tól kapott projektek:</strong> {allProjects.length}</li>
+              <li><strong>Frontend filter után:</strong> {filteredProjects.length}</li>
+              <li><strong>Megjelenített projektek:</strong> {projects.length}</li>
+              <li><strong>Pagination:</strong> Page {paginationMeta.page}/{paginationMeta.pageCount}, Total: {paginationMeta.total}</li>
+            </ul>
+          </div>
+        )}
+
         {/* Projects Table */}
         {isLoading ? (
           <div className="text-center py-12">
