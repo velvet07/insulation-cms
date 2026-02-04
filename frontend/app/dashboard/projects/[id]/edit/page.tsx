@@ -100,11 +100,12 @@ export default function EditProjectPage() {
 
   // Fetch available subcontractors
   const { data: subcontractors = [], isLoading: isLoadingSubcontractors } = useQuery({
-    queryKey: ['companies', 'subcontractors', isMainContractor ? ((userCompany as any)?.documentId || (userCompany as any)?.id || null) : 'all'],
+    queryKey: ['companies', 'subcontractors', isAdmin ? 'admin-all' : (isMainContractor ? ((userCompany as any)?.documentId || (userCompany as any)?.id || null) : 'all')],
     queryFn: async () => {
       const filters: any = { type: 'subcontractor' };
-      // If main contractor, only show their own subcontractors
-      if (isMainContractor && userCompany) {
+      // Admin sees ALL subcontractors
+      // If main contractor (and not admin), only show their own subcontractors
+      if (!isAdmin && isMainContractor && userCompany) {
         const companyId = (userCompany as any).documentId || userCompany.id;
         filters.parent_company = companyId;
       }
