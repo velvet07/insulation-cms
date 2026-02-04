@@ -925,7 +925,7 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
                     <Select
                       value={
                         document.company == null || document.company === undefined
-                          ? ''
+                          ? '__none__'
                           : typeof document.company === 'object' && document.company !== null
                             ? (document.company as Company).documentId || String((document.company as Company).id)
                             : String(document.company)
@@ -933,7 +933,7 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
                       onValueChange={(v) => {
                         documentCompanyUpdateMutation.mutate({
                           documentId,
-                          companyId: v === '' ? null : v,
+                          companyId: v === '__none__' ? null : v,
                         });
                       }}
                       disabled={documentCompanyUpdateMutation.isPending}
@@ -942,7 +942,7 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
                         <SelectValue placeholder="Tulajdonos" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">— Nincs —</SelectItem>
+                        <SelectItem value="__none__">— Nincs —</SelectItem>
                         {companies.map((c) => {
                           const id = c.documentId || String(c.id);
                           return (
