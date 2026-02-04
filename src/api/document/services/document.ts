@@ -217,7 +217,29 @@ export default factories.createCoreService('api::document.document', ({ strapi }
       doc.setData(tokens);
 
       // Dokumentum generálása
-      doc.render();
+      try {
+        doc.render();
+      } catch (error: any) {
+        // Docxtemplater hiba részletes kiírása
+        strapi.log.error('Docxtemplater render error:', {
+          message: error.message,
+          name: error.name,
+          properties: error.properties,
+        });
+        
+        // Ha multi error (több token hiányzik), részletezzük
+        if (error.properties && error.properties.errors instanceof Array) {
+          const missingTags = error.properties.errors
+            .filter((err: any) => err.properties && err.properties.explanation === 'tag_not_found')
+            .map((err: any) => err.properties.id);
+          
+          if (missingTags.length > 0) {
+            throw new Error(`Hiányzó tokenek a sablonban: ${missingTags.join(', ')}. Kérlek, ellenőrizd a sablon fájlt és a projekt adatokat.`);
+          }
+        }
+        
+        throw new Error(`Hiba a dokumentum generálása során: ${error.message}`);
+      }
 
       const generatedDocxBuffer = doc.getZip().generate({
         type: 'nodebuffer',
@@ -490,7 +512,30 @@ export default factories.createCoreService('api::document.document', ({ strapi }
       tokens.signature = signatureData;
 
       doc.setData(tokens);
-      doc.render();
+      
+      try {
+        doc.render();
+      } catch (error: any) {
+        // Docxtemplater hiba részletes kiírása
+        strapi.log.error('Docxtemplater render error:', {
+          message: error.message,
+          name: error.name,
+          properties: error.properties,
+        });
+        
+        // Ha multi error (több token hiányzik), részletezzük
+        if (error.properties && error.properties.errors instanceof Array) {
+          const missingTags = error.properties.errors
+            .filter((err: any) => err.properties && err.properties.explanation === 'tag_not_found')
+            .map((err: any) => err.properties.id);
+          
+          if (missingTags.length > 0) {
+            throw new Error(`Hiányzó tokenek a sablonban: ${missingTags.join(', ')}. Kérlek, ellenőrizd a sablon fájlt és a projekt adatokat.`);
+          }
+        }
+        
+        throw new Error(`Hiba a dokumentum újragenerálása során: ${error.message}`);
+      }
 
       const generatedDocxBuffer = doc.getZip().generate({
         type: 'nodebuffer',
