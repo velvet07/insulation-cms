@@ -85,6 +85,7 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
     mutationFn: async (templateIds: string | string[]) => {
       const ids = Array.isArray(templateIds) ? templateIds : [templateIds];
       const results = [];
+      const errors: Array<{ templateName: string; error: string }> = [];
 
       for (const templateId of ids) {
         const template = templates.find((t) => (t.documentId || t.id).toString() === templateId);
@@ -109,10 +110,22 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
             audit_log: updatedAuditLog,
             documents_generated_count: (currentProject.documents_generated_count || 0) + 1,
           });
-        } catch (error) {
+        } catch (error: any) {
           console.error(`Error generating document for template ${templateId}:`, error);
+          const errorMessage = error?.message || 'Ismeretlen hiba';
+          errors.push({ 
+            templateName: template.name, 
+            error: errorMessage 
+          });
         }
       }
+      
+      // Ha voltak hibák, jelezzük őket
+      if (errors.length > 0) {
+        const errorList = errors.map(e => `- ${e.templateName}: ${e.error}`).join('\n');
+        throw new Error(`Néhány dokumentum generálása sikertelen volt:\n\n${errorList}`);
+      }
+      
       return results;
     },
     onSuccess: () => {
@@ -123,6 +136,7 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
     },
     onError: (error: any) => {
       console.error('Error generating document:', error);
+      alert(error?.message || 'Hiba történt a dokumentumok generálása során');
     },
   });
 
