@@ -1,38 +1,49 @@
 'use client';
 
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 'react';
 import { Button } from './button';
-import { X, RotateCcw } from 'lucide-react';
+import { RotateCcw } from 'lucide-react';
 
 interface SignaturePadProps {
-  onSave: (signatureData: string) => void;
-  onCancel: () => void;
+  onChange?: (hasSignature: boolean) => void;
   initialSignature?: string | null;
   width?: number;
   height?: number;
-  saveButtonText?: string;
-  hideCancelButton?: boolean;
 }
 
-export function SignaturePad({ 
-  onSave, 
-  onCancel, 
+export interface SignaturePadHandle {
+  getSignatureData: () => string | null;
+  clear: () => void;
+}
+
+export const SignaturePad = forwardRef<SignaturePadHandle, SignaturePadProps>(({ 
+  onChange,
   initialSignature = null,
   width = 600,
-  height = 200,
-  saveButtonText = 'Aláírás mentése',
-  hideCancelButton = false
-}: SignaturePadProps) {
+  height = 200
+}, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(!!initialSignature);
+
+  useImperativeHandle(ref, () => ({
+    getSignatureData: () => {
+      const canvas = canvasRef.current;
+      if (!canvas || !hasSignature) return null;
+      return canvas.toDataURL('image/png');
+    },
+    clear: () => {
+      clear();
+    }
+  }));
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     // Canvas beállítása - Nagy felbontás az élesebb vonalakért
-    const dpr = window.devicePixelRatio || 1;
+    // 3x nagyobb felbontás a pixelesség elkerülésére
+    const dpr = (window.devicePixelRatio || 1) * 3;
     canvas.width = width * dpr;
     canvas.height = height * dpr;
     
@@ -47,9 +58,9 @@ export function SignaturePad({
     // Skálázzuk a kontextust a DPR-nek megfelelően
     ctx.scale(dpr, dpr);
     
-    // Kék szín az aláíráshoz
+    // Kék szín az aláíráshoz - vastagabb vonal a jobb láthatóságért
     ctx.strokeStyle = '#003399'; 
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 2;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
@@ -124,6 +135,7 @@ export function SignaturePad({
     ctx.lineTo(coords.x, coords.y);
     ctx.stroke();
     setHasSignature(true);
+    onChange?.(true);
   };
 
   const stopDrawing = () => {
@@ -139,14 +151,7 @@ export function SignaturePad({
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     setHasSignature(false);
-  };
-
-  const save = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const signatureData = canvas.toDataURL('image/png');
-    onSave(signatureData);
+    onChange?.(false);
   };
 
   return (
@@ -170,16 +175,7 @@ export function SignaturePad({
           <RotateCcw className="mr-2 h-4 w-4" />
           Törlés
         </Button>
-        {!hideCancelButton && (
-          <Button variant="outline" onClick={onCancel}>
-            <X className="mr-2 h-4 w-4" />
-            Mégse
-          </Button>
-        )}
-        <Button onClick={save} disabled={!hasSignature}>
-          {saveButtonText}
-        </Button>
       </div>
     </div>
   );
-}
+});

@@ -32,7 +32,7 @@ import { documentsApi } from '@/lib/api/documents';
 import { templatesApi } from '@/lib/api/templates';
 import { DOCUMENT_TYPE_LABELS, TEMPLATE_TYPE_LABELS, type Document, type Template, type Project, type Company } from '@/types';
 import { Plus, Download, Trash2, FileText, Loader2, PenTool, X, Check, Upload, Edit } from 'lucide-react';
-import { SignaturePad } from '@/components/ui/signature-pad';
+import { SignaturePad, SignaturePadHandle } from '@/components/ui/signature-pad';
 import dynamic from 'next/dynamic';
 
 // Dynamically import PdfViewer to avoid SSR issues with DOMMatrix
@@ -60,30 +60,11 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<Set<string>>(new Set());
   const [isTypeChangeDialogOpen, setIsTypeChangeDialogOpen] = useState(false);
   const [newDocumentType, setNewDocumentType] = useState<Document['type']>('other');
-  const [signature1Data, setSignature1Data] = useState<string | null>(null);
-  const [signature2Data, setSignature2Data] = useState<string | null>(null);
   const [selectedDocumentForPreview, setSelectedDocumentForPreview] = useState<Document | null>(null);
-
-  // Reset signature states when document changes
-  useEffect(() => {
-    if (selectedDocumentForSignature) {
-      const sigData = selectedDocumentForSignature.signature_data;
-      if (sigData && typeof sigData === 'object') {
-        setSignature1Data((sigData as any).signature1 || null);
-        setSignature2Data((sigData as any).signature2 || null);
-      } else if (sigData && typeof sigData === 'string') {
-        // Backwards compatibility - single signature
-        setSignature1Data(sigData);
-        setSignature2Data(null);
-      } else {
-        setSignature1Data(null);
-        setSignature2Data(null);
-      }
-    } else {
-      setSignature1Data(null);
-      setSignature2Data(null);
-    }
-  }, [selectedDocumentForSignature]);
+  const signature1Ref = useRef<SignaturePadHandle>(null);
+  const signature2Ref = useRef<SignaturePadHandle>(null);
+  const [hasSignature1, setHasSignature1] = useState(false);
+  const [hasSignature2, setHasSignature2] = useState(false);
 
   const projectId = project.documentId || project.id;
 
@@ -1215,8 +1196,8 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
                   Az aláírás a sablon {'{%signature1}'} helyére kerül.
                 </p>
                 <SignaturePad
-                  onSave={(sig1) => setSignature1Data(sig1)}
-                  onCancel={() => {}}
+                  ref={signature1Ref}
+                  onChange={(has) => setHasSignature1(has)}
                   initialSignature={
                     selectedDocumentForSignature.signature_data
                       ? (typeof selectedDocumentForSignature.signature_data === 'object'
@@ -1224,10 +1205,8 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
                           : selectedDocumentForSignature.signature_data)
                       : null
                   }
-                  width={400}
-                  height={150}
-                  saveButtonText="Rögzítés"
-                  hideCancelButton={true}
+                  width={500}
+                  height={180}
                 />
               </div>
 
@@ -1238,17 +1217,15 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
                   Az aláírás a sablon {'{%signature2}'} helyére kerül.
                 </p>
                 <SignaturePad
-                  onSave={(sig2) => setSignature2Data(sig2)}
-                  onCancel={() => {}}
+                  ref={signature2Ref}
+                  onChange={(has) => setHasSignature2(has)}
                   initialSignature={
                     selectedDocumentForSignature.signature_data && typeof selectedDocumentForSignature.signature_data === 'object'
                       ? (selectedDocumentForSignature.signature_data as any).signature2
                       : null
                   }
-                  width={400}
-                  height={150}
-                  saveButtonText="Rögzítés"
-                  hideCancelButton={true}
+                  width={500}
+                  height={180}
                 />
               </div>
             </div>
@@ -1259,8 +1236,8 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
                 variant="outline" 
                 onClick={() => {
                   setSelectedDocumentForSignature(null);
-                  setSignature1Data(null);
-                  setSignature2Data(null);
+                  setHasSignature1(false);
+                  setHasSignature2(false);
                 }}
               >
                 <X className="mr-2 h-4 w-4" />
@@ -1268,26 +1245,36 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
               </Button>
               <Button
                 onClick={() => {
-                  if (!signature1Data) {
-                    alert('Kérem adja meg a Kivitelező aláírását!');
-                    return;
-                  }
+                  // Exportáljuk a canvas-okat
+                  const sig1 = signature1Ref.current?.getSignatureData();
+                  const sig2 = signature2Ref.current?.getSignatureData();
                   
-                  // Elküldjük az aláírás(ok)at
-                  if (signature2Data) {
-                    // Mindkét aláírás megvan, objektumként küldjük
+                  // Elküldjük az aláírás(ok)at - üres aláírás is megengedett
+                  if (sig1 && sig2) {
+                    // Mindkét aláírás megvan
                     saveSignature({
-                      signature1: signature1Data,
-                      signature2: signature2Data,
+                      signature1: sig1,
+                      signature2: sig2,
+                    });
+                  } else if (sig1) {
+                    // Csak az első aláírás
+                    saveSignature(sig1);
+                  } else if (sig2) {
+                    // Csak a második aláírás (signature1 üres, de van signature2)
+                    saveSignature({
+                      signature1: '', // Placeholder
+                      signature2: sig2,
                     });
                   } else {
-                    // Csak egy aláírás - backwards compatibility
-                    saveSignature(signature1Data);
+                    // Nincs aláírás egyáltalán - warning, de folytatás
+                    const confirmed = confirm('Nincs aláírás a dokumentumon. Folytatja?');
+                    if (confirmed) {
+                      saveSignature(''); // Üres aláírás
+                    }
                   }
                 }}
-                disabled={!signature1Data}
               >
-                {signature2Data ? 'Dokumentum aláírása (mindkét fél)' : 'Dokumentum aláírása'}
+                Dokumentum aláírása
               </Button>
             </div>
           </div>

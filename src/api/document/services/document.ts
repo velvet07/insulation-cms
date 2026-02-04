@@ -173,14 +173,17 @@ export default factories.createCoreService('api::document.document', ({ strapi }
       if (ImageModule) {
         const imageOptions = {
           centered: false,
+          fileType: 'docx',
           getImage: (tagValue: string) => {
             // A tagValue itt a base64 string lesz
             const base64Data = tagValue.replace(/^data:image\/\w+;base64,/, '');
             return Buffer.from(base64Data, 'base64');
           },
           getSize: () => {
-            // Az aláírás mérete a dokumentumban (pixelben)
-            return [150, 50];
+            // Az aláírás mérete a dokumentumban
+            // Nagyobb méret a jobb láthatóságért (pixelben 96 DPI-nél)
+            // Word: 1 inch = 914400 EMUs, 96 DPI esetén 1 px ≈ 9525 EMUs
+            return [200, 80]; // szélesség x magasság pixelben
           },
         };
         docOptions.modules = [new ImageModule(imageOptions)];
@@ -498,11 +501,12 @@ export default factories.createCoreService('api::document.document', ({ strapi }
       if (ImageModule) {
         const imageOptions = {
           centered: false,
+          fileType: 'docx',
           getImage: (tagValue: string) => {
             const base64Data = tagValue.replace(/^data:image\/\w+;base64,/, '');
             return Buffer.from(base64Data, 'base64');
           },
-          getSize: () => [150, 50],
+          getSize: () => [200, 80], // szélesség x magasság pixelben
         };
         docOptions.modules = [new ImageModule(imageOptions)];
       }
