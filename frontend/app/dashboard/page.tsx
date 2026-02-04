@@ -138,6 +138,13 @@ export default function DashboardPage() {
     )
     .slice(0, 5);
 
+  // Közelgő események (scheduled projects with scheduled_date)
+  const upcomingEvents = projects
+    .filter((p: Project) => p.status === 'scheduled' && p.scheduled_date)
+    .sort((a: Project, b: Project) =>
+      new Date(a.scheduled_date!).getTime() - new Date(b.scheduled_date!).getTime()
+    );
+
   return (
     <ProtectedRoute>
       <DashboardLayout>
@@ -256,7 +263,49 @@ export default function DashboardPage() {
               <CardTitle>Közelgő események</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-gray-500">Nincsenek ütemezett események</p>
+              {isLoading ? (
+                <p className="text-sm text-gray-500">Betöltés...</p>
+              ) : upcomingEvents.length === 0 ? (
+                <p className="text-sm text-gray-500">Nincsenek ütemezett események</p>
+              ) : (
+                <div className="space-y-3">
+                  {upcomingEvents.map((project: Project) => {
+                    const identifier = project.documentId || project.id;
+                    const scheduledDate = new Date(project.scheduled_date!);
+                    const formattedDate = scheduledDate.toLocaleDateString('hu-HU', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
+                    });
+                    return (
+                      <div
+                        key={project.id}
+                        className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
+                      >
+                        <div className="flex-1">
+                          <button
+                            onClick={() => router.push(`/dashboard/projects/${identifier}`)}
+                            className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline cursor-pointer text-left"
+                          >
+                            {project.title}
+                          </button>
+                          <p className="text-xs text-gray-500">
+                            {formattedDate} • {project.client_name}
+                          </p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => router.push(`/dashboard/projects/${identifier}`)}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

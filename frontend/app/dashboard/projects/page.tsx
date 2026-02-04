@@ -611,10 +611,10 @@ export default function ProjectsPage() {
         )}
 
         {/* Pagination */}
-        {paginationMeta.total > 0 && (
+        {projects.length > 0 && (
           <div className="mt-4 flex items-center justify-between">
             <div className="text-sm text-gray-500">
-              Összesen {paginationMeta.total} projekt
+              Összesen {projects.length} projekt
               {paginationMeta.pageCount > 1 && (
                 <span> • {currentPage}. oldal / {paginationMeta.pageCount}</span>
               )}
