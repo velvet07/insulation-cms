@@ -118,9 +118,42 @@ export default factories.createCoreController('api::project.project', ({ strapi 
       return ctx.badRequest('projectIds kötelező (tömb)');
     }
 
-    const exportStamp = formatTimestampForFile(new Date());
-    const zipFileName = `export_${exportStamp}.zip`;
-    // Per requirement: top-level folder must be the project name (no extra root folder).
+    const findProject = async (id: any) => {
+      const idStr = safeString(id);
+      try {
+        // @ts-ignore
+        const doc = await (strapi as any).documents('api::project.project').findOne({
+          documentId: idStr,
+          populate: ['company', 'subcontractor', 'assigned_to'],
+        });
+        if (doc) return doc;
+      } catch {
+        // ignore
+      }
+      if (!isNaN(Number(idStr))) {
+        return await (strapi as any).entityService.findOne('api::project.project', Number(idStr), {
+          populate: ['company', 'subcontractor', 'assigned_to'],
+        });
+      }
+      return null;
+    };
+
+    const firstProject = await findProject(projectIds[0]);
+    const companyName = firstProject?.company && typeof firstProject.company === 'object' && firstProject.company !== null
+      ? (firstProject.company as any).name
+      : 'Ceg';
+    const projectTitle = firstProject?.title || 'Projekt';
+    const projectPart = projectIds.length === 1
+      ? projectTitle
+      : 'Tobb_projekt';
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const datePart = `${yyyy}_${mm}_${dd}`;
+    const safeCompany = sanitizeWindowsNameKeepAccents(companyName);
+    const safeProject = sanitizeWindowsNameKeepAccents(projectPart);
+    const zipFileName = `${safeCompany}_${safeProject}_export_${datePart}.zip`;
 
     ctx.set('Content-Type', 'application/zip');
     ctx.set('Content-Disposition', `attachment; filename="${zipFileName}"`);
@@ -175,30 +208,6 @@ export default factories.createCoreController('api::project.project', ({ strapi 
       }
       // Node 20+: convert Web ReadableStream to Node stream
       return Readable.fromWeb(res.body as any);
-    };
-
-    const findProject = async (id: any) => {
-      const idStr = safeString(id);
-      // Try documentId first (Strapi v5)
-      try {
-        // @ts-ignore
-        const doc = await (strapi as any).documents('api::project.project').findOne({
-          documentId: idStr,
-          populate: ['company', 'subcontractor', 'assigned_to'],
-        });
-        if (doc) return doc;
-      } catch {
-        // ignore
-      }
-
-      // Fallback numeric
-      if (!isNaN(Number(idStr))) {
-        return await (strapi as any).entityService.findOne('api::project.project', Number(idStr), {
-          populate: ['company', 'subcontractor', 'assigned_to'],
-        });
-      }
-
-      return null;
     };
 
     const ensureFolders = (projectBase: string) => {

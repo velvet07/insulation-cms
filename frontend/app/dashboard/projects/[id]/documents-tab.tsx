@@ -30,7 +30,8 @@ import {
 } from '@/components/ui/dialog';
 import { documentsApi } from '@/lib/api/documents';
 import { templatesApi } from '@/lib/api/templates';
-import { DOCUMENT_TYPE_LABELS, TEMPLATE_TYPE_LABELS, type Document, type Template, type Project } from '@/types';
+import { companiesApi } from '@/lib/api/companies';
+import { DOCUMENT_TYPE_LABELS, TEMPLATE_TYPE_LABELS, type Document, type Template, type Project, type Company } from '@/types';
 import { Plus, Download, Trash2, FileText, Loader2, PenTool, X, Check, Upload, Edit } from 'lucide-react';
 import { SignaturePad } from '@/components/ui/signature-pad';
 import dynamic from 'next/dynamic';
@@ -73,6 +74,11 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
   const { data: templates = [], isLoading: isLoadingTemplates } = useQuery({
     queryKey: ['templates'],
     queryFn: () => templatesApi.getAll(),
+  });
+
+  const { data: companies = [] } = useQuery({
+    queryKey: ['companies'],
+    queryFn: () => companiesApi.getAll(),
   });
 
   const generateMutation = useMutation({
@@ -215,6 +221,40 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
     },
     onError: (error: any) => {
       console.error('Error updating document type:', error);
+    },
+  });
+
+  const documentCompanyUpdateMutation = useMutation({
+    mutationFn: async ({ documentId, companyId }: { documentId: string; companyId: string | null }) => {
+      await documentsApi.update(documentId, {
+        company: companyId === null || companyId === '' ? null : companyId,
+      });
+
+      const auditLogEntry = createAuditLogEntry(
+        'document_modified',
+        user,
+        'Dokumentum tulajdonosa módosítva'
+      );
+      auditLogEntry.module = 'Dokumentumok';
+
+      try {
+        const currentProject = await projectsApi.getOne(projectId);
+        const updatedAuditLog = addAuditLogEntry(currentProject.audit_log, auditLogEntry);
+        await projectsApi.update(projectId, {
+          audit_log: updatedAuditLog,
+        });
+      } catch (error: any) {
+        if (!error?.message?.includes('Invalid key audit_log')) {
+          console.error('Error updating audit log:', error);
+        }
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+    },
+    onError: (error: any) => {
+      console.error('Error updating document company:', error);
     },
   });
 
@@ -835,6 +875,7 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
                 <TableHead className="w-12"></TableHead>
                 <TableHead>Név</TableHead>
                 <TableHead>Típus</TableHead>
+                <TableHead>Tulajdonos</TableHead>
                 <TableHead>Státusz</TableHead>
                 <TableHead>Létrehozva</TableHead>
                 <TableHead className="text-right">Műveletek</TableHead>
@@ -879,6 +920,39 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
                     ) : (
                       DOCUMENT_TYPE_LABELS[document.type as keyof typeof DOCUMENT_TYPE_LABELS] || document.type
                     )}
+                  </TableCell>
+                  <TableCell>
+                    <Select
+                      value={
+                        document.company == null || document.company === undefined
+                          ? ''
+                          : typeof document.company === 'object' && document.company !== null
+                            ? (document.company as Company).documentId || String((document.company as Company).id)
+                            : String(document.company)
+                      }
+                      onValueChange={(v) => {
+                        documentCompanyUpdateMutation.mutate({
+                          documentId,
+                          companyId: v === '' ? null : v,
+                        });
+                      }}
+                      disabled={documentCompanyUpdateMutation.isPending}
+                    >
+                      <SelectTrigger className="w-48 min-w-[12rem]">
+                        <SelectValue placeholder="Tulajdonos" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">— Nincs —</SelectItem>
+                        {companies.map((c) => {
+                          const id = c.documentId || String(c.id);
+                          return (
+                            <SelectItem key={id} value={id}>
+                              {c.name}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
                   </TableCell>
                   <TableCell>
                     {isUploaded ? (

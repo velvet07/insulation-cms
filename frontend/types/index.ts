@@ -159,6 +159,7 @@ export interface Document extends StrapiEntity {
   signature_data?: string | Record<string, unknown>; // Base64 encoded image vagy JSON
   signed_at?: string;
   project?: Project;
+  company?: Company | string | number; // Tulajdonos (céges dokumentum)
   uploaded_by?: User;
   template?: Template;
   file?: {
