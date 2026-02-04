@@ -521,7 +521,6 @@ export default function ProjectsPage() {
                   <TableHead>Ügyfél neve</TableHead>
                   <TableHead>Cím</TableHead>
                   <TableHead>Terület (m²)</TableHead>
-                  <TableHead>Szigetelés</TableHead>
                   <TableHead>Státusz</TableHead>
                   <TableHead>Tulajdonos</TableHead>
                   {isAdmin && <TableHead>Fővállalkozó</TableHead>}
@@ -555,7 +554,6 @@ export default function ProjectsPage() {
                         : project.client_address || '-'}
                     </TableCell>
                     <TableCell>{project.area_sqm ? `${project.area_sqm} m²` : '-'}</TableCell>
-                    <TableCell>{project.insulation_option || '-'}</TableCell>
                     <TableCell>
                       <span
                         className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[project.status as Project['status']]}`}

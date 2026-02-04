@@ -163,6 +163,8 @@ export default function ProjectImportPage() {
       // Get user company info for the projects
       const userCompany = user?.company as any;
       const companyId = userCompany?.documentId || userCompany?.id;
+      const companyType = userCompany?.type;
+      const parentCompany = userCompany?.parent_company;
 
       for (let i = 0; i < validRows.length; i++) {
         const row = validRows[i];
@@ -184,9 +186,34 @@ export default function ProjectImportPage() {
             audit_log: [auditLogEntry],
           };
 
-          // Add company if user has one
+          // Set company and subcontractor based on user's company type
+          // IMPORTANT: Projects must always have a main contractor (company)
           if (companyId) {
-            projectData.company = companyId;
+            if (companyType === 'main_contractor') {
+              // User is main contractor: project.company = user.company
+              projectData.company = companyId;
+            } else if (companyType === 'subcontractor') {
+              // User is subcontractor: 
+              // - project.company = parent_company (main contractor)
+              // - project.subcontractor = user.company
+              if (parentCompany) {
+                const parentId = parentCompany.documentId || parentCompany.id;
+                if (parentId) {
+                  projectData.company = parentId;
+                }
+              }
+              // Always set subcontractor
+              projectData.subcontractor = companyId;
+            } else {
+              // Unknown company type, just set company
+              projectData.company = companyId;
+            }
+          } else {
+            // If user has no company, assign the project to this user
+            const userId = user?.documentId || user?.id;
+            if (userId) {
+              projectData.assigned_to = userId;
+            }
           }
 
           await projectsApi.create(projectData);
