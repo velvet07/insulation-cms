@@ -235,21 +235,27 @@ export default factories.createCoreService('api::document.document', ({ strapi }
             if (err.properties) {
               const explanation = err.properties.explanation;
               const id = err.properties.id;
+              const context = err.properties.context || err.properties.xtag || id;
               
               if (explanation === 'tag_not_found') {
                 errorDetails.push(`Hiányzó token: {${id}}`);
               } else if (explanation === 'unopened_tag') {
-                errorDetails.push(`Lezáratlan token: {${id}}`);
+                errorDetails.push(`Lezáratlan token: {${context}}`);
               } else if (explanation === 'unclosed_tag') {
-                errorDetails.push(`Nem lezárt token: {${id}}`);
+                errorDetails.push(`Nem lezárt token: {${context}}`);
+              } else if (id === 'duplicate_close_tag') {
+                errorDetails.push(`Dupla zárójel a sablonban: ${context} (valószínűleg }} }} helyett csak } kell)`);
+              } else if (id === 'duplicate_open_tag') {
+                errorDetails.push(`Dupla nyitó zárójel a sablonban: ${context} (valószínűleg {{ {{ helyett csak { kell)`);
               } else {
-                errorDetails.push(`${explanation}: ${id}`);
+                // Minden más hiba típust is jelzünk
+                errorDetails.push(`${explanation || id}: ${context}`);
               }
             }
           });
           
           if (errorDetails.length > 0) {
-            throw new Error(`Sablon hiba(k): ${errorDetails.join(', ')}. Kérlek ellenőrizd a sablon fájlt és a projekt adatokat.`);
+            throw new Error(`Sablon hiba(k): ${errorDetails.join(' | ')}. Kérlek ellenőrizd a sablon fájlt!`);
           }
         }
         
@@ -546,21 +552,27 @@ export default factories.createCoreService('api::document.document', ({ strapi }
             if (err.properties) {
               const explanation = err.properties.explanation;
               const id = err.properties.id;
+              const context = err.properties.context || err.properties.xtag || id;
               
               if (explanation === 'tag_not_found') {
                 errorDetails.push(`Hiányzó token: {${id}}`);
               } else if (explanation === 'unopened_tag') {
-                errorDetails.push(`Lezáratlan token: {${id}}`);
+                errorDetails.push(`Lezáratlan token: {${context}}`);
               } else if (explanation === 'unclosed_tag') {
-                errorDetails.push(`Nem lezárt token: {${id}}`);
+                errorDetails.push(`Nem lezárt token: {${context}}`);
+              } else if (id === 'duplicate_close_tag') {
+                errorDetails.push(`Dupla zárójel a sablonban: ${context} (valószínűleg }} }} helyett csak } kell)`);
+              } else if (id === 'duplicate_open_tag') {
+                errorDetails.push(`Dupla nyitó zárójel a sablonban: ${context} (valószínűleg {{ {{ helyett csak { kell)`);
               } else {
-                errorDetails.push(`${explanation}: ${id}`);
+                // Minden más hiba típust is jelzünk
+                errorDetails.push(`${explanation || id}: ${context}`);
               }
             }
           });
           
           if (errorDetails.length > 0) {
-            throw new Error(`Sablon hiba(k): ${errorDetails.join(', ')}. Kérlek ellenőrizd a sablon fájlt és a projekt adatokat.`);
+            throw new Error(`Sablon hiba(k): ${errorDetails.join(' | ')}. Kérlek ellenőrizd a sablon fájlt!`);
           }
         }
         
