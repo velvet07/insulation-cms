@@ -106,8 +106,9 @@ export const templatesApi = {
         templateData.template_file = templateFileId;
       }
 
-      // Fővállalkozóhoz kötés
-      if (data.company) {
+      // Fővállalkozóhoz kötés (ha van)
+      // Empty string = no company (global template)
+      if (data.company && data.company !== '') {
         templateData.company = data.company;
       }
 
@@ -153,6 +154,13 @@ export const templatesApi = {
 
       if (templateFileId) {
         cleanData.template_file = templateFileId;
+      }
+
+      // Handle company field: empty string = set to null (global template)
+      if ('company' in data) {
+        if (data.company === '' || data.company === undefined) {
+          cleanData.company = null;
+        }
       }
       
       const response = await strapiApi.put<StrapiResponse<Template>>(`/templates/${id}`, { data: cleanData });

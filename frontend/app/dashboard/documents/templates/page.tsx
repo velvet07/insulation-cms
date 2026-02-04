@@ -37,7 +37,8 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { templatesApi } from '@/lib/api/templates';
-import { TEMPLATE_TYPE_LABELS, type Template, type TemplateType } from '@/types';
+import { companiesApi } from '@/lib/api/companies';
+import { TEMPLATE_TYPE_LABELS, type Template, type TemplateType, type Company } from '@/types';
 import { Plus, Edit, Trash2, Upload, FileText, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useForm } from 'react-hook-form';
@@ -50,6 +51,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from '@/components/ui/form';
 
 const templateSchema = z.object({
@@ -64,6 +66,7 @@ const templateSchema = z.object({
     'munkaterul_atadas',
     'other',
   ]),
+  company: z.string().optional(),
 });
 
 type TemplateFormValues = z.infer<typeof templateSchema>;
@@ -110,6 +113,13 @@ export default function TemplatesPage() {
   const userCompanyId = getUserCompanyId();
   const userCompanyName = typeof user?.company === 'object' ? (user.company as Company)?.name : undefined;
 
+  // Fetch main contractors (for admin only)
+  const { data: mainContractors = [] } = useQuery({
+    queryKey: ['companies', 'main_contractor'],
+    queryFn: () => companiesApi.getAll({ type: 'main_contractor' }),
+    enabled: isAdmin, // Only fetch if admin
+  });
+
   // Fetch templates - filter by user's company if not admin
   const { data: templates = [], isLoading } = useQuery({
     queryKey: ['templates', userCompanyId, isAdmin],
@@ -127,22 +137,31 @@ export default function TemplatesPage() {
     defaultValues: {
       name: '',
       type: 'felmerolap',
+      company: undefined,
     },
   });
 
   const createMutation = useMutation({
     mutationFn: async (data: TemplateFormValues) => {
+      // Admin manually selects company or leaves it empty
+      // Non-admin users automatically get their company
+      const companyId = isAdmin ? data.company : userCompanyId;
+      
       return templatesApi.create({
         name: data.name,
         type: data.type,
         tokens: [], // Alapértelmezett tokenek listája
-        company: userCompanyId, // Automatikusan a user cégéhez kötjük
+        company: companyId || undefined, // Can be undefined for global templates
       }, selectedFile || undefined);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['templates'] });
       setIsDialogOpen(false);
-      form.reset();
+      form.reset({
+        name: '',
+        type: 'felmerolap',
+        company: undefined,
+      });
       setSelectedFile(null);
     },
     onError: (error: any) => {
@@ -176,7 +195,11 @@ export default function TemplatesPage() {
       queryClient.invalidateQueries({ queryKey: ['templates'] });
       setIsDialogOpen(false);
       setEditingTemplate(null);
-      form.reset();
+      form.reset({
+        name: '',
+        type: 'felmerolap',
+        company: undefined,
+      });
       setSelectedFile(null);
     },
     onError: (error: any) => {
@@ -217,9 +240,21 @@ export default function TemplatesPage() {
 
   const handleEdit = (template: Template) => {
     setEditingTemplate(template);
+    
+    // Get company ID (documentId or id)
+    let companyId: string | undefined;
+    if (template.company) {
+      if (typeof template.company === 'object') {
+        companyId = (template.company as Company).documentId || String((template.company as Company).id);
+      } else {
+        companyId = String(template.company);
+      }
+    }
+    
     form.reset({
       name: template.name,
       type: template.type,
+      company: companyId,
     });
     setIsDialogOpen(true);
   };
@@ -234,12 +269,19 @@ export default function TemplatesPage() {
   const onSubmit = (values: TemplateFormValues) => {
     if (editingTemplate) {
       const identifier = editingTemplate.documentId || editingTemplate.id;
+      const updateData: Partial<Template> = {
+        name: values.name,
+        type: values.type,
+      };
+      
+      // Admin can update company
+      if (isAdmin) {
+        updateData.company = values.company || undefined;
+      }
+      
       updateMutation.mutate({
         id: identifier,
-        data: {
-          name: values.name,
-          type: values.type,
-        },
+        data: updateData,
       });
     } else {
       createMutation.mutate(values);
@@ -269,7 +311,11 @@ export default function TemplatesPage() {
                 <DialogTrigger asChild>
                   <Button onClick={() => {
                     setEditingTemplate(null);
-                    form.reset();
+                    form.reset({
+                      name: '',
+                      type: 'felmerolap',
+                      company: undefined,
+                    });
                     setSelectedFile(null);
                   }}>
                     <Plus className="mr-2 h-4 w-4" />
@@ -326,6 +372,42 @@ export default function TemplatesPage() {
                           </FormItem>
                         )}
                       />
+                      {isAdmin && (
+                        <FormField
+                          control={form.control}
+                          name="company"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Fővállalkozó (opcionális)</FormLabel>
+                              <Select 
+                                onValueChange={field.onChange} 
+                                value={field.value || ''}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Válasszon céget (üres = globális sablon)" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="">
+                                    <span className="text-gray-500">Nincs (globális sablon)</span>
+                                  </SelectItem>
+                                  {mainContractors.map((company) => (
+                                    <SelectItem 
+                                      key={company.documentId || company.id} 
+                                      value={company.documentId || String(company.id)}>
+                                      {company.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormDescription>
+                                Ha nincs kiválasztva, a sablon minden cég számára elérhető lesz
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
                       <div>
                         <label className="text-sm font-medium mb-2 block">
                           Sablon fájl (DOCX) {editingTemplate && '(opcionális - csak lecseréléshez)'}
@@ -411,7 +493,11 @@ export default function TemplatesPage() {
                           variant="outline"
                           onClick={() => {
                             setIsDialogOpen(false);
-                            form.reset();
+                            form.reset({
+                              name: '',
+                              type: 'felmerolap',
+                              company: undefined,
+                            });
                             setSelectedFile(null);
                           }}
                         >
