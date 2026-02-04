@@ -136,7 +136,7 @@ export default function TemplatesPage() {
     defaultValues: {
       name: '',
       type: 'felmerolap',
-      company: undefined,
+      company: '__none__',
     },
   });
 
@@ -159,7 +159,7 @@ export default function TemplatesPage() {
       form.reset({
         name: '',
         type: 'felmerolap',
-        company: undefined,
+        company: '__none__',
       });
       setSelectedFile(null);
     },
@@ -197,7 +197,7 @@ export default function TemplatesPage() {
       form.reset({
         name: '',
         type: 'felmerolap',
-        company: undefined,
+        company: '__none__',
       });
       setSelectedFile(null);
     },
@@ -253,7 +253,7 @@ export default function TemplatesPage() {
     form.reset({
       name: template.name,
       type: template.type,
-      company: companyId,
+      company: companyId || '__none__', // Use __none__ if no company
     });
     setIsDialogOpen(true);
   };
@@ -266,6 +266,9 @@ export default function TemplatesPage() {
   };
 
   const onSubmit = (values: TemplateFormValues) => {
+    // Convert __none__ to undefined for API
+    const companyValue = values.company === '__none__' ? undefined : values.company;
+    
     if (editingTemplate) {
       const identifier = editingTemplate.documentId || editingTemplate.id;
       const updateData: Partial<Template> = {
@@ -275,7 +278,7 @@ export default function TemplatesPage() {
       
       // Admin can update company
       if (isAdmin) {
-        updateData.company = values.company || undefined;
+        updateData.company = companyValue;
       }
       
       updateMutation.mutate({
@@ -283,7 +286,10 @@ export default function TemplatesPage() {
         data: updateData,
       });
     } else {
-      createMutation.mutate(values);
+      createMutation.mutate({
+        ...values,
+        company: companyValue,
+      });
     }
   };
 
@@ -313,7 +319,7 @@ export default function TemplatesPage() {
                     form.reset({
                       name: '',
                       type: 'felmerolap',
-                      company: undefined,
+                      company: '__none__',
                     });
                     setSelectedFile(null);
                   }}>
@@ -380,14 +386,14 @@ export default function TemplatesPage() {
                               <FormLabel>Fővállalkozó (opcionális)</FormLabel>
                               <Select 
                                 onValueChange={field.onChange} 
-                                value={field.value || ''}>
+                                value={field.value || '__none__'}>
                                 <FormControl>
                                   <SelectTrigger>
                                     <SelectValue placeholder="Válasszon céget (üres = globális sablon)" />
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  <SelectItem value="">
+                                  <SelectItem value="__none__">
                                     <span className="text-gray-500">Nincs (globális sablon)</span>
                                   </SelectItem>
                                   {mainContractors.map((company) => (
@@ -495,7 +501,7 @@ export default function TemplatesPage() {
                             form.reset({
                               name: '',
                               type: 'felmerolap',
-                              company: undefined,
+                              company: '__none__',
                             });
                             setSelectedFile(null);
                           }}

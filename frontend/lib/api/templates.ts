@@ -107,8 +107,8 @@ export const templatesApi = {
       }
 
       // Fővállalkozóhoz kötés (ha van)
-      // Empty string = no company (global template)
-      if (data.company && data.company !== '') {
+      // __none__ or empty string = no company (global template)
+      if (data.company && data.company !== '' && data.company !== '__none__') {
         templateData.company = data.company;
       }
 
@@ -156,9 +156,9 @@ export const templatesApi = {
         cleanData.template_file = templateFileId;
       }
 
-      // Handle company field: empty string = set to null (global template)
+      // Handle company field: __none__, empty string, or undefined = set to null (global template)
       if ('company' in data) {
-        if (data.company === '' || data.company === undefined) {
+        if (data.company === '' || data.company === undefined || data.company === '__none__') {
           cleanData.company = null;
         }
       }
