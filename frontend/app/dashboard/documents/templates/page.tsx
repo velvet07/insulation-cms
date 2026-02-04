@@ -10,7 +10,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { useAuthStore } from '@/lib/store/auth';
 import { usePermission } from '@/lib/contexts/permission-context';
 import { isAdminRole } from '@/lib/utils/user-role';
-import type { Company } from '@/types';
 import { Input } from '@/components/ui/input';
 import {
   Select,
