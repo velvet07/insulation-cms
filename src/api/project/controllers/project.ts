@@ -153,10 +153,11 @@ export default factories.createCoreController('api::project.project', ({ strapi 
     const datePart = `${yyyy}_${mm}_${dd}`;
     const safeCompany = sanitizeWindowsNameKeepAccents(companyName);
     const safeProject = sanitizeWindowsNameKeepAccents(projectPart);
-    const zipFileName = `${safeCompany}_${safeProject}_export_${datePart}.zip`;
+    const zipFileNameAscii = `${removeAccents(safeCompany) || 'Ceg'}_${removeAccents(safeProject) || 'Projekt'}_export_${datePart}.zip`;
 
     ctx.set('Content-Type', 'application/zip');
-    ctx.set('Content-Disposition', `attachment; filename="${zipFileName}"`);
+    ctx.set('Content-Disposition', `attachment; filename="${zipFileNameAscii}"`);
+    ctx.set('X-Export-Filename', zipFileNameAscii);
     ctx.set('Cache-Control', 'no-store');
 
     const archive = archiver('zip', { zlib: { level: 9 } });
@@ -210,13 +211,13 @@ export default factories.createCoreController('api::project.project', ({ strapi 
       return Readable.fromWeb(res.body as any);
     };
 
+    // Csak ezen mappák; több nem. 011=kezdő szerződések, 012=záró TIG/átadás, 013=nyilatkozatok, 021=fotók, 023=felmérőlap.
     const ensureFolders = (projectBase: string) => {
       const dirs = [
         `${projectBase}01_Adminisztratív_dokumentumok/`,
         `${projectBase}01_Adminisztratív_dokumentumok/011_Intézkedés_kezdete/`,
         `${projectBase}01_Adminisztratív_dokumentumok/012_Intézkedés_zárása/`,
         `${projectBase}01_Adminisztratív_dokumentumok/013_Egyéb_adminisztratív_dokumentumok_nyilatkozatok/`,
-
         `${projectBase}02_Végső_felhasználói_adatszolgáltatás/`,
         `${projectBase}02_Végső_felhasználói_adatszolgáltatás/021_Fényképek/`,
         `${projectBase}02_Végső_felhasználói_adatszolgáltatás/023_Műszaki_alátámasztó_dokumentumok/`,

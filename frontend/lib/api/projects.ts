@@ -386,8 +386,9 @@ export const projectsApi = {
     }
 
     const contentDisposition = response.headers.get('content-disposition') || '';
+    const xExportFilename = response.headers.get('x-export-filename') || '';
     const filenameMatch = contentDisposition.match(/filename="([^"]+)"/i);
-    const filename = filenameMatch?.[1] || 'export.zip';
+    const filename = xExportFilename || filenameMatch?.[1] || 'export.zip';
 
     const blob = await response.blob();
     return { blob, filename };

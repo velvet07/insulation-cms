@@ -38,6 +38,7 @@ export default [
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'],
       credentials: true,
       keepHeaderOnError: true,
+      exposedHeaders: ['Content-Disposition', 'X-Export-Filename'],
     },
   },
   'strapi::poweredBy',

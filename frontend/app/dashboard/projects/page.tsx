@@ -93,6 +93,17 @@ function generatePageNumbers(currentPage: number, pageCount: number): (number | 
   return pages;
 }
 
+function buildExportFilename(projects: Project[], selectedIds: Set<string>): string {
+  const idList = Array.from(selectedIds);
+  const first = idList.length > 0 ? projects.find((p) => (p.documentId || p.id)?.toString() === idList[0]) : null;
+  const companyName = first?.company && typeof first.company === 'object' ? (first.company as Company).name : 'Ceg';
+  const projectTitle = first?.title || (idList.length > 1 ? 'Tobb_projekt' : 'Projekt');
+  const sanitize = (s: string) => s.replace(/[<>:"/\\|?*\u0000-\u001F]/g, '_').replace(/\s+/g, ' ').trim() || 'Export';
+  const d = new Date();
+  const datePart = `${d.getFullYear()}_${String(d.getMonth() + 1).padStart(2, '0')}_${String(d.getDate()).padStart(2, '0')}`;
+  return `${sanitize(companyName)}_${sanitize(projectTitle)}_export_${datePart}.zip`;
+}
+
 export default function ProjectsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -315,7 +326,8 @@ export default function ProjectsPage() {
     setIsExporting(true);
     try {
       const ids = Array.from(selectedProjectIds);
-      const { blob, filename } = await projectsApi.bulkExport(ids);
+      const { blob } = await projectsApi.bulkExport(ids);
+      const filename = buildExportFilename(projects, selectedProjectIds);
       const url = window.URL.createObjectURL(blob);
       const a = window.document.createElement('a');
       a.href = url;
