@@ -10,6 +10,8 @@ interface SignaturePadProps {
   initialSignature?: string | null;
   width?: number;
   height?: number;
+  saveButtonText?: string;
+  hideCancelButton?: boolean;
 }
 
 export function SignaturePad({ 
@@ -17,7 +19,9 @@ export function SignaturePad({
   onCancel, 
   initialSignature = null,
   width = 600,
-  height = 200 
+  height = 200,
+  saveButtonText = 'Aláírás mentése',
+  hideCancelButton = false
 }: SignaturePadProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -166,12 +170,14 @@ export function SignaturePad({
           <RotateCcw className="mr-2 h-4 w-4" />
           Törlés
         </Button>
-        <Button variant="outline" onClick={onCancel}>
-          <X className="mr-2 h-4 w-4" />
-          Mégse
-        </Button>
+        {!hideCancelButton && (
+          <Button variant="outline" onClick={onCancel}>
+            <X className="mr-2 h-4 w-4" />
+            Mégse
+          </Button>
+        )}
         <Button onClick={save} disabled={!hasSignature}>
-          Aláírás mentése
+          {saveButtonText}
         </Button>
       </div>
     </div>

@@ -186,7 +186,7 @@ export const documentsApi = {
   },
 
   // Dokumentum újragenerálása az aláírással
-  regenerateWithSignature: async (documentId: number | string, signatureData: string) => {
+  regenerateWithSignature: async (documentId: number | string, signatureData: string | { signature1: string; signature2?: string }) => {
     try {
       const response = await strapiApi.post<StrapiResponse<Document>>('/documents/regenerate-with-signature', {
         data: {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
@@ -60,7 +60,29 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<Set<string>>(new Set());
   const [isTypeChangeDialogOpen, setIsTypeChangeDialogOpen] = useState(false);
   const [newDocumentType, setNewDocumentType] = useState<Document['type']>('other');
+  const [signature1Data, setSignature1Data] = useState<string | null>(null);
+  const [signature2Data, setSignature2Data] = useState<string | null>(null);
 
+  // Reset signature states when document changes
+  useEffect(() => {
+    if (selectedDocumentForSignature) {
+      const sigData = selectedDocumentForSignature.signature_data;
+      if (sigData && typeof sigData === 'object') {
+        setSignature1Data((sigData as any).signature1 || null);
+        setSignature2Data((sigData as any).signature2 || null);
+      } else if (sigData && typeof sigData === 'string') {
+        // Backwards compatibility - single signature
+        setSignature1Data(sigData);
+        setSignature2Data(null);
+      } else {
+        setSignature1Data(null);
+        setSignature2Data(null);
+      }
+    } else {
+      setSignature1Data(null);
+      setSignature2Data(null);
+    }
+  }, [selectedDocumentForSignature]);
 
   const projectId = project.documentId || project.id;
 
@@ -494,7 +516,7 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
     return fullUrl;
   };
 
-  const saveSignature = async (signatureData: string) => {
+  const saveSignature = async (signatureData: string | { signature1: string; signature2?: string }) => {
     if (!selectedDocumentForSignature) return;
 
     try {
@@ -1067,26 +1089,90 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
               </div>
           </div>
 
-          {/* Aláírási mező - középre igazítva max-w-2xl */}
-          <div className="max-w-2xl mx-auto">
-            <div className="border rounded-lg p-6 bg-white dark:bg-gray-800">
-              <h4 className="text-md font-semibold mb-4">Aláírás</h4>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                Tableten vagy érintőképernyős eszközön ujjal vagy stylus-szal is aláírhat.
-              </p>
-              <SignaturePad
-                onSave={saveSignature}
-                onCancel={() => setSelectedDocumentForSignature(null)}
-                initialSignature={
-                  selectedDocumentForSignature.signature_data
-                    ? (typeof selectedDocumentForSignature.signature_data === 'string'
-                        ? selectedDocumentForSignature.signature_data
-                        : (selectedDocumentForSignature.signature_data as any)?.image)
-                    : null
-                }
-                width={600}
-                height={200}
-              />
+          {/* Aláírási mezők */}
+          <div className="max-w-4xl mx-auto space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Kivitelező aláírása */}
+              <div className="border rounded-lg p-6 bg-white dark:bg-gray-800">
+                <h4 className="text-md font-semibold mb-2">Kivitelező aláírása</h4>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                  Az aláírás a sablon {'{%signature1}'} helyére kerül.
+                </p>
+                <SignaturePad
+                  onSave={(sig1) => setSignature1Data(sig1)}
+                  onCancel={() => {}}
+                  initialSignature={
+                    selectedDocumentForSignature.signature_data
+                      ? (typeof selectedDocumentForSignature.signature_data === 'object'
+                          ? (selectedDocumentForSignature.signature_data as any).signature1
+                          : selectedDocumentForSignature.signature_data)
+                      : null
+                  }
+                  width={400}
+                  height={150}
+                  saveButtonText="Rögzítés"
+                  hideCancelButton={true}
+                />
+              </div>
+
+              {/* Ügyfél aláírása */}
+              <div className="border rounded-lg p-6 bg-white dark:bg-gray-800">
+                <h4 className="text-md font-semibold mb-2">Ügyfél aláírása</h4>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                  Az aláírás a sablon {'{%signature2}'} helyére kerül.
+                </p>
+                <SignaturePad
+                  onSave={(sig2) => setSignature2Data(sig2)}
+                  onCancel={() => {}}
+                  initialSignature={
+                    selectedDocumentForSignature.signature_data && typeof selectedDocumentForSignature.signature_data === 'object'
+                      ? (selectedDocumentForSignature.signature_data as any).signature2
+                      : null
+                  }
+                  width={400}
+                  height={150}
+                  saveButtonText="Rögzítés"
+                  hideCancelButton={true}
+                />
+              </div>
+            </div>
+
+            {/* Közös mentés gomb */}
+            <div className="flex justify-end gap-2 pt-4 border-t">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setSelectedDocumentForSignature(null);
+                  setSignature1Data(null);
+                  setSignature2Data(null);
+                }}
+              >
+                <X className="mr-2 h-4 w-4" />
+                Mégse
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!signature1Data) {
+                    alert('Kérem adja meg a Kivitelező aláírását!');
+                    return;
+                  }
+                  
+                  // Elküldjük az aláírás(ok)at
+                  if (signature2Data) {
+                    // Mindkét aláírás megvan, objektumként küldjük
+                    saveSignature({
+                      signature1: signature1Data,
+                      signature2: signature2Data,
+                    });
+                  } else {
+                    // Csak egy aláírás - backwards compatibility
+                    saveSignature(signature1Data);
+                  }
+                }}
+                disabled={!signature1Data}
+              >
+                {signature2Data ? 'Dokumentum aláírása (mindkét fél)' : 'Dokumentum aláírása'}
+              </Button>
             </div>
           </div>
         </div>

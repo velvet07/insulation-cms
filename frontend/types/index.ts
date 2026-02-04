@@ -158,7 +158,7 @@ export interface Document extends StrapiEntity {
   file_size?: number;
   signed: boolean;
   requires_signature?: boolean;
-  signature_data?: string | Record<string, unknown>; // Base64 encoded image vagy JSON
+  signature_data?: string | { signature1: string; signature2?: string }; // Base64 encoded image (single) vagy objektum (dual)
   signed_at?: string;
   project?: Project;
   company?: Company | string | number | null; // Tulajdonos (céges dokumentum); null = nincs beállítva

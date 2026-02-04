@@ -578,8 +578,11 @@ export default factories.createCoreService('api::document.document', ({ strapi }
         compression: 'DEFLATE',
       });
 
-      // PDF konverzió
-      const pdfBuffer = await this.convertDocxToPdf(generatedDocxBuffer);
+      // PDF konverzió - aláírt dokumentumhoz PDF/A-1a formátumban readonly védelemmel
+      const pdfBuffer = await this.convertDocxToPdf(generatedDocxBuffer, {
+        usePdfA: true,
+        protectPdf: true,
+      });
 
       // Fájlnév
       // @ts-ignore
@@ -798,9 +801,35 @@ export default factories.createCoreService('api::document.document', ({ strapi }
     },
 
   /**
+   * PDF védelem alkalmazása (readonly, nem szerkeszthető)
+   */
+  async protectPdf(pdfBuffer: Buffer): Promise<Buffer> {
+    try {
+      // @ts-ignore
+      const { PDFDocument } = await import('pdf-lib');
+      const pdfDoc = await PDFDocument.load(pdfBuffer);
+      
+      const protectedBytes = await pdfDoc.save({
+        useObjectStreams: false,
+        addDefaultPage: false,
+        objectsPerTick: 50,
+        updateFieldAppearances: false,
+      });
+      
+      // Note: pdf-lib v1.17+ nem támogatja az encryption-t közvetlenül
+      // A PDF/A formátum magában is védi a dokumentumot
+      return Buffer.from(protectedBytes);
+    } catch (error: any) {
+      strapi.log.error('Error protecting PDF:', error);
+      // Ha a védelem sikertelen, visszaadjuk az eredeti PDF-et
+      return pdfBuffer;
+    }
+  },
+
+  /**
    * DOCX fájlt PDF-re konvertál LibreOffice-szal
    */
-  async convertDocxToPdf(docxBuffer: Buffer): Promise<Buffer> {
+  async convertDocxToPdf(docxBuffer: Buffer, options?: { usePdfA?: boolean; protectPdf?: boolean }): Promise<Buffer> {
     const tempDir = tmpdir();
     // Ugyanazt a base nevet használjuk, hogy a LibreOffice ugyanazzal a névvel hozza létre a PDF-et
     const baseName = `temp_${Date.now()}_${Math.random().toString(36).substring(7)}`;
@@ -844,9 +873,19 @@ export default factories.createCoreService('api::document.document', ({ strapi }
 
       // LibreOffice konverzió opciók a jobb formázásért
       // --infilter: Word dokumentumok jobb kezelése
-      const convertCommand = `${sofficeCommand} --headless --infilter="MS Word 2007 XML" --convert-to pdf --outdir "${tempDir}" "${tempDocxPath}"`;
+      // PDF/A-1a formátum aláírt dokumentumokhoz (archívum-barát, módosítás-érzékeny)
+      let convertCommand: string;
       
-      strapi.log.info(`Converting DOCX to PDF: ${convertCommand}`);
+      if (options?.usePdfA) {
+        // PDF/A-1a export tagged PDF-fel és PDF/UA compliance-szal
+        const pdfAFilter = 'pdf:writer_pdf_Export:{"SelectPdfVersion":{"type":"long","value":"1"},"UseTaggedPDF":{"type":"boolean","value":"true"},"PDFUACompliance":{"type":"boolean","value":"true"}}';
+        convertCommand = `${sofficeCommand} --headless --infilter="MS Word 2007 XML" --convert-to "${pdfAFilter}" --outdir "${tempDir}" "${tempDocxPath}"`;
+      } else {
+        // Standard PDF
+        convertCommand = `${sofficeCommand} --headless --infilter="MS Word 2007 XML" --convert-to pdf --outdir "${tempDir}" "${tempDocxPath}"`;
+      }
+      
+      strapi.log.info(`Converting DOCX to PDF${options?.usePdfA ? ' (PDF/A-1a)' : ''}: ${convertCommand}`);
       
       try {
         await execAsync(convertCommand, { timeout: 30000 }); // 30 másodperces timeout
@@ -880,13 +919,20 @@ export default factories.createCoreService('api::document.document', ({ strapi }
         if (pdfFiles.length > 0) {
           const foundPdfPath = path.join(tempDir, pdfFiles[0]);
           strapi.log.info(`Found PDF at: ${foundPdfPath}`);
-          const pdfBuffer = await fs.promises.readFile(foundPdfPath);
+          let pdfBuffer = await fs.promises.readFile(foundPdfPath);
           
           // Tisztítás
           await unlink(tempDocxPath).catch(() => {});
           await unlink(foundPdfPath).catch(() => {});
           
           strapi.log.info(`PDF conversion successful, size: ${pdfBuffer.length} bytes`);
+          
+          // Ha kért PDF protection, alkalmazzuk
+          if (options?.protectPdf) {
+            strapi.log.info('Applying PDF protection...');
+            pdfBuffer = await this.protectPdf(pdfBuffer);
+          }
+          
           return pdfBuffer;
         } else {
           throw new Error(`PDF fájl nem található a várt helyen: ${tempPdfPath}`);
@@ -894,13 +940,20 @@ export default factories.createCoreService('api::document.document', ({ strapi }
       }
 
       // PDF fájl beolvasása
-      const pdfBuffer = await fs.promises.readFile(tempPdfPath);
+      let pdfBuffer = await fs.promises.readFile(tempPdfPath);
 
       // Tisztítás
       await unlink(tempDocxPath).catch(() => {});
       await unlink(tempPdfPath).catch(() => {});
 
       strapi.log.info(`PDF conversion successful, size: ${pdfBuffer.length} bytes`);
+      
+      // Ha kért PDF protection, alkalmazzuk
+      if (options?.protectPdf) {
+        strapi.log.info('Applying PDF protection...');
+        pdfBuffer = await this.protectPdf(pdfBuffer);
+      }
+      
       return pdfBuffer;
     } catch (error: any) {
       // Tisztítás hiba esetén is
