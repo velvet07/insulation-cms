@@ -93,10 +93,28 @@ function generatePageNumbers(currentPage: number, pageCount: number): (number | 
   return pages;
 }
 
-function buildExportFilename(projects: Project[], selectedIds: Set<string>): string {
+function buildExportFilename(projects: Project[], allProjects: Project[], selectedIds: Set<string>): string {
   const idList = Array.from(selectedIds);
-  const first = idList.length > 0 ? projects.find((p) => (p.documentId || p.id)?.toString() === idList[0]) : null;
-  const companyName = first?.company && typeof first.company === 'object' ? (first.company as Company).name : 'Ceg';
+  // Try to find first selected project in allProjects (all loaded pages), not just current page
+  let first = idList.length > 0 ? allProjects.find((p) => (p.documentId || p.id)?.toString() === idList[0]) : null;
+  // Fallback to current page if not found in all loaded
+  if (!first && idList.length > 0) {
+    first = projects.find((p) => (p.documentId || p.id)?.toString() === idList[0]) || null;
+  }
+  
+  // Company name: prefer main contractor (company), fallback to subcontractor's parent, then subcontractor
+  let companyName = 'Ceg';
+  if (first?.company && typeof first.company === 'object') {
+    companyName = (first.company as Company).name || 'Ceg';
+  } else if (first?.subcontractor && typeof first.subcontractor === 'object') {
+    const sub = first.subcontractor as any;
+    if (sub.parent_company && typeof sub.parent_company === 'object') {
+      companyName = sub.parent_company.name || 'Ceg';
+    } else {
+      companyName = sub.name || 'Ceg';
+    }
+  }
+  
   const projectTitle = first?.title || (idList.length > 1 ? 'Tobb_projekt' : 'Projekt');
   const sanitize = (s: string) => s.replace(/[<>:"/\\|?*\u0000-\u001F]/g, '_').replace(/\s+/g, ' ').trim() || 'Export';
   const d = new Date();
@@ -327,7 +345,7 @@ export default function ProjectsPage() {
     try {
       const ids = Array.from(selectedProjectIds);
       const { blob } = await projectsApi.bulkExport(ids);
-      const filename = buildExportFilename(projects, selectedProjectIds);
+      const filename = buildExportFilename(projects, allProjects, selectedProjectIds);
       const url = window.URL.createObjectURL(blob);
       const a = window.document.createElement('a');
       a.href = url;
