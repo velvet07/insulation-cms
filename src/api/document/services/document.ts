@@ -192,10 +192,23 @@ export default factories.createCoreService('api::document.document', ({ strapi }
       // @ts-ignore
       const tokens: any = this.createTokensFromProject(project);
       
-      // Ha van aláírás, adjuk hozzá a tokenekhez (a sablonban {%signature} token kell legyen)
+      // Ha van aláírás, adjuk hozzá a tokenekhez
+      // A sablonban {%signature1} és {%signature2} tokeneket lehet használni
       if (signatureData) {
-        strapi.log.info('Adding signature to document tokens');
-        tokens.signature = signatureData;
+        strapi.log.info('Adding signature(s) to document tokens');
+        
+        // Ha a signatureData objektum (két aláírás), akkor mindkettőt beállítjuk
+        if (typeof signatureData === 'object' && signatureData !== null) {
+          tokens.signature1 = (signatureData as any).signature1 || '';
+          tokens.signature2 = (signatureData as any).signature2 || '';
+          // Backwards compatibility - signature is signature1
+          tokens.signature = (signatureData as any).signature1 || '';
+        } else {
+          // Ha string (egy aláírás), akkor mindhárom tokenhez ugyanazt használjuk
+          tokens.signature = signatureData;
+          tokens.signature1 = signatureData;
+          tokens.signature2 = signatureData;
+        }
       }
 
       doc.setData(tokens);
@@ -499,7 +512,19 @@ export default factories.createCoreService('api::document.document', ({ strapi }
       // Tokenek létrehozása az aláírással
       // @ts-ignore
       const tokens: any = this.createTokensFromProject(project);
-      tokens.signature = signatureData;
+      
+      // Ha a signatureData objektum (két aláírás), akkor mindkettőt beállítjuk
+      if (typeof signatureData === 'object' && signatureData !== null) {
+        tokens.signature1 = (signatureData as any).signature1 || '';
+        tokens.signature2 = (signatureData as any).signature2 || '';
+        // Backwards compatibility
+        tokens.signature = (signatureData as any).signature1 || '';
+      } else {
+        // Ha string (egy aláírás), akkor mindhárom tokenhez ugyanazt használjuk
+        tokens.signature = signatureData;
+        tokens.signature1 = signatureData;
+        tokens.signature2 = signatureData;
+      }
 
       doc.setData(tokens);
       
