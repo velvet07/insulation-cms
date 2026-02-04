@@ -28,24 +28,8 @@ export default function TemplatesPage() {
   const { can } = usePermission();
   const isAdmin = isAdminRole(user);
 
-  // Check permission - redirect if user cannot view templates
-  if (!can('documents', 'view_list')) {
-    return (
-      <ProtectedRoute>
-        <DashboardLayout>
-          <div className="p-6">
-            <Card>
-              <CardContent className="py-8 text-center">
-                <p className="text-gray-500">Nincs jogosultságod az oldal megtekintéséhez.</p>
-              </CardContent>
-            </Card>
-          </div>
-        </DashboardLayout>
-      </ProtectedRoute>
-    );
-  }
-
-  // Check if user can manage templates
+  // Check permissions
+  const canViewList = can('documents', 'view_list');
   const canManageTemplates = can('documents', 'manage_templates');
 
   // Get user's company (for filtering templates)
@@ -95,6 +79,23 @@ export default function TemplatesPage() {
       deleteMutation.mutate(identifier);
     }
   };
+
+  // Early return for permission check - after all hooks
+  if (!canViewList) {
+    return (
+      <ProtectedRoute>
+        <DashboardLayout>
+          <div className="p-6">
+            <Card>
+              <CardContent className="py-8 text-center">
+                <p className="text-gray-500">Nincs jogosultságod az oldal megtekintéséhez.</p>
+              </CardContent>
+            </Card>
+          </div>
+        </DashboardLayout>
+      </ProtectedRoute>
+    );
+  }
 
   return (
     <ProtectedRoute>
