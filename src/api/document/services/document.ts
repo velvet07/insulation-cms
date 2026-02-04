@@ -745,11 +745,11 @@ export default factories.createCoreService('api::document.document', ({ strapi }
       anyjaneve2: '',
       adoazonosito2: '',
 
-      hrsz: '',
+      hrsz: project.property_hrsz || '',
       negyzetmeter: project.area_sqm ? String(project.area_sqm) : '',
       szerzodesdatum: project.createdAt ? formatDate(project.createdAt) : '',
       kivdatum: project.scheduled_date ? formatDate(project.scheduled_date) : '',
-      hem: '',
+      hem: project.hem_value || '',
       fodem_anyaga: floorMaterialValue,
       adoszam: company?.tax_number || '',
       kivdatum_real: project.completed_at ? formatDate(project.completed_at) : '',

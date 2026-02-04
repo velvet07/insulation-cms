@@ -13,6 +13,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from '@/components/ui/form';
 import {
   RadioGroup,
@@ -42,9 +43,11 @@ const contractDataSchema = z.object({
   property_street: z.string().optional(),
   property_city: z.string().optional(),
   property_zip: z.string().optional(),
+  property_hrsz: z.string().optional(),
   area_sqm: z.number().optional(),
   floor_material: z.enum(['wood', 'prefab_rc', 'monolithic_rc', 'rc_slab', 'hollow_block', 'other']).optional(),
   floor_material_extra: z.string().optional(),
+  hem_value: z.string().optional(),
   scheduled_date: z.string().optional(),
 }).superRefine((data, ctx) => {
   // Ha property_zip van kitöltve, validáljuk a formátumát (de nem kötelező)
@@ -80,9 +83,11 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
       property_street: project.property_street || '',
       property_city: project.property_city || '',
       property_zip: project.property_zip || '',
+      property_hrsz: project.property_hrsz || '',
       area_sqm: project.area_sqm || 0,
       floor_material: project.floor_material || 'wood',
       floor_material_extra: project.floor_material_extra || '',
+      hem_value: project.hem_value || '',
       scheduled_date: project.scheduled_date || undefined,
     },
   });
@@ -123,9 +128,11 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
       property_street: project.property_street || '',
       property_city: project.property_city || '',
       property_zip: project.property_zip || '',
+      property_hrsz: project.property_hrsz || '',
       area_sqm: project.area_sqm || 0,
       floor_material: project.floor_material || 'wood',
       floor_material_extra: project.floor_material_extra || '',
+      hem_value: project.hem_value || '',
       scheduled_date: project.scheduled_date || undefined,
     });
     // Explicit módon állítsd be a dátum mező értékét, hogy biztosan frissüljön
@@ -421,6 +428,25 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
           <div className="mt-4">
             <FormField
               control={form.control}
+              name="property_hrsz"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Helyrajzi szám (HRSZ)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="123456/7" {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    Az ingatlan helyrajzi száma
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+          
+          <div className="mt-4">
+            <FormField
+              control={form.control}
               name="area_sqm"
               render={({ field }) => (
                 <FormItem>
@@ -499,6 +525,25 @@ export function ContractForm({ project, onSubmit, isSubmitting }: ContractFormPr
                 />
               </div>
             )}
+          </div>
+
+          <div className="mt-4">
+            <FormField
+              control={form.control}
+              name="hem_value"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Elszámolható HEM mérete (GJ)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Pl. 50.5" {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    A HEM (Hőenergia Megtakarítás) értéke gigajoule-ban
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           </div>
         </div>
 

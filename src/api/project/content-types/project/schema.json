@@ -59,11 +59,17 @@
     "property_zip": {
       "type": "string"
     },
+    "property_hrsz": {
+      "type": "string"
+    },
     "floor_material": {
       "type": "enumeration",
       "enum": ["wood", "prefab_rc", "monolithic_rc", "rc_slab", "hollow_block", "other"]
     },
     "floor_material_extra": {
+      "type": "string"
+    },
+    "hem_value": {
       "type": "string"
     },
     "title": {

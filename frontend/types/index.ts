@@ -95,8 +95,10 @@ export interface Project extends StrapiEntity {
   property_street?: string; // Ingatlan utca, házszám
   property_city?: string; // Ingatlan város
   property_zip?: string; // Ingatlan IRSZ
+  property_hrsz?: string; // Helyrajzi szám
   floor_material?: 'wood' | 'prefab_rc' | 'monolithic_rc' | 'rc_slab' | 'hollow_block' | 'other'; // Padlásfödém anyaga
   floor_material_extra?: string; // Egyéb födém anyaga
+  hem_value?: string; // HEM érték (GJ)
   audit_log?: ProjectAuditLogEntry[]; // Audit log az események követésére
 }
 
