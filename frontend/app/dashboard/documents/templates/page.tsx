@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ProtectedRoute } from '@/components/auth/protected-route';
@@ -10,14 +9,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { useAuthStore } from '@/lib/store/auth';
 import { usePermission } from '@/lib/contexts/permission-context';
 import { isAdminRole } from '@/lib/utils/user-role';
-import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -26,58 +17,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
 import { templatesApi } from '@/lib/api/templates';
-import { companiesApi } from '@/lib/api/companies';
 import { TEMPLATE_TYPE_LABELS, type Template, type TemplateType, type Company } from '@/types';
-import { Plus, Edit, Trash2, Upload, FileText, AlertCircle } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-  FormDescription,
-} from '@/components/ui/form';
-
-const templateSchema = z.object({
-  name: z.string().min(1, 'A sablon neve kötelező'),
-  type: z.enum([
-    'felmerolap',
-    'vallalkozasi_szerzodes',
-    'megallapodas',
-    'szerzodes_energiahatékonysag',
-    'adatkezelesi_hozzajarulas',
-    'teljesitesi_igazolo',
-    'munkaterul_atadas',
-    'other',
-  ]),
-  company: z.string().optional(),
-});
-
-type TemplateFormValues = z.infer<typeof templateSchema>;
+import { Plus, Edit, Trash2, FileText } from 'lucide-react';
 
 export default function TemplatesPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
   const { can } = usePermission();
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const isAdmin = isAdminRole(user);
 
   // Check permission - redirect if user cannot view templates
   if (!can('documents', 'view_list')) {
@@ -98,9 +47,8 @@ export default function TemplatesPage() {
 
   // Check if user can manage templates
   const canManageTemplates = can('documents', 'manage_templates');
-  const isAdmin = isAdminRole(user);
 
-  // Get user's company (for filtering and creating templates)
+  // Get user's company (for filtering templates)
   const getUserCompanyId = (): string | undefined => {
     if (!user?.company) return undefined;
     if (typeof user.company === 'object' && user.company !== null) {
@@ -110,14 +58,6 @@ export default function TemplatesPage() {
   };
 
   const userCompanyId = getUserCompanyId();
-  const userCompanyName = typeof user?.company === 'object' ? (user.company as Company)?.name : undefined;
-
-  // Fetch main contractors (for admin only)
-  const { data: mainContractors = [] } = useQuery({
-    queryKey: ['companies', 'main_contractor'],
-    queryFn: () => companiesApi.getAll({ type: 'main_contractor' }),
-    enabled: isAdmin, // Only fetch if admin
-  });
 
   // Fetch templates - filter by user's company if not admin
   const { data: templates = [], isLoading } = useQuery({
@@ -128,99 +68,6 @@ export default function TemplatesPage() {
         return templatesApi.getAll();
       }
       return templatesApi.getAll(userCompanyId ? { company: userCompanyId } : undefined);
-    },
-  });
-
-  const form = useForm<TemplateFormValues>({
-    resolver: zodResolver(templateSchema),
-    defaultValues: {
-      name: '',
-      type: 'felmerolap',
-      company: '__none__',
-    },
-  });
-
-  const createMutation = useMutation({
-    mutationFn: async (data: TemplateFormValues) => {
-      // Admin manually selects company or leaves it empty
-      // Non-admin users automatically get their company
-      const companyId = isAdmin ? data.company : userCompanyId;
-      
-      return templatesApi.create({
-        name: data.name,
-        type: data.type,
-        tokens: [], // Alapértelmezett tokenek listája
-        company: companyId || undefined, // Can be undefined for global templates
-      }, selectedFile || undefined);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['templates'] });
-      setIsDialogOpen(false);
-      form.reset({
-        name: '',
-        type: 'felmerolap',
-        company: '__none__',
-      });
-      setSelectedFile(null);
-    },
-    onError: (error: any) => {
-      console.error('Error creating template:', error);
-
-      // Ellenőrizzük, hogy a hiba a type enum értékekkel kapcsolatos-e
-      const errorMessage = error?.message || '';
-      if (errorMessage.includes('type must be one of the following values') ||
-        errorMessage.includes('contract, worksheet, invoice')) {
-        alert(
-          'HIBA: A Strapi szerveren a dokumentum típusok sémája még nem frissült.\n\n' +
-          'Kérjük, frissítse a Strapi admin felületen:\n' +
-          '1. Lépjen be: https://cms.emermedia.eu/admin\n' +
-          '2. Menjen a Content-Type Builder menüpontra\n' +
-          '3. Keresse meg a "Template" content type-ot\n' +
-          '4. Frissítse a "type" mező enum értékeit az új értékekre\n' +
-          '5. Ismételje meg ugyanezt a "Document" content type-nál is\n\n' +
-          'Részletes útmutató: docs/STRAPI_SCHEMA_UPDATE.md'
-        );
-      } else {
-        alert(error?.message || 'Hiba történt a sablon létrehozása során.');
-      }
-    },
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number | string; data: Partial<Template> }) => {
-      return templatesApi.update(id, data, selectedFile || undefined);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['templates'] });
-      setIsDialogOpen(false);
-      setEditingTemplate(null);
-      form.reset({
-        name: '',
-        type: 'felmerolap',
-        company: '__none__',
-      });
-      setSelectedFile(null);
-    },
-    onError: (error: any) => {
-      console.error('Error updating template:', error);
-
-      // Ellenőrizzük, hogy a hiba a type enum értékekkel kapcsolatos-e
-      const errorMessage = error?.message || '';
-      if (errorMessage.includes('type must be one of the following values') ||
-        errorMessage.includes('contract, worksheet, invoice')) {
-        alert(
-          'HIBA: A Strapi szerveren a dokumentum típusok sémája még nem frissült.\n\n' +
-          'Kérjük, frissítse a Strapi admin felületen:\n' +
-          '1. Lépjen be: https://cms.emermedia.eu/admin\n' +
-          '2. Menjen a Content-Type Builder menüpontra\n' +
-          '3. Keresse meg a "Template" content type-ot\n' +
-          '4. Frissítse a "type" mező enum értékeit az új értékekre\n' +
-          '5. Ismételje meg ugyanezt a "Document" content type-nál is\n\n' +
-          'Részletes útmutató: docs/STRAPI_SCHEMA_UPDATE.md'
-        );
-      } else {
-        alert(error?.message || 'Hiba történt a sablon frissítése során.');
-      }
     },
   });
 
@@ -238,65 +85,14 @@ export default function TemplatesPage() {
   });
 
   const handleEdit = (template: Template) => {
-    setEditingTemplate(template);
-    
-    // Get company ID (documentId or id)
-    let companyId: string | undefined;
-    if (template.company) {
-      if (typeof template.company === 'object') {
-        companyId = (template.company as Company).documentId || String((template.company as Company).id);
-      } else {
-        companyId = String(template.company);
-      }
-    }
-    
-    form.reset({
-      name: template.name,
-      type: template.type,
-      company: companyId || '__none__', // Use __none__ if no company
-    });
-    setIsDialogOpen(true);
+    const identifier = template.documentId || template.id;
+    router.push(`/dashboard/documents/templates/${identifier}`);
   };
 
   const handleDelete = (template: Template) => {
     if (confirm(`Biztosan törölni szeretné a "${template.name}" sablont?`)) {
       const identifier = template.documentId || template.id;
       deleteMutation.mutate(identifier);
-    }
-  };
-
-  const onSubmit = (values: TemplateFormValues) => {
-    // Convert __none__ to undefined for API
-    const companyValue = values.company === '__none__' ? undefined : values.company;
-    
-    if (editingTemplate) {
-      const identifier = editingTemplate.documentId || editingTemplate.id;
-      const updateData: Partial<Template> = {
-        name: values.name,
-        type: values.type,
-      };
-      
-      // Admin can update company
-      if (isAdmin) {
-        updateData.company = companyValue;
-      }
-      
-      updateMutation.mutate({
-        id: identifier,
-        data: updateData,
-      });
-    } else {
-      createMutation.mutate({
-        ...values,
-        company: companyValue,
-      });
-    }
-  };
-
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
     }
   };
 
@@ -312,210 +108,10 @@ export default function TemplatesPage() {
               </p>
             </div>
             {canManageTemplates && (
-              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button onClick={() => {
-                    setEditingTemplate(null);
-                    form.reset({
-                      name: '',
-                      type: 'felmerolap',
-                      company: '__none__',
-                    });
-                    setSelectedFile(null);
-                  }}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Új sablon
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-[500px]">
-                  <DialogHeader>
-                    <DialogTitle>
-                      {editingTemplate ? 'Sablon szerkesztése' : 'Új sablon létrehozása'}
-                    </DialogTitle>
-                    <DialogDescription>
-                      {editingTemplate
-                        ? 'Módosítsa a sablon adatait vagy cserélje le a sablon fájlt.'
-                        : 'Hozzon létre egy új dokumentum sablont.'}
-                    </DialogDescription>
-                  </DialogHeader>
-                  <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                      <FormField
-                        control={form.control}
-                        name="name"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Sablon neve *</FormLabel>
-                            <FormControl>
-                              <Input placeholder="Pl. Felmérőlap sablon" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="type"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Dokumentum típus *</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Válasszon típust" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {Object.entries(TEMPLATE_TYPE_LABELS).map(([value, label]) => (
-                                  <SelectItem key={value} value={value}>
-                                    {label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      {isAdmin && (
-                        <FormField
-                          control={form.control}
-                          name="company"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Fővállalkozó (opcionális)</FormLabel>
-                              <Select 
-                                onValueChange={field.onChange} 
-                                value={field.value || '__none__'}>
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Válasszon céget (üres = globális sablon)" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  <SelectItem value="__none__">
-                                    <span className="text-gray-500">Nincs (globális sablon)</span>
-                                  </SelectItem>
-                                  {mainContractors.map((company) => (
-                                    <SelectItem 
-                                      key={company.documentId || company.id} 
-                                      value={company.documentId || String(company.id)}>
-                                      {company.name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <FormDescription>
-                                Ha nincs kiválasztva, a sablon minden cég számára elérhető lesz
-                              </FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      )}
-                      <div>
-                        <label className="text-sm font-medium mb-2 block">
-                          Sablon fájl (DOCX) {editingTemplate && '(opcionális - csak lecseréléshez)'}
-                        </label>
-                        <div className="flex items-center gap-2">
-                          <Input
-                            type="file"
-                            accept=".docx"
-                            onChange={handleFileSelect}
-                            className="flex-1"
-                          />
-                          {selectedFile && (
-                            <span className="text-sm text-gray-500">{selectedFile.name}</span>
-                          )}
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {editingTemplate
-                            ? 'Csak akkor töltse fel, ha le szeretné cserélni a meglévő sablont.'
-                            : 'Töltse fel a DOCX sablon fájlt. A tokeneket {token_neve} formátumban használja.'}
-                        </p>
-                      </div>
-                      <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-md border border-gray-200 dark:border-gray-700">
-                        <p className="text-sm font-medium mb-3">Elérhető tokenek:</p>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                          <div>
-                            <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">Szerződő fél (1):</p>
-                            <ul className="space-y-1 text-gray-600 dark:text-gray-400">
-                              <li>• {'{nev1}'} - Név</li>
-                              <li>• {'{irsz1}'} - Irányítószám</li>
-                              <li>• {'{telepules1}'} - Település</li>
-                              <li>• {'{cim1}'} - Cím (utca, házszám)</li>
-                              <li>• {'{telefon}'} - Telefonszám</li>
-                              <li>• {'{email1}'} - Email</li>
-                            </ul>
-                          </div>
-                          <div>
-                            <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">Személyes adatok (1):</p>
-                            <ul className="space-y-1 text-gray-600 dark:text-gray-400">
-                              <li>• {'{szhely}'} - Születési hely</li>
-                              <li>• {'{szido1}'} - Születési idő</li>
-                              <li>• {'{anyjaneve1}'} - Anyja neve</li>
-                              <li>• {'{adoazonosito1}'} - Adóazonosító</li>
-                            </ul>
-                          </div>
-                          <div>
-                            <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">Projekt / ingatlan:</p>
-                            <ul className="space-y-1 text-gray-600 dark:text-gray-400">
-                              <li>• {'{projektirsz}'} - Ingatlan IRSZ</li>
-                              <li>• {'{projekttelepules}'} - Ingatlan település</li>
-                              <li>• {'{projektcim}'} - Ingatlan cím (utca, házszám)</li>
-                              <li>• {'{hrsz}'} - HRSZ</li>
-                              <li>• {'{negyzetmeter}'} - Terület (m²)</li>
-                              <li>• {'{fodem_anyaga}'} - Födém anyaga</li>
-                            </ul>
-                          </div>
-                          <div>
-                            <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">Szerződő fél (2) / cég:</p>
-                            <ul className="space-y-1 text-gray-600 dark:text-gray-400">
-                              <li>• {'{nev2}'} - Név</li>
-                              <li>• {'{irsz2}'} - Irányítószám</li>
-                              <li>• {'{telepules2}'} - Település</li>
-                              <li>• {'{cim2}'} - Cím</li>
-                              <li>• {'{szido2}'} - Születési idő</li>
-                              <li>• {'{anyjaneve2}'} - Anyja neve</li>
-                              <li>• {'{adoazonosito2}'} - Adóazonosító</li>
-                              <li>• {'{adoszam}'} - Adószám</li>
-                            </ul>
-                          </div>
-                          <div>
-                            <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">Dátumok / egyéb:</p>
-                            <ul className="space-y-1 text-gray-600 dark:text-gray-400">
-                              <li>• {'{szerzodesdatum}'} - Szerződés dátuma</li>
-                              <li>• {'{kivdatum}'} - Kivitelezés dátuma</li>
-                              <li>• {'{kivdatum_real}'} - Kivitelezés dátuma (tényleges)</li>
-                              <li>• {'{hem}'} - HEM</li>
-                            </ul>
-                          </div>
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => {
-                            setIsDialogOpen(false);
-                            form.reset({
-                              name: '',
-                              type: 'felmerolap',
-                              company: '__none__',
-                            });
-                            setSelectedFile(null);
-                          }}
-                        >
-                          Mégse
-                        </Button>
-                        <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
-                          {editingTemplate ? 'Mentés' : 'Létrehozás'}
-                        </Button>
-                      </DialogFooter>
-                    </form>
-                  </Form>
-                </DialogContent>
-              </Dialog>
+              <Button onClick={() => router.push('/dashboard/documents/templates/new')}>
+                <Plus className="mr-2 h-4 w-4" />
+                Új sablon
+              </Button>
             )}
           </div>
 
@@ -527,10 +123,12 @@ export default function TemplatesPage() {
             <div className="text-center py-12">
               <FileText className="mx-auto h-12 w-12 text-gray-400 mb-4" />
               <p className="text-gray-500 mb-4">Még nincsenek sablonok.</p>
-              <Button onClick={() => setIsDialogOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Első sablon létrehozása
-              </Button>
+              {canManageTemplates && (
+                <Button onClick={() => router.push('/dashboard/documents/templates/new')}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Első sablon létrehozása
+                </Button>
+              )}
             </div>
           ) : (
             <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
