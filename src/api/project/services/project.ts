@@ -1,5 +1,14 @@
 import { factories } from '@strapi/strapi';
 
+interface CompanyWithParent {
+  id: number;
+  documentId: string;
+  parent_company?: {
+    id: number;
+    documentId: string;
+  };
+}
+
 /**
  * project service (TS)
  *
@@ -22,7 +31,7 @@ export default factories.createCoreService('api::project.project', ({ strapi }) 
           'api::company.company',
           subcontractorId,
           { populate: ['parent_company'] }
-        );
+        ) as CompanyWithParent;
 
         if (subcontractor?.parent_company) {
           // Auto-assign parent company as the main contractor
