@@ -161,28 +161,15 @@ export default factories.createCoreService('api::document.document', ({ strapi }
 
       // Docxtemplater inicializálása kép modullal (ha elérhető)
       const zip = new PizZip(templateBuffer);
-
-      // Kompatibilitás: ha a sablonban {{token}} formátum van, alakítsuk {token}-re
-      // (a DOCX zipben lévő XML-ekben cserélünk, mert a DOCX tömörített)
-      try {
-        // @ts-ignore
-        zip.forEach((relativePath: string, file: any) => {
-          if (!relativePath || file?.dir) return;
-          if (!relativePath.endsWith('.xml')) return;
-          const content = file.asText();
-          const replaced = content.replace(/{{/g, '{').replace(/}}/g, '}');
-          if (replaced !== content) {
-            // @ts-ignore
-            zip.file(relativePath, replaced);
-          }
-        });
-      } catch (e: any) {
-        strapi.log.warn('Could not normalize {{}} tokens in DOCX template:', e?.message || e);
-      }
       
       const docOptions: any = {
         paragraphLoop: true,
         linebreaks: true,
+        // Dupla kapcsos zárójel használata: {{token}}
+        delimiters: {
+          start: '{{',
+          end: '}}'
+        }
       };
 
       // Ha az ImageModule elérhető, adjuk hozzá
@@ -208,10 +195,12 @@ export default factories.createCoreService('api::document.document', ({ strapi }
       // @ts-ignore
       const tokens: any = this.createTokensFromProject(project);
       
-      // Ha van aláírás, adjuk hozzá a tokenekhez (a sablonban {%signature} token kell legyen)
+      // Ha van aláírás, adjuk hozzá a tokenekhez
+      // A sablonban {%signature1} és {%signature2} tokeneket lehet használni
       if (signatureData) {
         strapi.log.info('Adding signature to document tokens');
-        tokens.signature = signatureData;
+        tokens.signature1 = signatureData;
+        tokens.signature2 = signatureData;
       }
 
       doc.setData(tokens);
@@ -491,26 +480,14 @@ export default factories.createCoreService('api::document.document', ({ strapi }
       // Docxtemplater inicializálása
       const zip = new PizZip(templateBuffer);
 
-      // Kompatibilitás: ha a sablonban {{token}} formátum van, alakítsuk {token}-re
-      try {
-        // @ts-ignore
-        zip.forEach((relativePath: string, file: any) => {
-          if (!relativePath || file?.dir) return;
-          if (!relativePath.endsWith('.xml')) return;
-          const content = file.asText();
-          const replaced = content.replace(/{{/g, '{').replace(/}}/g, '}');
-          if (replaced !== content) {
-            // @ts-ignore
-            zip.file(relativePath, replaced);
-          }
-        });
-      } catch (e: any) {
-        strapi.log.warn('Could not normalize {{}} tokens in DOCX template:', e?.message || e);
-      }
-
       const docOptions: any = {
         paragraphLoop: true,
         linebreaks: true,
+        // Dupla kapcsos zárójel használata: {{token}}
+        delimiters: {
+          start: '{{',
+          end: '}}'
+        }
       };
 
       if (ImageModule) {
@@ -530,7 +507,9 @@ export default factories.createCoreService('api::document.document', ({ strapi }
       // Tokenek létrehozása az aláírással
       // @ts-ignore
       const tokens: any = this.createTokensFromProject(project);
-      tokens.signature = signatureData;
+      // A sablonban {%signature1} és {%signature2} tokeneket lehet használni
+      tokens.signature1 = signatureData;
+      tokens.signature2 = signatureData;
 
       doc.setData(tokens);
       
