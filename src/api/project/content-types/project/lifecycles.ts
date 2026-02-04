@@ -43,26 +43,49 @@ export default {
       // Only validate if company or subcontractor is being modified
       if (data.hasOwnProperty('company') || data.hasOwnProperty('subcontractor')) {
         // Get current project data to merge with updates
-        const projectId = event.params.where.id || event.params.where.documentId;
-        if (projectId) {
-          const currentProject = await strapiAny.entityService.findOne(
-            'api::project.project',
-            projectId,
-            { populate: ['company', 'subcontractor'] }
-          );
-
-          // Merge current data with updates to check final state
-          const mergedData = {
-            company: data.company !== undefined ? data.company : currentProject?.company,
-            subcontractor: data.subcontractor !== undefined ? data.subcontractor : currentProject?.subcontractor,
-          };
-
-          // Validate and auto-assign company
-          await strapiAny.service('api::project.project').validateAndSetCompany(mergedData);
+        const whereClause = event.params.where;
+        const projectId = whereClause.id;
+        const documentId = whereClause.documentId;
+        
+        if (projectId || documentId) {
+          let currentProject: any = null;
           
-          // Apply the validated company back to data if it was auto-assigned
-          if (mergedData.company && !data.company) {
-            data.company = mergedData.company;
+          // Try to load the project using the correct method based on ID type
+          if (documentId) {
+            // Use Document Service API for documentId (Strapi v5)
+            try {
+              currentProject = await strapiAny.documents('api::project.project').findOne({
+                documentId,
+                populate: ['company', 'subcontractor'],
+              });
+            } catch (docErr: any) {
+              strapiAny.log.warn(`[Project lifecycle] Document Service failed, trying Entity Service: ${docErr?.message}`);
+            }
+          }
+          
+          // Fallback to Entity Service with numeric id
+          if (!currentProject && projectId) {
+            currentProject = await strapiAny.entityService.findOne(
+              'api::project.project',
+              projectId,
+              { populate: ['company', 'subcontractor'] }
+            );
+          }
+
+          if (currentProject) {
+            // Merge current data with updates to check final state
+            const mergedData = {
+              company: data.company !== undefined ? data.company : currentProject?.company,
+              subcontractor: data.subcontractor !== undefined ? data.subcontractor : currentProject?.subcontractor,
+            };
+
+            // Validate and auto-assign company
+            await strapiAny.service('api::project.project').validateAndSetCompany(mergedData);
+            
+            // Apply the validated company back to data if it was auto-assigned
+            if (mergedData.company && !data.company) {
+              data.company = mergedData.company;
+            }
           }
         }
       }

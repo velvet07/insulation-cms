@@ -15,12 +15,14 @@
     "upgrade:dry": "npx @strapi/upgrade latest --dry"
   },
   "dependencies": {
+    "@esbuild/win32-x64": "^0.27.2",
     "@strapi/plugin-cloud": "5.33.3",
     "@strapi/plugin-users-permissions": "5.33.3",
     "@strapi/strapi": "5.33.3",
     "archiver": "^7.0.1",
     "better-sqlite3": "12.4.1",
     "docxtemplater": "^3.67.6",
+    "docxtemplater-image-module-free": "^1.1.1",
     "node-fetch": "^3.3.2",
     "pg": "^8.16.3",
     "pizzip": "^3.2.0",

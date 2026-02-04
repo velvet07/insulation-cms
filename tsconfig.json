@@ -10,7 +10,7 @@
     "incremental": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,
-    "noEmitOnError": true,
+    "noEmitOnError": false,
     "noImplicitThis": true,
     "outDir": "dist",
     "rootDir": "."
@@ -38,6 +38,11 @@
     // Do not include test files
     "**/*.test.*",
     // Do not include plugins in the server compilation
-    "src/plugins/**"
+    "src/plugins/**",
+    // Do not include frontend and website Next.js projects
+    "frontend/",
+    "website/",
+    // Do not include strapi-export folder
+    "strapi-export/"
   ]
 }
