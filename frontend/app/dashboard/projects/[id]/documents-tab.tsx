@@ -62,6 +62,7 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
   const [newDocumentType, setNewDocumentType] = useState<Document['type']>('other');
   const [signature1Data, setSignature1Data] = useState<string | null>(null);
   const [signature2Data, setSignature2Data] = useState<string | null>(null);
+  const [selectedDocumentForPreview, setSelectedDocumentForPreview] = useState<Document | null>(null);
 
   // Reset signature states when document changes
   useEffect(() => {
@@ -920,7 +921,13 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
                     />
                   </TableCell>
                   <TableCell className="font-medium">
-                    {document.file_name || `Dokumentum ${document.id}`}
+                    <button
+                      onClick={() => setSelectedDocumentForPreview(document)}
+                      className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline text-left"
+                      title="Kattintson az előnézet megjelenítéséhez"
+                    >
+                      {document.file_name || `Dokumentum ${document.id}`}
+                    </button>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
@@ -1081,6 +1088,76 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Dokumentum Előnézet Section */}
+      {selectedDocumentForPreview && (
+        <div id="preview-section" className="border-t pt-6 mt-6 space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold">Dokumentum megtekintése</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                {selectedDocumentForPreview.file_name || 'Dokumentum'}
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setSelectedDocumentForPreview(null)}
+              className="h-8 w-8"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+
+          {/* PDF Preview - teljes szélességű */}
+          <div className="border rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-900">
+            <div className="p-4 border-b bg-white dark:bg-gray-800 flex items-center justify-between">
+              <p className="text-sm font-medium">
+                {selectedDocumentForPreview.file_name || 'Dokumentum megtekintése'}
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleDownload(selectedDocumentForPreview)}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Letöltés
+                </Button>
+                {!selectedDocumentForPreview.signed && selectedDocumentForPreview.requires_signature !== false && (
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setSelectedDocumentForPreview(null);
+                      setSelectedDocumentForSignature(selectedDocumentForPreview);
+                    }}
+                  >
+                    <PenTool className="mr-2 h-4 w-4" />
+                    Aláírás
+                  </Button>
+                )}
+              </div>
+            </div>
+            <div className="bg-gray-100 dark:bg-gray-900 p-4" style={{ minHeight: '600px' }}>
+              {(() => {
+                const documentUrl = getDocumentUrl(selectedDocumentForPreview);
+                if (!documentUrl) {
+                  return (
+                    <div className="flex items-center justify-center h-full text-gray-500 p-8" style={{ minHeight: '600px' }}>
+                      <p>A dokumentum fájl még nem elérhető.</p>
+                    </div>
+                  );
+                }
+                
+                // PDF megjelenítés react-pdf-vel (PDF.js)
+                return (
+                  <PdfViewer url={documentUrl} className="min-h-[600px]" />
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Aláírás Section (nem Dialog) */}
       {selectedDocumentForSignature && (
