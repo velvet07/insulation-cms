@@ -385,11 +385,32 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
       return;
     }
 
+    // Ellenőrizzük, hogy már létezik-e azonos típusú dokumentum
+    const selectedTemplates = templates.filter(t => 
+      selectedTemplateIds.includes((t.documentId || t.id).toString())
+    );
+    
+    const duplicateTypes: string[] = [];
+    selectedTemplates.forEach(template => {
+      const existingDoc = documents.find(doc => doc.type === template.type);
+      if (existingDoc) {
+        const typeLabel = TEMPLATE_TYPE_LABELS[template.type as keyof typeof TEMPLATE_TYPE_LABELS] || template.type;
+        duplicateTypes.push(typeLabel);
+      }
+    });
+
+    if (duplicateTypes.length > 0) {
+      const confirmed = confirm(
+        `FIGYELEM! Az alábbi típusú dokumentumok már léteznek:\n\n${duplicateTypes.map(t => `- ${t}`).join('\n')}\n\n` +
+        'Folytatja a generálást? (Duplikátumok fognak létrejönni)'
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
+
     // Ellenőrizzük, hogy van-e olyan template, amihez figyelmeztetés kell
     if (isContractDataIncomplete) {
-      const selectedTemplates = templates.filter(t => 
-        selectedTemplateIds.includes((t.documentId || t.id).toString())
-      );
       const needsWarning = selectedTemplates.some(template => 
         !allowedTemplatesWithoutWarning.includes(template.type)
       );
@@ -882,8 +903,16 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
               {documents.map((document) => {
                 const documentId = (document.documentId || document.id).toString();
                 const isUploaded = document.requires_signature === false;
+                
+                // Ellenőrizzük, hogy van-e duplikátum ugyanabból a típusból
+                const typeCount = documents.filter(d => d.type === document.type).length;
+                const isDuplicate = typeCount > 1;
+                
                 return (
-                <TableRow key={documentId}>
+                <TableRow 
+                  key={documentId}
+                  className={isDuplicate ? 'bg-amber-50 dark:bg-amber-950/20' : ''}
+                >
                   <TableCell>
                     <Checkbox
                       checked={selectedDocumentIds.has(documentId)}
@@ -894,29 +923,39 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
                     {document.file_name || `Dokumentum ${document.id}`}
                   </TableCell>
                   <TableCell>
-                    {isUploaded ? (
-                      <Select
-                        value={document.type}
-                        onValueChange={(v) => {
-                          const nextType = v as Document['type'];
-                          documentTypeUpdateMutation.mutate({ documentId, type: nextType });
-                        }}
-                        disabled={documentTypeUpdateMutation.isPending}
-                      >
-                        <SelectTrigger className="w-56">
-                          <SelectValue placeholder="Válasszon típust" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(DOCUMENT_TYPE_LABELS).map(([value, label]) => (
-                            <SelectItem key={value} value={value}>
-                              {label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      DOCUMENT_TYPE_LABELS[document.type as keyof typeof DOCUMENT_TYPE_LABELS] || document.type
-                    )}
+                    <div className="flex items-center gap-2">
+                      {isDuplicate && (
+                        <span 
+                          className="px-1.5 py-0.5 rounded text-xs font-medium bg-amber-200 text-amber-900 dark:bg-amber-900 dark:text-amber-200"
+                          title={`${typeCount} db azonos típusú dokumentum`}
+                        >
+                          {typeCount}×
+                        </span>
+                      )}
+                      {isUploaded ? (
+                        <Select
+                          value={document.type}
+                          onValueChange={(v) => {
+                            const nextType = v as Document['type'];
+                            documentTypeUpdateMutation.mutate({ documentId, type: nextType });
+                          }}
+                          disabled={documentTypeUpdateMutation.isPending}
+                        >
+                          <SelectTrigger className="w-56">
+                            <SelectValue placeholder="Válasszon típust" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(DOCUMENT_TYPE_LABELS).map(([value, label]) => (
+                              <SelectItem key={value} value={value}>
+                                {label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        DOCUMENT_TYPE_LABELS[document.type as keyof typeof DOCUMENT_TYPE_LABELS] || document.type
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     {document.company && typeof document.company === 'object'
