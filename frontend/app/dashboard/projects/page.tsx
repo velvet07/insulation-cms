@@ -95,6 +95,8 @@ function generatePageNumbers(currentPage: number, pageCount: number): (number | 
 
 function buildExportFilename(projects: Project[], allProjects: Project[], selectedIds: Set<string>): string {
   const idList = Array.from(selectedIds);
+  const isMultiple = idList.length > 1;
+  
   // Try to find first selected project in allProjects (all loaded pages), not just current page
   let first = idList.length > 0 ? allProjects.find((p) => (p.documentId || p.id)?.toString() === idList[0]) : null;
   // Fallback to current page if not found in all loaded
@@ -115,10 +117,18 @@ function buildExportFilename(projects: Project[], allProjects: Project[], select
     }
   }
   
-  const projectTitle = first?.title || (idList.length > 1 ? 'Tobb_projekt' : 'Projekt');
-  const sanitize = (s: string) => s.replace(/[<>:"/\\|?*\u0000-\u001F]/g, '_').replace(/\s+/g, ' ').trim() || 'Export';
+  // Remove dots and invalid filename characters
+  const sanitize = (s: string) => s.replace(/[.<>:"/\\|?*\u0000-\u001F]/g, '_').replace(/\s+/g, ' ').trim() || 'Export';
   const d = new Date();
   const datePart = `${d.getFullYear()}_${String(d.getMonth() + 1).padStart(2, '0')}_${String(d.getDate()).padStart(2, '0')}`;
+  
+  // If multiple projects selected, omit project title from filename
+  if (isMultiple) {
+    return `${sanitize(companyName)}_audit_export_${datePart}.zip`;
+  }
+  
+  // Single project: include project title
+  const projectTitle = first?.title || 'Projekt';
   return `${sanitize(companyName)}_${sanitize(projectTitle)}_export_${datePart}.zip`;
 }
 
