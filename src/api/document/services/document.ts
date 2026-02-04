@@ -165,11 +165,8 @@ export default factories.createCoreService('api::document.document', ({ strapi }
       const docOptions: any = {
         paragraphLoop: true,
         linebreaks: true,
-        // Dupla kapcsos zárójel használata: {{token}}
-        delimiters: {
-          start: '{{',
-          end: '}}'
-        }
+        // Egyszeres kapcsos zárójel használata: {token}
+        // (robusztusabb a Word formázással szemben)
       };
 
       // Ha az ImageModule elérhető, adjuk hozzá
@@ -195,12 +192,10 @@ export default factories.createCoreService('api::document.document', ({ strapi }
       // @ts-ignore
       const tokens: any = this.createTokensFromProject(project);
       
-      // Ha van aláírás, adjuk hozzá a tokenekhez
-      // A sablonban {%signature1} és {%signature2} tokeneket lehet használni
+      // Ha van aláírás, adjuk hozzá a tokenekhez (a sablonban {%signature} token kell legyen)
       if (signatureData) {
         strapi.log.info('Adding signature to document tokens');
-        tokens.signature1 = signatureData;
-        tokens.signature2 = signatureData;
+        tokens.signature = signatureData;
       }
 
       doc.setData(tokens);
@@ -483,11 +478,8 @@ export default factories.createCoreService('api::document.document', ({ strapi }
       const docOptions: any = {
         paragraphLoop: true,
         linebreaks: true,
-        // Dupla kapcsos zárójel használata: {{token}}
-        delimiters: {
-          start: '{{',
-          end: '}}'
-        }
+        // Egyszeres kapcsos zárójel használata: {token}
+        // (robusztusabb a Word formázással szemben)
       };
 
       if (ImageModule) {
@@ -507,9 +499,7 @@ export default factories.createCoreService('api::document.document', ({ strapi }
       // Tokenek létrehozása az aláírással
       // @ts-ignore
       const tokens: any = this.createTokensFromProject(project);
-      // A sablonban {%signature1} és {%signature2} tokeneket lehet használni
-      tokens.signature1 = signatureData;
-      tokens.signature2 = signatureData;
+      tokens.signature = signatureData;
 
       doc.setData(tokens);
       
