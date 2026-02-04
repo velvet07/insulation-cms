@@ -227,14 +227,29 @@ export default factories.createCoreService('api::document.document', ({ strapi }
           properties: error.properties,
         });
         
-        // Ha multi error (több token hiányzik), részletezzük
+        // Ha multi error (több token hiányzik vagy egyéb hiba), részletezzük
         if (error.properties && error.properties.errors instanceof Array) {
-          const missingTags = error.properties.errors
-            .filter((err: any) => err.properties && err.properties.explanation === 'tag_not_found')
-            .map((err: any) => err.properties.id);
+          const errorDetails: string[] = [];
           
-          if (missingTags.length > 0) {
-            throw new Error(`Hiányzó tokenek a sablonban: ${missingTags.join(', ')}. Kérlek, ellenőrizd a sablon fájlt és a projekt adatokat.`);
+          error.properties.errors.forEach((err: any) => {
+            if (err.properties) {
+              const explanation = err.properties.explanation;
+              const id = err.properties.id;
+              
+              if (explanation === 'tag_not_found') {
+                errorDetails.push(`Hiányzó token: {${id}}`);
+              } else if (explanation === 'unopened_tag') {
+                errorDetails.push(`Lezáratlan token: {${id}}`);
+              } else if (explanation === 'unclosed_tag') {
+                errorDetails.push(`Nem lezárt token: {${id}}`);
+              } else {
+                errorDetails.push(`${explanation}: ${id}`);
+              }
+            }
+          });
+          
+          if (errorDetails.length > 0) {
+            throw new Error(`Sablon hiba(k): ${errorDetails.join(', ')}. Kérlek ellenőrizd a sablon fájlt és a projekt adatokat.`);
           }
         }
         
@@ -523,14 +538,29 @@ export default factories.createCoreService('api::document.document', ({ strapi }
           properties: error.properties,
         });
         
-        // Ha multi error (több token hiányzik), részletezzük
+        // Ha multi error (több token hiányzik vagy egyéb hiba), részletezzük
         if (error.properties && error.properties.errors instanceof Array) {
-          const missingTags = error.properties.errors
-            .filter((err: any) => err.properties && err.properties.explanation === 'tag_not_found')
-            .map((err: any) => err.properties.id);
+          const errorDetails: string[] = [];
           
-          if (missingTags.length > 0) {
-            throw new Error(`Hiányzó tokenek a sablonban: ${missingTags.join(', ')}. Kérlek, ellenőrizd a sablon fájlt és a projekt adatokat.`);
+          error.properties.errors.forEach((err: any) => {
+            if (err.properties) {
+              const explanation = err.properties.explanation;
+              const id = err.properties.id;
+              
+              if (explanation === 'tag_not_found') {
+                errorDetails.push(`Hiányzó token: {${id}}`);
+              } else if (explanation === 'unopened_tag') {
+                errorDetails.push(`Lezáratlan token: {${id}}`);
+              } else if (explanation === 'unclosed_tag') {
+                errorDetails.push(`Nem lezárt token: {${id}}`);
+              } else {
+                errorDetails.push(`${explanation}: ${id}`);
+              }
+            }
+          });
+          
+          if (errorDetails.length > 0) {
+            throw new Error(`Sablon hiba(k): ${errorDetails.join(', ')}. Kérlek ellenőrizd a sablon fájlt és a projekt adatokat.`);
           }
         }
         

@@ -33,7 +33,18 @@ export default factories.createCoreController('api::document.document', ({ strap
       strapi.log.error('Error in generate controller:', error);
       strapi.log.error('Error message:', error.message);
       strapi.log.error('Error stack:', error.stack);
-      return ctx.badRequest(error.message || 'Hiba történt a dokumentum generálása során');
+      
+      // Explicit hiba formátum Strapi v5-nek
+      const errorMessage = error.message || 'Hiba történt a dokumentum generálása során';
+      ctx.status = 400;
+      return ctx.send({
+        data: null,
+        error: {
+          status: 400,
+          name: 'BadRequestError',
+          message: errorMessage,
+        },
+      });
     }
   },
 
@@ -59,7 +70,18 @@ export default factories.createCoreController('api::document.document', ({ strap
       return { data: document };
     } catch (error: any) {
       strapi.log.error('Error in regenerateWithSignature controller:', error);
-      return ctx.badRequest(error.message || 'Hiba történt a dokumentum újragenerálása során');
+      
+      // Explicit hiba formátum Strapi v5-nek
+      const errorMessage = error.message || 'Hiba történt a dokumentum újragenerálása során';
+      ctx.status = 400;
+      return ctx.send({
+        data: null,
+        error: {
+          status: 400,
+          name: 'BadRequestError',
+          message: errorMessage,
+        },
+      });
     }
   },
 
