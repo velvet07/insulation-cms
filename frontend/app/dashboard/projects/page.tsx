@@ -117,8 +117,8 @@ function buildExportFilename(projects: Project[], allProjects: Project[], select
     }
   }
   
-  // Remove dots and invalid filename characters
-  const sanitize = (s: string) => s.replace(/[.<>:"/\\|?*\u0000-\u001F]/g, '_').replace(/\s+/g, ' ').trim() || 'Export';
+  // Remove dots and invalid filename characters, collapse multiple underscores
+  const sanitize = (s: string) => s.replace(/[.<>:"/\\|?*\u0000-\u001F]/g, '_').replace(/\s+/g, ' ').replace(/_+/g, '_').replace(/^_+|_+$/g, '').trim() || 'Export';
   const d = new Date();
   const datePart = `${d.getFullYear()}_${String(d.getMonth() + 1).padStart(2, '0')}_${String(d.getDate()).padStart(2, '0')}`;
   
