@@ -205,23 +205,12 @@ export default factories.createCoreController('api::project.project', ({ strapi 
       const dirs = [
         `${projectBase}01_Adminisztratív_dokumentumok/`,
         `${projectBase}01_Adminisztratív_dokumentumok/011_Intézkedés_kezdete/`,
-        `${projectBase}01_Adminisztratív_dokumentumok/011_Intézkedés_kezdete/Kezdő dátumot alátámasztó dokumentum(ok)/`,
         `${projectBase}01_Adminisztratív_dokumentumok/012_Intézkedés_zárása/`,
-        `${projectBase}01_Adminisztratív_dokumentumok/012_Intézkedés_zárása/Záró dátumot alátámasztó dokumentum(ok)/`,
-        `${projectBase}01_Adminisztratív_dokumentumok/012_Intézkedés_zárása/Számviteli bizonylat(ok)/`,
         `${projectBase}01_Adminisztratív_dokumentumok/013_Egyéb_adminisztratív_dokumentumok_nyilatkozatok/`,
 
         `${projectBase}02_Végső_felhasználói_adatszolgáltatás/`,
         `${projectBase}02_Végső_felhasználói_adatszolgáltatás/021_Fényképek/`,
-        `${projectBase}02_Végső_felhasználói_adatszolgáltatás/022_Mérés_oldali_validáció_Energetikai_Tanúsítvány/`,
         `${projectBase}02_Végső_felhasználói_adatszolgáltatás/023_Műszaki_alátámasztó_dokumentumok/`,
-
-        `${projectBase}03_Auditor_számítások/`,
-        `${projectBase}03_Auditor_számítások/A végfelhasználási energiamegtakarítás [GJ/év] számítása/`,
-
-        `${projectBase}04_Hitelesítési_dokumentációk/`,
-        `${projectBase}04_Hitelesítési_dokumentációk/Tanúsítvány hitelesített energiamegtakarításról/`,
-        `${projectBase}04_Hitelesítési_dokumentációk/Hitelesítési jegyzőkönyv, vagy a hitelesítés menetét leíró dokumentum/`,
       ];
 
       // Add empty directory entries so structure is visible even if empty.
@@ -233,20 +222,30 @@ export default factories.createCoreController('api::project.project', ({ strapi 
     const pickDocumentTargetFolder = (doc: any) => {
       const t = safeString(doc?.type || 'other');
 
-      // Mapping (adjustable)
-      if (t === 'invoice') {
-        return '01_Adminisztratív_dokumentumok/012_Intézkedés_zárása/Számviteli bizonylat(ok)';
+      // 011: Vállalkozási szerződés, Szerződés energiahatékonyság-javító intézkedési munkálatokra, Megállapodás
+      if (
+        t === 'vallalkozasi_szerzodes' ||
+        t === 'szerzodes_energiahatékonysag' ||
+        t === 'megallapodas' ||
+        t === 'contract'
+      ) {
+        return '01_Adminisztratív_dokumentumok/011_Intézkedés_kezdete';
       }
-      if (t === 'completion_certificate' || t === 'teljesitesi_igazolo') {
-        return '01_Adminisztratív_dokumentumok/012_Intézkedés_zárása/Záró dátumot alátámasztó dokumentum(ok)';
+      // 012: Teljesítést igazoló jegyzőkönyv (TIG), Munkaterül átadás-átvételi jegyzőkönyv
+      if (
+        t === 'teljesitesi_igazolo' ||
+        t === 'munkaterul_atadas' ||
+        t === 'completion_certificate' ||
+        t === 'invoice'
+      ) {
+        return '01_Adminisztratív_dokumentumok/012_Intézkedés_zárása';
       }
-      if (t === 'contract' || t === 'vallalkozasi_szerzodes' || t === 'megallapodas') {
-        return '01_Adminisztratív_dokumentumok/011_Intézkedés_kezdete/Kezdő dátumot alátámasztó dokumentum(ok)';
+      // 013: Adatkezelési hozzájárulás nyilatkozat
+      if (t === 'adatkezelesi_hozzajarulas') {
+        return '01_Adminisztratív_dokumentumok/013_Egyéb_adminisztratív_dokumentumok_nyilatkozatok';
       }
+      // 023: Felmérőlap (kivitelezői felmérés, szigetelt terület meghatározása)
       if (t === 'felmerolap') {
-        return '02_Végső_felhasználói_adatszolgáltatás/022_Mérés_oldali_validáció_Energetikai_Tanúsítvány';
-      }
-      if (t === 'munkaterul_atadas') {
         return '02_Végső_felhasználói_adatszolgáltatás/023_Műszaki_alátámasztó_dokumentumok';
       }
 
@@ -306,18 +305,19 @@ export default factories.createCoreController('api::project.project', ({ strapi 
         sort: ['createdAt:asc'],
       });
 
+      let photoIndex = 0;
       for (const photo of photos || []) {
         const fileEntity = photo.file;
         const stream = await getFileStream(fileEntity);
         if (!stream) continue;
 
-        const categoryName = photo.category?.name || 'uncategorized';
-        const categoryFolder = sanitizeWindowsNameKeepAccents(categoryName);
-        const safeName = sanitizeWindowsNameKeepAccents(fileEntity?.name || photo.name || `Foto_${photo.id || 'unknown'}`);
+        photoIndex += 1;
+        const baseName = sanitizeWindowsNameKeepAccents(fileEntity?.name || photo.name || `Foto`);
         const ext = path.extname(safeString(fileEntity?.name)) || '.jpg';
-        const finalName = safeName.endsWith(ext) ? safeName : `${safeName}${ext}`;
+        const nameWithoutExt = baseName.endsWith(ext) ? baseName.slice(0, -ext.length) : baseName;
+        const finalName = `${nameWithoutExt}_${photoIndex}${ext}`;
 
-        const zipPath = `${base}02_Végső_felhasználói_adatszolgáltatás/021_Fényképek/${categoryFolder}/${finalName}`;
+        const zipPath = `${base}02_Végső_felhasználói_adatszolgáltatás/021_Fényképek/${finalName}`;
         archive.append(stream as any, { name: zipPath });
       }
     }
