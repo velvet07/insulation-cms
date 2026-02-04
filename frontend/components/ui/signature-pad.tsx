@@ -41,9 +41,9 @@ export const SignaturePad = forwardRef<SignaturePadHandle, SignaturePadProps>(({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    // Canvas beállítása - Nagy felbontás az élesebb vonalakért
-    // 3x nagyobb felbontás a pixelesség elkerülésére
-    const dpr = (window.devicePixelRatio || 1) * 3;
+    // Canvas beállítása - Nagyon nagy felbontás az élesebb vonalakért
+    // 6x nagyobb felbontás a teljesen éles aláírásokért
+    const dpr = (window.devicePixelRatio || 1) * 6;
     canvas.width = width * dpr;
     canvas.height = height * dpr;
     
