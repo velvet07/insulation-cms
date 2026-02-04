@@ -475,7 +475,10 @@ export default function SettingsPage() {
   const handleUserUpdate = () => {
     if (!editingUser) return;
     const data: any = { username: userUsername, email: userEmail, company: selectedUserCompany || null };
-    if (isAdmin && userRole !== undefined) data.role = userRole;
+    // Only allow role update for admin's own user
+    if (isAdmin && userRole !== undefined && editingUser.id === user?.id) {
+      data.role = userRole;
+    }
     if (userPassword) data.password = userPassword;
     updateUserMutation.mutate({ id: editingUser.id!, data });
   };
@@ -710,20 +713,28 @@ export default function SettingsPage() {
                     <TableHead>Felhasználónév</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Cég</TableHead>
+                    {isAdmin && <TableHead>Szerepkör</TableHead>}
                     <TableHead>Műveletek</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell>{user.username}</TableCell>
-                      <TableCell>{user.email}</TableCell>
-                      <TableCell>{(user.company as any)?.name || '-'}</TableCell>
+                  {users.map((userItem) => (
+                    <TableRow key={userItem.id}>
+                      <TableCell>{userItem.username}</TableCell>
+                      <TableCell>{userItem.email}</TableCell>
+                      <TableCell>{(userItem.company as any)?.name || '-'}</TableCell>
+                      {isAdmin && (
+                        <TableCell>
+                          {typeof userItem.role === 'object' && userItem.role !== null 
+                            ? (userItem.role as any)?.name || '-'
+                            : '-'}
+                        </TableCell>
+                      )}
                       <TableCell className="text-right">
                         {can('settings', 'manage_users') && (
                           <>
-                            <Button variant="ghost" size="sm" onClick={() => { setEditingUser(user); setUserUsername(user.username || ''); setUserEmail(user.email); setIsUserDialogOpen(true); }}><Edit className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="sm" onClick={() => handleUserDelete(user)}><Trash2 className="h-4 w-4 text-red-600" /></Button>
+                            <Button variant="ghost" size="sm" onClick={() => { setEditingUser(userItem); setUserUsername(userItem.username || ''); setUserEmail(userItem.email); setSelectedUserCompany((userItem.company as any)?.documentId || (userItem.company as any)?.id?.toString() || ''); setUserRole(typeof userItem.role === 'object' ? (userItem.role as any)?.id : undefined); setIsUserDialogOpen(true); }}><Edit className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleUserDelete(userItem)}><Trash2 className="h-4 w-4 text-red-600" /></Button>
                           </>
                         )}
                       </TableCell>
@@ -753,7 +764,7 @@ export default function SettingsPage() {
                   </SelectContent>
                 </Select>
               </div>
-              {isAdmin && (
+              {isAdmin && (!editingUser || editingUser.id === user?.id) && (
                 <div>
                   <Label>Szerepkör</Label>
                   <Select value={userRole?.toString()} onValueChange={(v) => setUserRole(parseInt(v))}>
@@ -762,6 +773,9 @@ export default function SettingsPage() {
                       {roles.map((r: any) => <SelectItem key={r.id} value={r.id.toString()}>{r.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
+                  {editingUser && editingUser.id === user?.id && (
+                    <p className="text-xs text-gray-500 mt-1">Saját szerepkör módosítása</p>
+                  )}
                 </div>
               )}
             </div>
