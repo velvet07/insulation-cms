@@ -30,7 +30,6 @@ import {
 } from '@/components/ui/dialog';
 import { documentsApi } from '@/lib/api/documents';
 import { templatesApi } from '@/lib/api/templates';
-import { companiesApi } from '@/lib/api/companies';
 import { DOCUMENT_TYPE_LABELS, TEMPLATE_TYPE_LABELS, type Document, type Template, type Project, type Company } from '@/types';
 import { Plus, Download, Trash2, FileText, Loader2, PenTool, X, Check, Upload, Edit } from 'lucide-react';
 import { SignaturePad } from '@/components/ui/signature-pad';
@@ -74,11 +73,6 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
   const { data: templates = [], isLoading: isLoadingTemplates } = useQuery({
     queryKey: ['templates'],
     queryFn: () => templatesApi.getAll(),
-  });
-
-  const { data: companies = [] } = useQuery({
-    queryKey: ['companies'],
-    queryFn: () => companiesApi.getAll(),
   });
 
   const generateMutation = useMutation({
@@ -238,39 +232,6 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
     },
   });
 
-  const documentCompanyUpdateMutation = useMutation({
-    mutationFn: async ({ documentId, companyId }: { documentId: string; companyId: string | null }) => {
-      await documentsApi.update(documentId, {
-        company: companyId === null || companyId === '' ? null : companyId,
-      });
-
-      const auditLogEntry = createAuditLogEntry(
-        'document_modified',
-        user,
-        'Dokumentum tulajdonosa módosítva'
-      );
-      auditLogEntry.module = 'Dokumentumok';
-
-      try {
-        const currentProject = await projectsApi.getOne(projectId);
-        const updatedAuditLog = addAuditLogEntry(currentProject.audit_log, auditLogEntry);
-        await projectsApi.update(projectId, {
-          audit_log: updatedAuditLog,
-        });
-      } catch (error: any) {
-        if (!error?.message?.includes('Invalid key audit_log')) {
-          console.error('Error updating audit log:', error);
-        }
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['documents', projectId] });
-      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
-    },
-    onError: (error: any) => {
-      console.error('Error updating document company:', error);
-    },
-  });
 
   const bulkTypeUpdateMutation = useMutation({
     mutationFn: async ({ documentIds, type }: { documentIds: string[]; type: Document['type'] }) => {
@@ -936,37 +897,9 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Select
-                      value={
-                        document.company == null || document.company === undefined
-                          ? '__none__'
-                          : typeof document.company === 'object' && document.company !== null
-                            ? (document.company as Company).documentId || String((document.company as Company).id)
-                            : String(document.company)
-                      }
-                      onValueChange={(v) => {
-                        documentCompanyUpdateMutation.mutate({
-                          documentId,
-                          companyId: v === '__none__' ? null : v,
-                        });
-                      }}
-                      disabled={documentCompanyUpdateMutation.isPending}
-                    >
-                      <SelectTrigger className="w-48 min-w-[12rem]">
-                        <SelectValue placeholder="Tulajdonos" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">— Nincs —</SelectItem>
-                        {companies.map((c) => {
-                          const id = c.documentId || String(c.id);
-                          return (
-                            <SelectItem key={id} value={id}>
-                              {c.name}
-                            </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
+                    {document.company && typeof document.company === 'object'
+                      ? (document.company as Company).name
+                      : '—'}
                   </TableCell>
                   <TableCell>
                     {isUploaded ? (
