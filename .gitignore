@@ -79,6 +79,10 @@ dist
 public/uploads/*
 !public/uploads/.gitkeep
 
+# Strapi generated files (auto-generated on build)
+types/generated/
+package-lock.json
+
 # Package managers
 .yarn/*
 !.yarn/cache
