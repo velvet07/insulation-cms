@@ -57,6 +57,11 @@ export const SignaturePad = forwardRef<SignaturePadHandle, SignaturePadProps>(({
 
     // Skálázzuk a kontextust a DPR-nek megfelelően
     ctx.scale(dpr, dpr);
+
+    // Clip: a rajzolás ne lógjon ki a keretből
+    ctx.beginPath();
+    ctx.rect(0, 0, width, height);
+    ctx.clip();
     
     // Kék szín az aláíráshoz - vastagabb vonal a jobb láthatóságért
     ctx.strokeStyle = '#003399'; 
@@ -93,6 +98,7 @@ export const SignaturePad = forwardRef<SignaturePadHandle, SignaturePadProps>(({
   };
 
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -106,6 +112,7 @@ export const SignaturePad = forwardRef<SignaturePadHandle, SignaturePadProps>(({
   };
 
   const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
     if (!isDrawing) return;
 
     const canvas = canvasRef.current;
@@ -132,14 +139,25 @@ export const SignaturePad = forwardRef<SignaturePadHandle, SignaturePadProps>(({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, width, height);
     setHasSignature(false);
     onChange?.(false);
   };
 
   return (
     <div className="space-y-4">
-      <div className="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900">
+      <div
+        className="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 overflow-hidden shrink-0"
+        style={{
+          width: `${width}px`,
+          minWidth: `${width}px`,
+          maxWidth: `${width}px`,
+          height: `${height}px`,
+          minHeight: `${height}px`,
+          maxHeight: `${height}px`,
+          touchAction: 'none',
+        }}
+      >
         <canvas
           ref={canvasRef}
           onMouseDown={startDrawing}
@@ -149,8 +167,18 @@ export const SignaturePad = forwardRef<SignaturePadHandle, SignaturePadProps>(({
           onTouchStart={startDrawing}
           onTouchMove={draw}
           onTouchEnd={stopDrawing}
-          className="cursor-crosshair touch-none"
-          style={{ width: `${width}px`, height: `${height}px`, boxSizing: 'border-box' }}
+          className="cursor-crosshair touch-none block"
+          style={{
+            width: `${width}px`,
+            height: `${height}px`,
+            minWidth: `${width}px`,
+            maxWidth: `${width}px`,
+            minHeight: `${height}px`,
+            maxHeight: `${height}px`,
+            boxSizing: 'border-box',
+            display: 'block',
+            touchAction: 'none',
+          }}
         />
       </div>
       <div className="flex gap-2 justify-end">

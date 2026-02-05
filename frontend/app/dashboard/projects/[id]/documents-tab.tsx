@@ -1205,8 +1205,8 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
                           : selectedDocumentForSignature.signature_data)
                       : null
                   }
-                  width={500}
-                  height={180}
+                  width={350}
+                  height={100}
                 />
               </div>
 
@@ -1224,8 +1224,8 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
                       ? (selectedDocumentForSignature.signature_data as any).signature2
                       : null
                   }
-                  width={500}
-                  height={180}
+                  width={350}
+                  height={100}
                 />
               </div>
             </div>

@@ -24,6 +24,32 @@ import { writeFile, unlink } from 'fs/promises';
 
 const execAsync = promisify(exec);
 
+/** PNG buffer IHDR-ból kiolvassa a szélességet és magasságot (px). */
+function getPngDimensions(buffer: Buffer): { width: number; height: number } | null {
+  if (buffer.length < 24) return null;
+  if (buffer.toString('ascii', 12, 16) !== 'IHDR') return null;
+  return {
+    width: buffer.readUInt32BE(16),
+    height: buffer.readUInt32BE(20),
+  };
+}
+
+/** Kép mérete arányosan a maxW x maxH dobozba (teljes kép látszik, nem vágja le). */
+function fitSize(
+  imgW: number,
+  imgH: number,
+  maxW: number,
+  maxH: number,
+): [number, number] {
+  if (imgW <= 0 || imgH <= 0) return [maxW, maxH];
+  const r = Math.min(maxW / imgW, maxH / imgH, 1);
+  return [Math.round(imgW * r), Math.round(imgH * r)];
+}
+
+/** Aláírás kép max mérete a DOCX/PDF szövegdobozban/táblázatban (ne tolja el a sorokat). */
+const SIGNATURE_MAX_WIDTH = 150;
+const SIGNATURE_MAX_HEIGHT = 60;
+
 export default factories.createCoreService('api::document.document', ({ strapi }) => ({
   /**
    * Ékezetes karakterek eltávolítása és fájlnév barát verzió készítése
@@ -180,9 +206,10 @@ export default factories.createCoreService('api::document.document', ({ strapi }
             return Buffer.from(base64Data, 'base64');
           },
           getSize: (img: any, tagValue: string, tagName: string) => {
-            // Az aláírás mérete a dokumentumban
-            // Nagyobb méret a nagyon éles aláírásokhoz (pixelben 96 DPI-nél)
-            return [250, 100]; // szélesség x magasság pixelben
+            const buf = Buffer.isBuffer(img) ? img : Buffer.from(img);
+            const dim = getPngDimensions(buf);
+            if (dim) return fitSize(dim.width, dim.height, SIGNATURE_MAX_WIDTH, SIGNATURE_MAX_HEIGHT);
+            return [SIGNATURE_MAX_WIDTH, SIGNATURE_MAX_HEIGHT];
           },
         };
         docOptions.modules = [new ImageModule(imageOptions)];
@@ -506,7 +533,10 @@ export default factories.createCoreService('api::document.document', ({ strapi }
             return Buffer.from(base64Data, 'base64');
           },
           getSize: (img: any, tagValue: string, tagName: string) => {
-            return [250, 100]; // szélesség x magasság pixelben
+            const buf = Buffer.isBuffer(img) ? img : Buffer.from(img);
+            const dim = getPngDimensions(buf);
+            if (dim) return fitSize(dim.width, dim.height, SIGNATURE_MAX_WIDTH, SIGNATURE_MAX_HEIGHT);
+            return [SIGNATURE_MAX_WIDTH, SIGNATURE_MAX_HEIGHT];
           },
         };
         docOptions.modules = [new ImageModule(imageOptions)];
@@ -625,7 +655,7 @@ export default factories.createCoreService('api::document.document', ({ strapi }
           // @ts-ignore
           await strapi.plugin('upload').service('upload').remove(document.file.id);
         } catch (err: any) {
-          strapi.log.warn('Error removing old file:', err.message);
+          strapi.log.warn('Error removing old file:', err?.message ?? String(err));
         }
       }
 
