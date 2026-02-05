@@ -19,6 +19,7 @@ export const IMPORTABLE_FIELDS: ImportableProjectField[] = [
   { key: 'client_zip', label: 'IRSZ', required: false, type: 'string' },
   { key: 'client_city', label: 'Város', required: false, type: 'string' },
   { key: 'client_street', label: 'Utca, házszám', required: false, type: 'string' },
+  { key: 'property_hrsz', label: 'Helyrajzi szám', required: false, type: 'string' },
   { key: 'client_birth_place', label: 'Születési hely', required: false, type: 'string' },
   { key: 'client_birth_date', label: 'Születési idő', required: false, type: 'date' },
   { key: 'client_mother_name', label: 'Anyja neve', required: false, type: 'string' },
@@ -157,6 +158,7 @@ export function suggestColumnMapping(headers: string[]): ColumnMapping[] {
     client_zip: ['irsz', 'irányítószám', 'zip', 'postal'],
     client_city: ['város', 'city', 'település', 'town'],
     client_street: ['utca', 'street', 'házszám', 'utca, házszám'],
+    property_hrsz: ['helyrajzi', 'hrsz', 'helyrajzi szám'],
     client_birth_place: ['születési hely', 'birth place', 'szül. hely'],
     client_birth_date: ['születési dátum', 'születési idő', 'birth date', 'szül. dátum', 'születési'],
     client_mother_name: ['anyja neve', 'mother', 'anya neve', 'anyja'],
@@ -164,9 +166,9 @@ export function suggestColumnMapping(headers: string[]): ColumnMapping[] {
     property_zip: ['ingatlan irsz', 'property zip', 'ingatlan irányítószám'],
     property_city: ['ingatlan város', 'property city'],
     property_street: ['ingatlan utca', 'property street', 'ingatlan utca, házszám'],
-    area_sqm: ['terület', 'area', 'm2', 'm²', 'négyzetméter', 'sqm', 'padlás', 'alapterület'],
-    floor_material: ['födém', 'floor', 'anyag', 'padlásfödém'],
-    floor_material_extra: ['egyéb', 'other', 'egyéb födém'],
+    area_sqm: ['padlás alapterülete', 'alapterület'],
+    floor_material: ['padlásfödém anyaga', 'födém anyaga'],
+    floor_material_extra: ['egyéb födém'],
   };
 
   headers.forEach(header => {
@@ -191,12 +193,15 @@ export function suggestColumnMapping(headers: string[]): ColumnMapping[] {
 
 /**
  * Magyar födém anyag mapping
+ * Zárójeles és zárójel nélküli verziók is
  */
 const FLOOR_MATERIAL_MAPPING: Record<string, string> = {
   'fa': 'wood',
   'wood': 'wood',
   'előre gyártott vb': 'prefab_rc',
   'előre gyártott vb.': 'prefab_rc',
+  'előre gyártott vb. (betongerendás)': 'prefab_rc',
+  'előre gyártott vb (betongerendás)': 'prefab_rc',
   'előre gyártott vasbeton': 'prefab_rc',
   'betongerendás': 'prefab_rc',
   'prefab_rc': 'prefab_rc',
@@ -502,6 +507,7 @@ export function downloadImportTemplate(): void {
       '1234',
       'Budapest',
       'Példa utca 1.',
+      '12345/6',
       'Budapest',
       '1975-03-15',
       'Kovács Mária',
@@ -520,6 +526,7 @@ export function downloadImportTemplate(): void {
       '5600',
       'Békéscsaba',
       'Kossuth u. 22.',
+      '56789/1',
       'Gyula',
       '1982-08-22',
       'Kiss Erzsébet',
@@ -538,6 +545,7 @@ export function downloadImportTemplate(): void {
       '3000',
       'Hatvan',
       'Rákóczi út 100.',
+      '3000/123',
       'Hatvan',
       '1968.12.01.',
       'Tóth Anna',
