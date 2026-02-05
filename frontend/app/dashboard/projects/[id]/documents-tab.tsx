@@ -43,6 +43,7 @@ const PdfViewer = dynamic(() => import('@/components/ui/pdf-viewer').then(mod =>
 import { useAuthStore } from '@/lib/store/auth';
 import { createAuditLogEntry, addAuditLogEntry } from '@/lib/utils/audit-log';
 import { projectsApi } from '@/lib/api/projects';
+import { isAdminRole } from '@/lib/utils/user-role';
 
 interface DocumentsTabProps {
   project: Project;
@@ -51,6 +52,7 @@ interface DocumentsTabProps {
 export function DocumentsTab({ project }: DocumentsTabProps) {
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
+  const isAdmin = isAdminRole(user);
   const [isGenerateDialogOpen, setIsGenerateDialogOpen] = useState(false);
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
   const [selectedDocumentForSignature, setSelectedDocumentForSignature] = useState<Document | null>(null);
@@ -68,6 +70,34 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
 
   const projectId = project.documentId || project.id;
 
+  const normalizeId = (value?: string | number | null) => {
+    if (value === undefined || value === null) return undefined;
+    return String(value);
+  };
+
+  const getCompanyId = (company?: Company | string | number | null) => {
+    if (!company) return undefined;
+    if (typeof company === 'object') {
+      return normalizeId(company.documentId || company.id);
+    }
+    return normalizeId(company);
+  };
+
+  const projectCompanyId = useMemo(() => getCompanyId(project.company || null), [project.company]);
+
+  const mainContractorId = useMemo(() => {
+    if (projectCompanyId) return projectCompanyId;
+    const userCompany = user?.company;
+    if (!userCompany) return undefined;
+    if (typeof userCompany === 'object' && userCompany !== null) {
+      if (userCompany.type === 'subcontractor' && userCompany.parent_company) {
+        return getCompanyId(userCompany.parent_company);
+      }
+      return getCompanyId(userCompany);
+    }
+    return getCompanyId(userCompany);
+  }, [projectCompanyId, user?.company]);
+
   const { data: documents = [], isLoading: isLoadingDocuments } = useQuery({
     queryKey: ['documents', projectId],
     queryFn: () => documentsApi.getAll({ project: projectId }),
@@ -78,6 +108,15 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
     queryKey: ['templates'],
     queryFn: () => templatesApi.getAll(),
   });
+
+  const availableTemplates = useMemo(() => {
+    if (isAdmin) return templates;
+    if (!mainContractorId) return [];
+    return templates.filter((template) => {
+      const templateCompanyId = getCompanyId(template.company || null);
+      return templateCompanyId === mainContractorId;
+    });
+  }, [templates, isAdmin, mainContractorId]);
 
   const generateMutation = useMutation({
     mutationFn: async (templateIds: string | string[]) => {
@@ -141,7 +180,7 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
   const handleGenerateAll = () => {
     // Ellenőrizzük, hogy van-e olyan template, amihez figyelmeztetés kell
     if (isContractDataIncomplete) {
-      const needsWarning = templates.some(template => 
+      const needsWarning = availableTemplates.some(template => 
         !allowedTemplatesWithoutWarning.includes(template.type)
       );
 
@@ -157,7 +196,7 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
     }
 
     if (confirm('Biztosan le szeretné generálni az összes elérhető sablont?')) {
-      const allTemplateIds = templates.map(t => (t.documentId || t.id).toString());
+      const allTemplateIds = availableTemplates.map(t => (t.documentId || t.id).toString());
       generateMutation.mutate(allTemplateIds);
     }
   };
@@ -368,7 +407,7 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
     }
 
     // Ellenőrizzük, hogy már létezik-e azonos típusú dokumentum
-    const selectedTemplates = templates.filter(t => 
+    const selectedTemplates = availableTemplates.filter(t => 
       selectedTemplateIds.includes((t.documentId || t.id).toString())
     );
     
@@ -604,9 +643,6 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
     }
   };
 
-  // Szűrjük a sablonokat a projekt típusa szerint (ha szükséges)
-  const availableTemplates = templates;
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -704,7 +740,7 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-          {templates.length > 0 && (
+          {availableTemplates.length > 0 && (
             <Button variant="outline" onClick={handleGenerateAll} disabled={generateMutation.isPending}>
               {generateMutation.isPending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

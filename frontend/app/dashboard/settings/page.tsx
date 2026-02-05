@@ -176,23 +176,20 @@ export default function SettingsPage() {
       const ownCompanyId = userCompany.id;
       if (isMainContractor) {
         const companyIds = [ownCompanyId, ...companies.map(c => c.id)].filter((id, index, self) => self.indexOf(id) === index);
-        const [companyUsers, unassignedUsers] = await Promise.all([
-          usersApi.getAll({ company: companyIds }),
-          usersApi.getAll({ company: 'null' })
-        ]);
-        const allUsers = [...companyUsers, ...unassignedUsers];
-        return Array.from(new Map(allUsers.map(u => [u.id, u])).values());
+        const companyUsers = await usersApi.getAll({ company: companyIds });
+        return Array.from(new Map(companyUsers.map(u => [u.id, u])).values());
       } else {
-        const [ownUsers, unassignedUsers] = await Promise.all([
-          usersApi.getAll({ company: ownCompanyId }),
-          usersApi.getAll({ company: 'null' })
-        ]);
-        const allUsers = [...ownUsers, ...unassignedUsers];
-        return Array.from(new Map(allUsers.map(u => [u.id, u])).values());
+        const ownUsers = await usersApi.getAll({ company: ownCompanyId });
+        return Array.from(new Map(ownUsers.map(u => [u.id, u])).values());
       }
     },
     enabled: !!user && (isAdmin || !!userCompany),
   });
+
+  const visibleUsers = useMemo(() => {
+    if (isAdmin) return users;
+    return users.filter((userItem) => !!userItem.company);
+  }, [users, isAdmin]);
 
   const { data: rolesData } = useQuery({
     queryKey: ['roles'],
@@ -718,7 +715,7 @@ export default function SettingsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users.map((userItem) => (
+                  {visibleUsers.map((userItem) => (
                     <TableRow key={userItem.id}>
                       <TableCell>{userItem.username}</TableCell>
                       <TableCell>{userItem.email}</TableCell>
