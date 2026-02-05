@@ -305,29 +305,66 @@ function convertValue(value: any, field: ImportableProjectField): any {
 
 /**
  * Projekt név generálása az ügyfél neve és város alapján
- * Formátum: yyyy mmdd hhmmss | Ügyfél neve | Város
+ * Formátum: Név - Település - yyyy mmdd hhmmss
  */
-export function generateProjectTitle(clientName: string, city: string): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const hours = String(now.getHours()).padStart(2, '0');
-  const minutes = String(now.getMinutes()).padStart(2, '0');
-  const seconds = String(now.getSeconds()).padStart(2, '0');
-  const identifier = `${year} ${month}${day} ${hours}${minutes}${seconds}`;
+export function generateProjectTitle(clientName: string, city: string, customTimestamp?: string): string {
+  let identifier: string;
+  
+  if (customTimestamp) {
+    identifier = customTimestamp;
+  } else {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    identifier = `${year} ${month}${day} ${hours}${minutes}${seconds}`;
+  }
 
-  return `${identifier} | ${clientName} | ${city}`;
+  return `${clientName} - ${city} - ${identifier}`;
+}
+
+/**
+ * Következő egyedi időbélyeg generálása
+ * Ha az azonosító már létezik, az utolsó számot lépteti (201711 -> 201712)
+ */
+export function generateUniqueTimestamp(baseTimestamp: string, existingTimestamps: Set<string>): string {
+  if (!existingTimestamps.has(baseTimestamp)) {
+    return baseTimestamp;
+  }
+
+  // Utolsó 2 szám kinyerése és léptetése
+  const parts = baseTimestamp.split(' ');
+  if (parts.length === 3) {
+    const lastPart = parts[2]; // hhmmss
+    let counter = parseInt(lastPart, 10);
+    
+    // Léptetés, amíg nem találunk egyedi azonosítót
+    while (true) {
+      counter++;
+      const newLastPart = String(counter).padStart(6, '0');
+      const newTimestamp = `${parts[0]} ${parts[1]} ${newLastPart}`;
+      
+      if (!existingTimestamps.has(newTimestamp)) {
+        return newTimestamp;
+      }
+    }
+  }
+
+  return baseTimestamp;
 }
 
 /**
  * Sor validálása és konvertálása
- * Automatikusan generálja a projekt nevét
+ * Automatikusan generálja a projekt nevét egyedi időbélyeggel
  */
 export function validateAndConvertRow(
   rowData: Record<string, any>,
   mapping: ColumnMapping[],
-  rowIndex: number
+  rowIndex: number,
+  timestamp: string
 ): PreviewRow {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -362,10 +399,10 @@ export function validateAndConvertRow(
     }
   });
 
-  // Projekt név automatikus generálása
+  // Projekt név automatikus generálása egyedi időbélyeggel
   const clientName = convertedData.client_name || 'Névtelen';
   const city = convertedData.client_city || convertedData.property_city || 'Ismeretlen';
-  convertedData.title = generateProjectTitle(clientName, city);
+  convertedData.title = generateProjectTitle(clientName, city, timestamp);
 
   // client_address generálása a kompatibilitás miatt
   if (convertedData.client_street && convertedData.client_city && convertedData.client_zip) {
@@ -387,13 +424,32 @@ export function validateAndConvertRow(
 }
 
 /**
- * Teljes import előnézet generálása
+ * Teljes import előnézet generálása egyedi időbélyegekkel
  */
 export function generatePreview(
   rows: Record<string, any>[],
   mapping: ColumnMapping[]
 ): PreviewRow[] {
-  return rows.map((row, index) => validateAndConvertRow(row, mapping, index + 2)); // +2 mert 1-indexelt + fejléc sor
+  // Alap időbélyeg generálása
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const seconds = String(now.getSeconds()).padStart(2, '0');
+  const baseTimestamp = `${year} ${month}${day} ${hours}${minutes}${seconds}`;
+
+  // Már használt időbélyegek nyilvántartása
+  const usedTimestamps = new Set<string>();
+
+  return rows.map((row, index) => {
+    // Egyedi időbélyeg generálása
+    const uniqueTimestamp = generateUniqueTimestamp(baseTimestamp, usedTimestamps);
+    usedTimestamps.add(uniqueTimestamp);
+
+    return validateAndConvertRow(row, mapping, index + 2, uniqueTimestamp); // +2 mert 1-indexelt + fejléc sor
+  });
 }
 
 /**
@@ -533,7 +589,8 @@ export function downloadImportTemplate(): void {
     ['5. Mentse el a fájlt és töltse fel az import oldalon'],
     [''],
     ['AUTOMATIKUS MEZŐK:'],
-    ['• Projekt neve - AUTOMATIKUSAN generálódik (formátum: yyyy mmdd hhmmss | Név | Város)'],
+    ['• Projekt neve - AUTOMATIKUSAN generálódik (formátum: Név - Település - yyyy mmdd hhmmss)'],
+    ['• Azonosító - Automatikusan léptetődik, ha több projekt importálása ugyanabban a másodpercben történik (201711, 201712, 201713...)'],
     ['• Ügyfél címe - Automatikusan összeáll az IRSZ, Város és Utca mezőkből'],
     [''],
     ['KÖTELEZŐ MEZŐK:'],
