@@ -517,15 +517,12 @@ export default factories.createCoreService('api::document.document', ({ strapi }
       // Tokenek létrehozása az aláírással
       // @ts-ignore
       const tokens: any = this.createTokensFromProject(project);
-      
-      // Ha a signatureData objektum (két aláírás), akkor mindkettőt beállítjuk
+
       if (typeof signatureData === 'object' && signatureData !== null) {
         tokens.signature1 = (signatureData as any).signature1 || '';
         tokens.signature2 = (signatureData as any).signature2 || '';
-        // Backwards compatibility
         tokens.signature = (signatureData as any).signature1 || '';
       } else {
-        // Ha string (egy aláírás), akkor mindhárom tokenhez ugyanazt használjuk
         tokens.signature = signatureData;
         tokens.signature1 = signatureData;
         tokens.signature2 = signatureData;
@@ -583,9 +580,10 @@ export default factories.createCoreService('api::document.document', ({ strapi }
         compression: 'DEFLATE',
       });
 
-      // PDF konverzió - aláírt dokumentumhoz PDF/A-1a formátumban readonly védelemmel
+      // PDF konverzió: ha qpdf elérhető, sima PDF + qpdf titkosítás (nem kell PDF/A).
+      const useQpdf = await this.isQpdfAvailable();
       const pdfBuffer = await this.convertDocxToPdf(generatedDocxBuffer, {
-        usePdfA: true,
+        usePdfA: !useQpdf,
         protectPdf: true,
       });
 
@@ -806,39 +804,60 @@ export default factories.createCoreService('api::document.document', ({ strapi }
     },
 
   /**
-   * PDF védelem alkalmazása (readonly, nem szerkeszthető).
-   * Owner jelszó + jogosultságok (szerkesztés, másolás, annotáció tiltva; nyomtatás engedélyezett).
-   * Megjegyzés: a standard pdf-lib jelenleg nem támogatja a save() encryption opcióját;
-   * ha a könyvtár vagy egy fork később támogatja, az alábbi opciók automatikusan érvényesülnek.
+   * qpdf elérhető-e (node-qpdf csomag + qpdf bináris). Ha igen, ezt használjuk titkosításra (nem kell PDF/A).
+   */
+  async isQpdfAvailable(): Promise<boolean> {
+    try {
+      require.resolve('node-qpdf');
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  /**
+   * PDF védelem: megnyitás jelszó nélkül, szerkesztés/másolás tiltva (owner jelszó).
+   * Ha elérhető a node-qpdf és a qpdf bináris, azzal titkosít. Különben visszaadja az eredeti buffer-t.
    */
   async protectPdf(pdfBuffer: Buffer): Promise<Buffer> {
+    let qpdf: any = null;
     try {
-      const { PDFDocument } = await import('pdf-lib');
-      const pdfDoc = await PDFDocument.load(pdfBuffer);
+      qpdf = require('node-qpdf');
+    } catch {
+      strapi.log.debug('node-qpdf not installed, skipping PDF encryption');
+      return pdfBuffer;
+    }
 
+    const tempDir = tmpdir();
+    const baseName = `pdf_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const inputPath = path.join(tempDir, `${baseName}.pdf`);
+    const outputPath = path.join(tempDir, `${baseName}_enc.pdf`);
+
+    try {
+      await writeFile(inputPath, pdfBuffer);
       const ownerPassword = process.env.PDF_OWNER_PASSWORD || 'strapi_internal_2026';
-      const saveOptions: Record<string, unknown> = {
-        useObjectStreams: false,
-        addDefaultPage: false,
-        objectsPerTick: 50,
-        updateFieldAppearances: false,
-        encryption: {
-          ownerPassword,
-          userPassword: '',
-          permissions: {
-            modifying: false,
-            copying: false,
-            annotating: false,
-            fillingForms: false,
-            printing: 'highResolution',
-          },
+      const options = {
+        keyLength: 256,
+        password: { user: '', owner: ownerPassword },
+        outputFile: outputPath,
+        restrictions: {
+          modify: 'none',
+          extract: 'n',
+          print: 'full',
         },
       };
-
-      const protectedBytes = await pdfDoc.save(saveOptions as any);
-      return Buffer.from(protectedBytes);
+      await new Promise<void>((resolve, reject) => {
+        qpdf.encrypt(inputPath, options, (err: Error | null) => (err ? reject(err) : resolve()));
+      });
+      const out = await fs.promises.readFile(outputPath);
+      await unlink(inputPath).catch(() => {});
+      await unlink(outputPath).catch(() => {});
+      strapi.log.info('PDF encrypted with qpdf (owner password, no user password)');
+      return out;
     } catch (error: any) {
-      strapi.log.error('Error protecting PDF:', error);
+      strapi.log.warn('qpdf encryption failed, returning unencrypted PDF:', error?.message);
+      await unlink(inputPath).catch(() => {});
+      await unlink(outputPath).catch(() => {});
       return pdfBuffer;
     }
   },
@@ -907,14 +926,14 @@ export default factories.createCoreService('api::document.document', ({ strapi }
       try {
         await execAsync(convertCommand, { timeout: 30000 }); // 30 másodperces timeout
       } catch (error: any) {
-        // Ha a soffice nem található, próbáljuk meg a libreoffice parancsot
+        // Ha a soffice nem található, próbáljuk meg a libreoffice parancsot (PDF/A-t is, ha kérték)
         if (error.message.includes('soffice') || error.message.includes('not found')) {
           strapi.log.warn('soffice not found, trying libreoffice command');
-          const libreofficeCommand = process.platform === 'win32' 
-            ? 'libreoffice' 
-            : 'libreoffice';
-          
-          const altConvertCommand = `${libreofficeCommand} --headless --convert-to pdf --outdir "${tempDir}" "${tempDocxPath}"`;
+          const libreofficeCommand = process.platform === 'win32' ? 'libreoffice' : 'libreoffice';
+          const altFilter = options?.usePdfA
+            ? 'pdf:writer_pdf_Export:{"SelectPdfVersion":{"type":"long","value":"1"},"UseTaggedPDF":{"type":"boolean","value":"true"},"PDFUACompliance":{"type":"boolean","value":"true"}}'
+            : 'pdf';
+          const altConvertCommand = `${libreofficeCommand} --headless --infilter="MS Word 2007 XML" --convert-to "${altFilter}" --outdir "${tempDir}" "${tempDocxPath}"`;
           await execAsync(altConvertCommand, { timeout: 30000 });
         } else {
           throw error;

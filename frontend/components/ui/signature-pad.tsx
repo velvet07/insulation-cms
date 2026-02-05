@@ -77,6 +77,21 @@ export const SignaturePad = forwardRef<SignaturePadHandle, SignaturePadProps>(({
     }
   }, [initialSignature, width, height]);
 
+  const getLogicalCoords = (
+    canvas: HTMLCanvasElement,
+    e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>,
+  ) => {
+    const rect = canvas.getBoundingClientRect();
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    const x = ((clientX - rect.left) / rect.width) * width;
+    const y = ((clientY - rect.top) / rect.height) * height;
+    return {
+      x: Math.max(0, Math.min(width, x)),
+      y: Math.max(0, Math.min(height, y)),
+    };
+  };
+
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -85,23 +100,7 @@ export const SignaturePad = forwardRef<SignaturePadHandle, SignaturePadProps>(({
     if (!ctx) return;
 
     setIsDrawing(true);
-    const rect = canvas.getBoundingClientRect();
-    
-    const getCoordinates = (e: React.MouseEvent | React.TouchEvent) => {
-      if ('touches' in e) {
-        return {
-          x: e.touches[0].clientX - rect.left,
-          y: e.touches[0].clientY - rect.top,
-        };
-      } else {
-        return {
-          x: e.clientX - rect.left,
-          y: e.clientY - rect.top,
-        };
-      }
-    };
-
-    const coords = getCoordinates(e);
+    const coords = getLogicalCoords(canvas, e);
     ctx.beginPath();
     ctx.moveTo(coords.x, coords.y);
   };
@@ -115,23 +114,7 @@ export const SignaturePad = forwardRef<SignaturePadHandle, SignaturePadProps>(({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const rect = canvas.getBoundingClientRect();
-    
-    const getCoordinates = (e: React.MouseEvent | React.TouchEvent) => {
-      if ('touches' in e) {
-        return {
-          x: e.touches[0].clientX - rect.left,
-          y: e.touches[0].clientY - rect.top,
-        };
-      } else {
-        return {
-          x: e.clientX - rect.left,
-          y: e.clientY - rect.top,
-        };
-      }
-    };
-
-    const coords = getCoordinates(e);
+    const coords = getLogicalCoords(canvas, e);
     ctx.lineTo(coords.x, coords.y);
     ctx.stroke();
     setHasSignature(true);
@@ -167,7 +150,7 @@ export const SignaturePad = forwardRef<SignaturePadHandle, SignaturePadProps>(({
           onTouchMove={draw}
           onTouchEnd={stopDrawing}
           className="cursor-crosshair touch-none"
-          style={{ width: '100%', maxWidth: `${width}px`, height: `${height}px` }}
+          style={{ width: `${width}px`, height: `${height}px`, boxSizing: 'border-box' }}
         />
       </div>
       <div className="flex gap-2 justify-end">
