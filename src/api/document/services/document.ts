@@ -806,27 +806,39 @@ export default factories.createCoreService('api::document.document', ({ strapi }
     },
 
   /**
-   * PDF védelem alkalmazása (readonly, nem szerkeszthető)
+   * PDF védelem alkalmazása (readonly, nem szerkeszthető).
+   * Owner jelszó + jogosultságok (szerkesztés, másolás, annotáció tiltva; nyomtatás engedélyezett).
+   * Megjegyzés: a standard pdf-lib jelenleg nem támogatja a save() encryption opcióját;
+   * ha a könyvtár vagy egy fork később támogatja, az alábbi opciók automatikusan érvényesülnek.
    */
   async protectPdf(pdfBuffer: Buffer): Promise<Buffer> {
     try {
-      // @ts-ignore
       const { PDFDocument } = await import('pdf-lib');
       const pdfDoc = await PDFDocument.load(pdfBuffer);
-      
-      const protectedBytes = await pdfDoc.save({
+
+      const ownerPassword = process.env.PDF_OWNER_PASSWORD || 'strapi_internal_2026';
+      const saveOptions: Record<string, unknown> = {
         useObjectStreams: false,
         addDefaultPage: false,
         objectsPerTick: 50,
         updateFieldAppearances: false,
-      });
-      
-      // Note: pdf-lib v1.17+ nem támogatja az encryption-t közvetlenül
-      // A PDF/A formátum magában is védi a dokumentumot
+        encryption: {
+          ownerPassword,
+          userPassword: '',
+          permissions: {
+            modifying: false,
+            copying: false,
+            annotating: false,
+            fillingForms: false,
+            printing: 'highResolution',
+          },
+        },
+      };
+
+      const protectedBytes = await pdfDoc.save(saveOptions as any);
       return Buffer.from(protectedBytes);
     } catch (error: any) {
       strapi.log.error('Error protecting PDF:', error);
-      // Ha a védelem sikertelen, visszaadjuk az eredeti PDF-et
       return pdfBuffer;
     }
   },
