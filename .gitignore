@@ -101,3 +101,5 @@ ssl
 nbproject
 .tmp
 .eslintcache
+
+strapi_backup/

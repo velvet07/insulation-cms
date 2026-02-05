@@ -12,41 +12,30 @@ export interface ImportableProjectField {
 }
 
 export const IMPORTABLE_FIELDS: ImportableProjectField[] = [
-  { key: 'title', label: 'Projekt neve', required: true, type: 'string', description: 'A projekt megnevezése' },
-  { key: 'client_name', label: 'Ügyfél neve', required: true, type: 'string', description: 'Az ügyfél teljes neve' },
-  { key: 'client_address', label: 'Ügyfél címe (teljes)', required: true, type: 'string', description: 'Teljes cím egy mezőben' },
-  { key: 'area_sqm', label: 'Terület (m²)', required: true, type: 'number', description: 'Padlásfödém területe négyzetméterben' },
-  { key: 'client_street', label: 'Utca, házszám', required: false, type: 'string' },
-  { key: 'client_city', label: 'Város', required: false, type: 'string' },
-  { key: 'client_zip', label: 'Irányítószám', required: false, type: 'string' },
+  // NOTE: 'title' lesz automatikusan generálva, nem kell az XLSX-ben
+  { key: 'client_name', label: 'Szerződő neve', required: true, type: 'string', description: 'A szerződő fél teljes neve' },
+  { key: 'client_email', label: 'Email cím', required: false, type: 'email' },
   { key: 'client_phone', label: 'Telefonszám', required: false, type: 'string' },
-  { key: 'client_email', label: 'E-mail cím', required: false, type: 'email' },
+  { key: 'client_zip', label: 'IRSZ', required: false, type: 'string' },
+  { key: 'client_city', label: 'Város', required: false, type: 'string' },
+  { key: 'client_street', label: 'Utca, házszám', required: false, type: 'string' },
   { key: 'client_birth_place', label: 'Születési hely', required: false, type: 'string' },
-  { key: 'client_birth_date', label: 'Születési dátum', required: false, type: 'date' },
+  { key: 'client_birth_date', label: 'Születési idő', required: false, type: 'date' },
   { key: 'client_mother_name', label: 'Anyja neve', required: false, type: 'string' },
-  { key: 'client_tax_id', label: 'Adószám', required: false, type: 'string' },
-  { key: 'property_street', label: 'Ingatlan utca', required: false, type: 'string' },
+  { key: 'client_tax_id', label: 'Adóazonosító', required: false, type: 'string' },
+  { key: 'property_zip', label: 'Ingatlan IRSZ', required: false, type: 'string' },
   { key: 'property_city', label: 'Ingatlan város', required: false, type: 'string' },
-  { key: 'property_zip', label: 'Ingatlan irányítószám', required: false, type: 'string' },
+  { key: 'property_street', label: 'Ingatlan Utca, házszám', required: false, type: 'string' },
+  { key: 'area_sqm', label: 'Padlás alapterülete (m²)', required: false, type: 'number', description: 'Padlásfödém területe négyzetméterben' },
   {
     key: 'floor_material',
-    label: 'Födém anyaga',
+    label: 'Padlásfödém anyaga',
     required: false,
     type: 'enum',
     enumValues: ['wood', 'prefab_rc', 'monolithic_rc', 'rc_slab', 'hollow_block', 'other'],
-    description: 'wood=fa, prefab_rc=előregyártott vasbeton, monolithic_rc=monolit vasbeton, rc_slab=vasbeton lemez, hollow_block=üreges blokk, other=egyéb'
+    description: 'Fa, Előre gyártott vb. (betongerendás), Monolit v.b., Vasbeton tálcás, Horcsik, Egyéb'
   },
-  { key: 'floor_material_extra', label: 'Födém anyaga (egyéb)', required: false, type: 'string' },
-  {
-    key: 'insulation_option',
-    label: 'Szigetelés típusa',
-    required: false,
-    type: 'enum',
-    enumValues: ['A', 'B'],
-    description: 'A vagy B típusú szigetelés'
-  },
-  { key: 'scheduled_date', label: 'Ütemezett dátum', required: false, type: 'date' },
-  { key: 'billing_amount', label: 'Számlázás összege', required: false, type: 'number' },
+  { key: 'floor_material_extra', label: 'Egyéb födém', required: false, type: 'string' },
 ];
 
 // Excel oszlop -> mező mapping típus
@@ -96,7 +85,24 @@ export function readExcelFile(file: File): Promise<{ workbook: XLSX.WorkBook; sh
 }
 
 /**
+ * Ellenőrzi, hogy egy sor magyarázó sor-e
+ * (ha legalább 3 cellában szerepel a "formátum", "példa", "értékek", "kötelező" szavak egyike)
+ */
+function isDescriptionRow(row: any[]): boolean {
+  if (!Array.isArray(row)) return false;
+  
+  const keywords = ['formátum', 'példa', 'értékek', 'kötelező', 'format', 'example', 'values', 'required', 'leírás', 'description'];
+  const matchCount = row.filter(cell => {
+    const str = String(cell || '').toLowerCase();
+    return str && keywords.some(kw => str.includes(kw));
+  }).length;
+  
+  return matchCount >= 3;
+}
+
+/**
  * Sheet adatainak kiolvasása
+ * A 2. sort kihagyja, ha magyarázó sor
  */
 export function getSheetData(workbook: XLSX.WorkBook, sheetName: string): { headers: string[]; rows: Record<string, any>[] } {
   const sheet = workbook.Sheets[sheetName];
@@ -116,7 +122,15 @@ export function getSheetData(workbook: XLSX.WorkBook, sheetName: string): { head
   }
 
   const headers = (jsonData[0] as any[]).map(h => String(h || '').trim());
-  const rows = jsonData.slice(1).map((row: any) => {
+  
+  // Ellenőrizzük a 2. sort, hogy magyarázó sor-e
+  let dataStartIndex = 1;
+  if (jsonData.length > 1 && isDescriptionRow(jsonData[1] as any[])) {
+    console.log('2. sor magyarázó sor - kihagyva');
+    dataStartIndex = 2;
+  }
+  
+  const rows = jsonData.slice(dataStartIndex).map((row: any) => {
     const rowObj: Record<string, any> = {};
     headers.forEach((header, index) => {
       if (header) {
@@ -135,28 +149,24 @@ export function getSheetData(workbook: XLSX.WorkBook, sheetName: string): { head
 export function suggestColumnMapping(headers: string[]): ColumnMapping[] {
   const mappings: ColumnMapping[] = [];
 
-  // Mapping szabályok (magyar és angol kulcsszavak)
+  // Mapping szabályok (magyar és angol kulcsszavak) - új formátum alapján
   const mappingRules: Record<string, string[]> = {
-    title: ['projekt', 'project', 'név', 'name', 'megnevezés', 'cím', 'title'],
-    client_name: ['ügyfél', 'client', 'megrendelő', 'customer', 'tulajdonos', 'owner', 'név'],
-    client_address: ['cím', 'address', 'lakcím', 'teljes cím'],
-    area_sqm: ['terület', 'area', 'm2', 'm²', 'négyzetméter', 'sqm'],
-    client_street: ['utca', 'street', 'házszám'],
+    client_name: ['szerződő neve', 'ügyfél', 'client', 'megrendelő', 'customer', 'tulajdonos', 'owner', 'név'],
+    client_email: ['email', 'e-mail', 'mail', 'e-mail cím'],
+    client_phone: ['telefon', 'phone', 'tel', 'mobil', 'mobile', 'telefonszám'],
+    client_zip: ['irsz', 'irányítószám', 'zip', 'postal'],
     client_city: ['város', 'city', 'település', 'town'],
-    client_zip: ['irányítószám', 'zip', 'postal', 'irsz'],
-    client_phone: ['telefon', 'phone', 'tel', 'mobil', 'mobile'],
-    client_email: ['email', 'e-mail', 'mail'],
+    client_street: ['utca', 'street', 'házszám', 'utca, házszám'],
     client_birth_place: ['születési hely', 'birth place', 'szül. hely'],
-    client_birth_date: ['születési dátum', 'születési idő', 'birth date', 'szül. dátum'],
-    client_mother_name: ['anyja neve', 'mother', 'anya neve'],
+    client_birth_date: ['születési dátum', 'születési idő', 'birth date', 'szül. dátum', 'születési'],
+    client_mother_name: ['anyja neve', 'mother', 'anya neve', 'anyja'],
     client_tax_id: ['adószám', 'adóazonosító', 'tax', 'tax id'],
-    property_street: ['ingatlan utca', 'property street'],
+    property_zip: ['ingatlan irsz', 'property zip', 'ingatlan irányítószám'],
     property_city: ['ingatlan város', 'property city'],
-    property_zip: ['ingatlan irsz', 'property zip'],
-    floor_material: ['födém', 'floor', 'anyag'],
-    insulation_option: ['szigetelés', 'insulation', 'opció', 'típus'],
-    scheduled_date: ['ütemezés', 'scheduled', 'dátum', 'date', 'időpont'],
-    billing_amount: ['összeg', 'amount', 'ár', 'price', 'számlázás'],
+    property_street: ['ingatlan utca', 'property street', 'ingatlan utca, házszám'],
+    area_sqm: ['terület', 'area', 'm2', 'm²', 'négyzetméter', 'sqm', 'padlás', 'alapterület'],
+    floor_material: ['födém', 'floor', 'anyag', 'padlásfödém'],
+    floor_material_extra: ['egyéb', 'other', 'egyéb födém'],
   };
 
   headers.forEach(header => {
@@ -178,6 +188,31 @@ export function suggestColumnMapping(headers: string[]): ColumnMapping[] {
 
   return mappings;
 }
+
+/**
+ * Magyar födém anyag mapping
+ */
+const FLOOR_MATERIAL_MAPPING: Record<string, string> = {
+  'fa': 'wood',
+  'wood': 'wood',
+  'előre gyártott vb': 'prefab_rc',
+  'előre gyártott vb.': 'prefab_rc',
+  'előre gyártott vasbeton': 'prefab_rc',
+  'betongerendás': 'prefab_rc',
+  'prefab_rc': 'prefab_rc',
+  'monolit v.b': 'monolithic_rc',
+  'monolit v.b.': 'monolithic_rc',
+  'monolit vasbeton': 'monolithic_rc',
+  'monolithic_rc': 'monolithic_rc',
+  'vasbeton tálcás': 'rc_slab',
+  'vasbeton lemez': 'rc_slab',
+  'rc_slab': 'rc_slab',
+  'horcsik': 'hollow_block',
+  'üreges blokk': 'hollow_block',
+  'hollow_block': 'hollow_block',
+  'egyéb': 'other',
+  'other': 'other',
+};
 
 /**
  * Érték konvertálása a megfelelő típusra
@@ -212,10 +247,20 @@ function convertValue(value: any, field: ImportableProjectField): any {
       for (const format of dateFormats) {
         const match = strValue.match(format);
         if (match) {
-          // Próbáljuk értelmezni
-          const d = new Date(strValue);
-          if (!isNaN(d.getTime())) {
-            return d.toISOString().split('T')[0];
+          // DD.MM.YYYY formátum kezelése
+          if (format === dateFormats[2]) {
+            const [_, day, month, year] = match;
+            const dateStr = `${year}-${month}-${day}`;
+            const d = new Date(dateStr);
+            if (!isNaN(d.getTime())) {
+              return d.toISOString().split('T')[0];
+            }
+          } else {
+            // Próbáljuk értelmezni
+            const d = new Date(strValue.replace(/\./g, '-'));
+            if (!isNaN(d.getTime())) {
+              return d.toISOString().split('T')[0];
+            }
           }
         }
       }
@@ -229,6 +274,13 @@ function convertValue(value: any, field: ImportableProjectField): any {
       return emailRegex.test(strValue) ? strValue : null;
 
     case 'enum':
+      // Speciális kezelés floor_material mezőhöz
+      if (field.key === 'floor_material') {
+        const normalized = strValue.toLowerCase().trim();
+        const mapped = FLOOR_MATERIAL_MAPPING[normalized];
+        return mapped || null;
+      }
+      
       // Enum értékek egyeztetése (case-insensitive)
       if (field.enumValues) {
         const normalizedValue = strValue.toLowerCase();
@@ -252,7 +304,25 @@ function convertValue(value: any, field: ImportableProjectField): any {
 }
 
 /**
+ * Projekt név generálása az ügyfél neve és város alapján
+ * Formátum: yyyy mmdd hhmmss | Ügyfél neve | Város
+ */
+export function generateProjectTitle(clientName: string, city: string): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const seconds = String(now.getSeconds()).padStart(2, '0');
+  const identifier = `${year} ${month}${day} ${hours}${minutes}${seconds}`;
+
+  return `${identifier} | ${clientName} | ${city}`;
+}
+
+/**
  * Sor validálása és konvertálása
+ * Automatikusan generálja a projekt nevét
  */
 export function validateAndConvertRow(
   rowData: Record<string, any>,
@@ -291,6 +361,21 @@ export function validateAndConvertRow(
       errors.push(`"${field.label}" mező kötelező`);
     }
   });
+
+  // Projekt név automatikus generálása
+  const clientName = convertedData.client_name || 'Névtelen';
+  const city = convertedData.client_city || convertedData.property_city || 'Ismeretlen';
+  convertedData.title = generateProjectTitle(clientName, city);
+
+  // client_address generálása a kompatibilitás miatt
+  if (convertedData.client_street && convertedData.client_city && convertedData.client_zip) {
+    convertedData.client_address = `${convertedData.client_zip} ${convertedData.client_city}, ${convertedData.client_street}`;
+  }
+
+  // area_sqm alapértelmezett érték, ha nincs megadva
+  if (!convertedData.area_sqm) {
+    convertedData.area_sqm = 0;
+  }
 
   return {
     rowIndex,
@@ -334,8 +419,8 @@ export function downloadImportTemplate(): void {
   // Leírás sor - magyarázatok minden mezőhöz
   const descriptions = IMPORTABLE_FIELDS.map(f => {
     let desc = f.description || '';
-    if (f.type === 'enum' && f.enumValues) {
-      desc = desc || `Értékek: ${f.enumValues.join(', ')}`;
+    if (f.key === 'floor_material') {
+      desc = 'Értékek: Fa, Előre gyártott vb. (betongerendás), Monolit v.b., Vasbeton tálcás, Horcsik, Egyéb';
     }
     if (f.type === 'date') {
       desc = (desc ? desc + ' - ' : '') + 'Formátum: ÉÉÉÉ-HH-NN';
@@ -355,15 +440,12 @@ export function downloadImportTemplate(): void {
   // Példa adatok - 3 minta sor
   const exampleRows = [
     [
-      'Kovács család szigetelés',
       'Kovács János',
-      '1234 Budapest, Példa utca 1.',
-      '85',
-      'Példa utca 1.',
-      'Budapest',
-      '1234',
-      '+36 30 123 4567',
       'kovacs.janos@email.hu',
+      '+36 30 123 4567',
+      '1234',
+      'Budapest',
+      'Példa utca 1.',
       'Budapest',
       '1975-03-15',
       'Kovács Mária',
@@ -371,56 +453,44 @@ export function downloadImportTemplate(): void {
       '',
       '',
       '',
-      'wood',
+      '85',
+      'Fa',
       '',
-      'A',
-      '2025-04-15',
-      '150000',
     ],
     [
-      'Nagy Péter lakás',
       'Nagy Péter',
-      '5600 Békéscsaba, Kossuth u. 22.',
-      '62,5',
-      'Kossuth u. 22.',
-      'Békéscsaba',
-      '5600',
-      '+36 20 987 6543',
       'nagy.peter@gmail.com',
+      '+36 20 987 6543',
+      '5600',
+      'Békéscsaba',
+      'Kossuth u. 22.',
       'Gyula',
       '1982-08-22',
       'Kiss Erzsébet',
       '8987654321',
-      'Petőfi u. 5.',
-      'Békéscsaba',
       '5600',
-      'prefab_rc',
+      'Békéscsaba',
+      'Petőfi u. 5.',
+      '62,5',
+      'Előre gyártott vb. (betongerendás)',
       '',
-      'B',
-      '2025-04-20',
-      '120000',
     ],
     [
-      'Szabó ház felújítás',
       'Szabó László',
-      '3000 Hatvan, Rákóczi út 100.',
-      '120',
+      'szabo.laszlo@freemail.hu',
+      '06-37-123-456',
+      '3000',
+      'Hatvan',
       'Rákóczi út 100.',
       'Hatvan',
-      '3000',
-      '06-37-123-456',
-      'szabo.laszlo@freemail.hu',
-      'Hatvan',
-      '1968-12-01',
+      '1968.12.01.',
       'Tóth Anna',
       '',
       '',
       '',
       '',
-      'monolithic_rc',
-      '',
-      'A',
-      '2025-05-01',
+      '120',
+      'Monolit v.b.',
       '',
     ],
   ];
@@ -458,37 +528,35 @@ export function downloadImportTemplate(): void {
     ['HASZNÁLAT:'],
     ['1. Töltse ki a "Projektek" munkalapot az adataival'],
     ['2. A *-gal jelölt mezők kötelezőek'],
-    ['3. A 2. sor tartalmazza a mezők leírását - ezt törölje importálás előtt!'],
-    ['4. A 3-5. sorok példa adatok - ezeket is törölje'],
+    ['3. A 2. sor tartalmazza a mezők leírását - ezt NEM KÖTELEZŐ törölni, automatikusan kihagyja az import'],
+    ['4. A 3-5. sorok példa adatok - ezeket törölje és írja át a saját adataira'],
     ['5. Mentse el a fájlt és töltse fel az import oldalon'],
     [''],
+    ['AUTOMATIKUS MEZŐK:'],
+    ['• Projekt neve - AUTOMATIKUSAN generálódik (formátum: yyyy mmdd hhmmss | Név | Város)'],
+    ['• Ügyfél címe - Automatikusan összeáll az IRSZ, Város és Utca mezőkből'],
+    [''],
     ['KÖTELEZŐ MEZŐK:'],
-    ['• Projekt neve * - A projekt megnevezése'],
-    ['• Ügyfél neve * - Az ügyfél teljes neve'],
-    ['• Ügyfél címe (teljes) * - Teljes cím egy mezőben (pl. "1234 Budapest, Példa u. 1.")'],
-    ['• Terület (m²) * - Padlásfödém területe négyzetméterben'],
+    ['• Szerződő neve * - A szerződő fél teljes neve'],
     [''],
-    ['DÁTUM FORMÁTUMOK:'],
-    ['• 2025-04-15 (ajánlott)'],
-    ['• 2025.04.15.'],
-    ['• 15.04.2025'],
+    ['DÁTUM FORMÁTUMOK (születési idő):'],
+    ['• 1975-03-15 (ajánlott)'],
+    ['• 1975.03.15.'],
+    ['• 15.03.1975'],
     [''],
-    ['FÖDÉM ANYAG ÉRTÉKEK:'],
-    ['• wood - Fa'],
-    ['• prefab_rc - Előregyártott vasbeton'],
-    ['• monolithic_rc - Monolit vasbeton'],
-    ['• rc_slab - Vasbeton lemez'],
-    ['• hollow_block - Üreges blokk'],
-    ['• other - Egyéb'],
-    [''],
-    ['SZIGETELÉS TÍPUS:'],
-    ['• A - A típusú szigetelés'],
-    ['• B - B típusú szigetelés'],
+    ['FÖDÉM ANYAG ÉRTÉKEK (magyar nyelven):'],
+    ['• Fa'],
+    ['• Előre gyártott vb. (betongerendás)'],
+    ['• Monolit v.b.'],
+    ['• Vasbeton tálcás'],
+    ['• Horcsik'],
+    ['• Egyéb'],
     [''],
     ['TIPPEK:'],
     ['• A terület mezőben használhat vesszőt vagy pontot tizedesjelként'],
     ['• A telefonszám bármilyen formátumú lehet'],
     ['• Ha az ingatlan címe megegyezik az ügyfél címével, hagyja üresen az ingatlan mezőket'],
+    ['• Az üres mezők nem okoznak hibát, az import folytatódik'],
   ];
 
   const wsGuide = XLSX.utils.aoa_to_sheet(guideData);

@@ -31,6 +31,7 @@ import { projectsApi } from '@/lib/api/projects';
 import { useAuthStore } from '@/lib/store/auth';
 import { createAuditLogEntry } from '@/lib/utils/audit-log';
 import { usePermission } from '@/lib/contexts/permission-context';
+import { generateProjectTitle } from '@/lib/utils/excel-import';
 import { ArrowLeft } from 'lucide-react';
 import { useEffect } from 'react';
 
@@ -168,20 +169,6 @@ export default function NewProjectPage() {
       alert('Hiba történt a projekt létrehozása során.');
     },
   });
-
-  const generateProjectTitle = (clientName: string, city: string): string => {
-    // Generáljuk az azonosítót: yyyy mmdd hhmmss (szóközökkel tagolva)
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    const seconds = String(now.getSeconds()).padStart(2, '0');
-    const identifier = `${year} ${month}${day} ${hours}${minutes}${seconds}`;
-
-    return `${clientName} - ${city} - ${identifier}`;
-  };
 
   const onSubmit = async (values: ProjectFormValues) => {
     setIsSubmitting(true);

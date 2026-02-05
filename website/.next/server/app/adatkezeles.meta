@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/adatkezeles/layout,_N_T_/adatkezeles/page,_N_T_/adatkezeles"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/adatkezeles/__PAGE__",
+    "/adatkezeles",
+    "/_index",
+    "/_head"
+  ]
+}

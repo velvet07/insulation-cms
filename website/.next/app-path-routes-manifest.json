@@ -1,0 +1,11 @@
+{
+  "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found",
+  "/adatkezeles/page": "/adatkezeles",
+  "/api/send-email/route": "/api/send-email",
+  "/aszf/page": "/aszf",
+  "/demo/page": "/demo",
+  "/favicon.ico/route": "/favicon.ico",
+  "/kapcsolat/page": "/kapcsolat",
+  "/page": "/"
+}
