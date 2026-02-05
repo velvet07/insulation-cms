@@ -475,8 +475,8 @@ export default function SettingsPage() {
   const handleUserUpdate = () => {
     if (!editingUser) return;
     const data: any = { username: userUsername, email: userEmail, company: selectedUserCompany || null };
-    // Only allow role update for admin's own user
-    if (isAdmin && userRole !== undefined && editingUser.id === user?.id) {
+    // Admin can update role
+    if (isAdmin && userRole !== undefined) {
       data.role = userRole;
     }
     if (userPassword) data.password = userPassword;
@@ -764,7 +764,7 @@ export default function SettingsPage() {
                   </SelectContent>
                 </Select>
               </div>
-              {isAdmin && (!editingUser || editingUser.id === user?.id) && (
+              {isAdmin && (
                 <div>
                   <Label>Szerepkör</Label>
                   <Select value={userRole?.toString()} onValueChange={(v) => setUserRole(parseInt(v))}>
