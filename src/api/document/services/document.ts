@@ -411,11 +411,28 @@ export default factories.createCoreService('api::document.document', ({ strapi }
 
       strapi.log.info(`Creating document record. Type: ${documentType} (template original type: ${template.type})`);
 
+      // Generáló user company-ja (ha van)
+      let userCompanyId = null;
+      if (userId) {
+        try {
+          const user = await strapi.entityService.findOne('plugin::users-permissions.user', userId, {
+            populate: ['company'],
+          });
+          userCompanyId = user?.company?.id || null;
+          if (userCompanyId) {
+            strapi.log.info(`Document will be associated with user's company: ${userCompanyId}`);
+          }
+        } catch (err: any) {
+          strapi.log.warn(`Could not fetch user company: ${err.message}`);
+        }
+      }
+
       // Dokumentum létrehozása entityService-szel
       const document = await strapi.entityService.create('api::document.document', {
         data: {
           type: documentType,
           project: project.id,
+          company: userCompanyId, // Automatikus csatolás a generáló user company-jához
           uploaded_by: userId,
           signed: false,
           requires_signature: true,
