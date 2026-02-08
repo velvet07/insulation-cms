@@ -346,8 +346,14 @@ export default function SettingsPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['materials'] }),
   });
 
-  const createUserMutation = useMutation({
-    mutationFn: (data: any) => usersApi.create(data),
+  const inviteUserMutation = useMutation({
+    mutationFn: (data: { username: string; email: string; company?: string | null; role?: number }) =>
+      usersApi.invite({
+        username: data.username,
+        email: data.email,
+        company: data.company === 'none' || !data.company ? null : data.company,
+        role: data.role,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       setIsUserDialogOpen(false);
@@ -357,6 +363,10 @@ export default function SettingsPage() {
       setUserPassword('');
       setUserPasswordConfirm('');
       setUserPasswordError('');
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error?.message ?? err?.response?.data?.message ?? err?.message;
+      setUserPasswordError(typeof msg === 'string' ? msg : 'Meghívó küldése sikertelen');
     },
   });
 
@@ -516,16 +526,31 @@ export default function SettingsPage() {
   };
 
   const handleUserCreate = () => {
-    if (!validateUserPassword(true)) return;
+    if (!userUsername.trim()) {
+      setUserPasswordError('A felhasználónév kötelező');
+      return;
+    }
+    if (userUsername.trim().length < 3) {
+      setUserPasswordError('A felhasználónév legalább 3 karakter');
+      return;
+    }
+    if (!userEmail.trim()) {
+      setUserPasswordError('Az e-mail cím kötelező');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail.trim())) {
+      setUserPasswordError('Érvényes e-mail cím szükséges');
+      return;
+    }
+    setUserPasswordError('');
     const roleToSend = isAdmin ? userRole : authenticatedRoleId;
     const payload: any = {
-      username: userUsername,
-      email: userEmail,
-      password: userPassword,
-      company: selectedUserCompany || null,
+      username: userUsername.trim(),
+      email: userEmail.trim(),
+      company: selectedUserCompany === 'none' ? null : selectedUserCompany || null,
     };
     if (roleToSend !== undefined) payload.role = roleToSend;
-    createUserMutation.mutate(payload);
+    inviteUserMutation.mutate(payload);
   };
 
   const handleUserUpdate = () => {
@@ -770,7 +795,7 @@ export default function SettingsPage() {
                     </Button>
                   )}
                   {can('settings', 'manage_users') && (
-                    <Button onClick={() => { setIsUserDialogOpen(true); setEditingUser(null); setUserPassword(''); setUserPasswordConfirm(''); setUserPasswordError(''); }}>
+                    <Button onClick={() => { setIsUserDialogOpen(true); setEditingUser(null); setUserUsername(''); setUserEmail(''); setUserPassword(''); setUserPasswordConfirm(''); setUserPasswordError(''); setSelectedUserCompany(''); setUserRole(undefined); }}>
                       <Plus className="h-4 w-4 mr-2" />
                       Új felhasználó
                     </Button>
@@ -824,10 +849,17 @@ export default function SettingsPage() {
           <DialogContent>
             <DialogHeader><DialogTitle>{editingUser ? 'Szerkesztés' : 'Új felhasználó'}</DialogTitle></DialogHeader>
             <div className="space-y-4">
-              <div><Label>Felhasználónév</Label><Input value={userUsername} onChange={e => setUserUsername(e.target.value)} /></div>
-              <div><Label>Email</Label><Input value={userEmail} onChange={e => setUserEmail(e.target.value)} /></div>
-              <div><Label>Jelszó</Label><Input type="password" value={userPassword} onChange={e => { setUserPassword(e.target.value); if (userPasswordError) setUserPasswordError(''); }} /></div>
-              <div><Label>Jelszó megerősítése</Label><Input type="password" value={userPasswordConfirm} onChange={e => { setUserPasswordConfirm(e.target.value); if (userPasswordError) setUserPasswordError(''); }} /></div>
+              <div><Label>Felhasználónév</Label><Input value={userUsername} onChange={e => setUserUsername(e.target.value)} placeholder="Min. 3 karakter" /></div>
+              <div><Label>Email</Label><Input type="email" value={userEmail} onChange={e => setUserEmail(e.target.value)} placeholder="email@example.com" /></div>
+              {editingUser && (
+                <>
+                  <div><Label>Jelszó (üresen hagyva nem változik)</Label><Input type="password" value={userPassword} onChange={e => { setUserPassword(e.target.value); if (userPasswordError) setUserPasswordError(''); }} /></div>
+                  <div><Label>Jelszó megerősítése</Label><Input type="password" value={userPasswordConfirm} onChange={e => { setUserPasswordConfirm(e.target.value); if (userPasswordError) setUserPasswordError(''); }} /></div>
+                </>
+              )}
+              {!editingUser && (
+                <p className="text-sm text-muted-foreground">Meghívót kapsz e-mailben. A linkre kattintva erősítsd meg az e-mail címedet, majd állítsd be a jelszavadat.</p>
+              )}
               {userPasswordError && <p className="text-xs text-red-500">{userPasswordError}</p>}
               <div>
                 <Label>Cég</Label>
@@ -855,7 +887,15 @@ export default function SettingsPage() {
               )}
             </div>
             <DialogFooter>
-              <Button onClick={editingUser ? handleUserUpdate : handleUserCreate}>Mentés</Button>
+              <Button
+                onClick={editingUser ? handleUserUpdate : handleUserCreate}
+                disabled={inviteUserMutation.isPending || updateUserMutation.isPending}
+              >
+                {(inviteUserMutation.isPending || updateUserMutation.isPending) && (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                )}
+                {editingUser ? 'Mentés' : 'Meghívó küldése'}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

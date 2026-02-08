@@ -1,0 +1,223 @@
+/**
+ * Users-permissions plugin extension.
+ * Adds invite flow: create user, send confirmation email, confirm + reset token endpoint.
+ */
+import type { Core } from '@strapi/strapi';
+import crypto from 'node:crypto';
+
+const FRONTEND_BASE_URL = process.env.FRONTEND_URL || 'https://app.thermodesk.eu';
+const CONFIRMATION_URL = `${FRONTEND_BASE_URL}/email-confirmation`;
+
+// Email template (matches "Email address confirmation" in admin)
+const EMAIL_TEMPLATE = {
+  subject: 'ThermoDesk – E-mail cím megerősítése',
+  text: `Üdvözlünk!
+
+Az adminisztrátor létrehozta a fiókodat a ThermoDesk rendszerben.
+
+A fiók aktiválásához kérjük, erősítsd meg az e-mail címedet az alábbi hivatkozásra kattintva.
+
+${CONFIRMATION_URL}?confirmation=<%= CODE %>
+
+Ha nem te kérted ezt a fiókot, kérjük, hagyd figyelmen kívül ezt az üzenetet.
+
+Köszönjük.`,
+  html: `<p>Üdvözlünk!</p>
+<p>Az adminisztrátor létrehozta a fiókodat a ThermoDesk rendszerben.</p>
+<p>A fiók aktiválásához kérjük, erősítsd meg az e-mail címedet az alábbi hivatkozásra kattintva.</p>
+<p><a href="<%= URL %>?confirmation=<%= CODE %>"><%= URL %>?confirmation=<%= CODE %></a></p>
+<p>Ha nem te kérted ezt a fiókot, kérjük, hagyd figyelmen kívül ezt az üzenetet.</p>
+<p>Köszönjük.</p>`,
+};
+
+function generateToken(): string {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+function generateRandomPassword(): string {
+  return crypto.randomBytes(24).toString('base64url').slice(0, 20);
+}
+
+export default (plugin: any) => {
+  plugin.controllers.auth.invite = async (ctx: any) => {
+    const authHeader = ctx.request?.headers?.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return ctx.unauthorized('API token szükséges');
+    }
+
+    const body = ctx.request?.body ?? {};
+    const { username, email, company, role } = body;
+
+    if (!username || typeof username !== 'string' || username.trim().length < 3) {
+      return ctx.badRequest('A felhasználónév kötelező és legalább 3 karakter');
+    }
+    if (!email || typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return ctx.badRequest('Érvényes e-mail cím kötelező');
+    }
+
+    const strapi = (ctx as any).state?.strapi ?? (ctx as any).app;
+    if (!strapi) throw new Error('Strapi instance not available');
+    const userService = strapi.documents('plugin::users-permissions.user');
+
+    try {
+      const existing = await userService.findMany({
+        filters: {
+          $or: [
+            { username: { $eq: username.trim() } },
+            { email: { $eq: email.trim().toLowerCase() } },
+          ],
+        },
+        limit: 1,
+      });
+      if (existing && existing.length > 0) {
+        return ctx.badRequest('A felhasználónév vagy e-mail cím már használatban van');
+      }
+
+      const tempPassword = generateRandomPassword();
+      const confirmationToken = generateToken();
+
+      const defaultRole = await strapi.db.query('plugin::users-permissions.role').findOne({
+        where: { type: 'authenticated' },
+      });
+      const roleId = role ?? defaultRole?.id;
+
+      const userData: Record<string, unknown> = {
+        username: username.trim(),
+        email: email.trim().toLowerCase(),
+        password: tempPassword,
+        confirmed: false,
+        blocked: false,
+        confirmationToken,
+        role: roleId,
+      };
+
+      const created = await userService.create({
+        data: userData as any,
+      });
+
+      const userId = created?.id ?? created?.documentId;
+      if (!userId) {
+        return ctx.internalServerError('Felhasználó létrehozása sikertelen');
+      }
+
+      if (company) {
+        try {
+          const companyService = strapi.documents('api::company.company');
+          await companyService.update({
+            documentId: String(company),
+            data: {
+              user: { connect: [userId] },
+            } as any,
+          });
+        } catch (e) {
+          strapi.log.warn('[invite] Company assignment failed:', e);
+        }
+      }
+
+      if (roleId && roleId !== defaultRole?.id) {
+        try {
+          await userService.update({
+            documentId: String(userId),
+            data: { role: roleId } as any,
+          });
+        } catch (e) {
+          strapi.log.warn('[invite] Role update failed:', e);
+        }
+      }
+
+      const url = CONFIRMATION_URL;
+      const code = confirmationToken;
+
+      await strapi.plugins['email'].services.email.sendTemplatedEmail(
+        { to: email.trim().toLowerCase() },
+        EMAIL_TEMPLATE,
+        { URL: url, CODE: code }
+      );
+
+      return ctx.send({
+        success: true,
+        message: 'Meghívó e-mail elküldve',
+        user: {
+          id: userId,
+          username: created.username,
+          email: created.email,
+          confirmed: false,
+        },
+      });
+    } catch (e: any) {
+      strapi.log.error('[invite] Error:', e);
+      return ctx.internalServerError(e?.message || 'Meghívó küldése sikertelen');
+    }
+  };
+
+  plugin.controllers.auth.confirmAndRequestReset = async (ctx: any) => {
+    const confirmation = ctx.request?.body?.confirmation ?? ctx.query?.confirmation ?? '';
+
+    if (!confirmation || typeof confirmation !== 'string') {
+      return ctx.badRequest('Érvénytelen vagy hiányzó confirmation token');
+    }
+
+    const strapi = (ctx as any).state?.strapi ?? (ctx as any).app;
+    if (!strapi) throw new Error('Strapi instance not available');
+    const userService = strapi.documents('plugin::users-permissions.user');
+
+    try {
+      const users = await userService.findMany({
+        filters: { confirmationToken: { $eq: confirmation.trim() } },
+        limit: 1,
+      });
+
+      const user = users?.[0];
+      if (!user) {
+        return ctx.badRequest('Érvénytelen vagy lejárt megerősítési link');
+      }
+
+      const resetToken = generateToken();
+
+      await userService.update({
+        documentId: String(user.documentId ?? user.id),
+        data: {
+          confirmed: true,
+          confirmationToken: null,
+          resetPasswordToken: resetToken,
+        } as any,
+      });
+
+      return ctx.send({
+        success: true,
+        code: resetToken,
+        message: 'E-mail megerősítve. Átirányítás a jelszó beállításához.',
+      });
+    } catch (e: any) {
+      strapi.log.error('[confirmAndRequestReset] Error:', e);
+      return ctx.internalServerError(e?.message || 'Megerősítés sikertelen');
+    }
+  };
+
+  const contentApi = plugin.routes?.['content-api'];
+  if (contentApi && Array.isArray(contentApi.routes)) {
+    contentApi.routes.push(
+    ...contentApiRoutes,
+      {
+        method: 'POST',
+        path: '/auth/invite',
+        handler: 'auth.invite',
+        config: {
+          auth: false,
+          policies: [],
+        },
+      },
+      {
+        method: 'POST',
+        path: '/auth/confirm-and-request-reset',
+        handler: 'auth.confirmAndRequestReset',
+        config: {
+          auth: false,
+          policies: [],
+        },
+      }
+    );
+  }
+
+  return plugin;
+};

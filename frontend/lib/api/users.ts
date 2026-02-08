@@ -179,4 +179,15 @@ export const usersApi = {
   delete: async (id: string | number): Promise<void> => {
     await strapiApi.delete(`/users/${id}`);
   },
+
+  // Invite user (creates with confirmed=false, sends confirmation email)
+  invite: async (data: {
+    username: string;
+    email: string;
+    company?: number | string | null;
+    role?: number | string;
+  }): Promise<{ success: boolean; message: string; user: { id: string | number; username: string; email: string; confirmed: boolean } }> => {
+    const response = await strapiApi.post('/auth/invite', data);
+    return response.data;
+  },
 };
