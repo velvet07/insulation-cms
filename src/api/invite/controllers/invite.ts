@@ -8,27 +8,59 @@ function generateRandomPassword(): string {
   return crypto.randomBytes(24).toString('base64url').slice(0, 20);
 }
 
+const USER_UID = 'plugin::users-permissions.user';
+const ROLE_UID = 'plugin::users-permissions.role';
+const COMPANY_UID = 'api::company.company';
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 // 24 hours in milliseconds
 const CONFIRMATION_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
-async function resolveCompanyId(strapi: any, company: string | number): Promise<number | null> {
-  const companyId = typeof company === 'string' ? company.trim() : company;
-  if (!companyId) return null;
+function parseNumericId(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && /^\d+$/.test(value.trim())) return parseInt(value.trim(), 10);
+  return null;
+}
 
-  if (typeof companyId === 'number') return companyId;
-  if (/^\d+$/.test(companyId)) return parseInt(companyId, 10);
+async function resolveCompanyId(strapi: any, company: unknown): Promise<number | null> {
+  const numericId = parseNumericId(company);
+  if (numericId) return numericId;
 
-  const found = await strapi.entityService.findMany('api::company.company', {
-    filters: {
-      $or: [
-        { id: { $eq: companyId } },
-        { documentId: { $eq: companyId } },
-      ],
-    },
+  if (typeof company !== 'string' || !company.trim()) return null;
+
+  const found = await strapi.entityService.findMany(COMPANY_UID, {
+    filters: { documentId: { $eq: company.trim() } },
+    fields: ['id'],
     limit: 1,
   });
 
   return found?.[0]?.id ?? null;
+}
+
+async function resolveRoleId(strapi: any, role: unknown): Promise<number | null> {
+  if (role === undefined || role === null || role === '') {
+    const defaultRole = await strapi.db.query(ROLE_UID).findOne({
+      where: { type: 'authenticated' },
+    });
+    return defaultRole?.id ?? null;
+  }
+
+  const numericRoleId = parseNumericId(role);
+  if (numericRoleId) {
+    const roleEntry = await strapi.db.query(ROLE_UID).findOne({
+      where: { id: numericRoleId },
+    });
+    return roleEntry?.id ?? null;
+  }
+
+  if (typeof role === 'string' && role.trim()) {
+    const roleEntry = await strapi.db.query(ROLE_UID).findOne({
+      where: { type: role.trim() },
+    });
+    return roleEntry?.id ?? null;
+  }
+
+  return null;
 }
 
 export default {
@@ -44,79 +76,60 @@ export default {
     if (!username || typeof username !== 'string' || username.trim().length < 3) {
       return ctx.badRequest('A felhasználónév kötelező és legalább 3 karakter');
     }
-    if (!email || typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!email || typeof email !== 'string' || !EMAIL_REGEX.test(email)) {
       return ctx.badRequest('Érvényes e-mail cím kötelező');
     }
 
-    const strapi = (ctx as any).state?.strapi ?? (ctx as any).app;
-    if (!strapi) throw new Error('Strapi instance not available');
-    const userService = strapi.entityService;
+    const strapiInstance = strapi;
+    const userService = strapiInstance.plugin('users-permissions').service('user');
 
     try {
-      const existing = await userService.findMany({
-        filters: {
-          $or: [
-            { username: { $eq: username.trim() } },
-            { email: { $eq: email.trim().toLowerCase() } },
-          ],
+      const usernameValue = username.trim();
+      const emailValue = email.trim().toLowerCase();
+
+      const existing = await strapiInstance.db.query(USER_UID).findOne({
+        where: {
+          $or: [{ username: usernameValue }, { email: emailValue }],
         },
-        limit: 1,
       });
-      if (existing && existing.length > 0) {
+
+      if (existing) {
         return ctx.badRequest('A felhasználónév vagy e-mail cím már használatban van');
       }
 
       const tempPassword = generateRandomPassword();
-      const defaultRole = await strapi.db.query('plugin::users-permissions.role').findOne({
-        where: { type: 'authenticated' },
-      });
-      const roleId = role ?? defaultRole?.id;
+      const roleId = await resolveRoleId(strapiInstance, role);
+      if (!roleId) {
+        return ctx.badRequest('Érvénytelen role');
+      }
+
+      const companyId = company ? await resolveCompanyId(strapiInstance, company) : null;
+      if (company && !companyId) {
+        return ctx.badRequest('Érvénytelen company');
+      }
 
       const userData: Record<string, unknown> = {
-        username: username.trim(),
-        email: email.trim().toLowerCase(),
+        username: usernameValue,
+        email: emailValue,
         password: tempPassword,
         confirmed: false,
         blocked: false,
         role: roleId,
       };
 
-      const created = await userService.create('plugin::users-permissions.user', {
-        data: userData as any,
-      });
+      if (companyId) {
+        userData.company = companyId;
+      }
 
-      const userId = created?.id ?? created?.documentId;
+      const created = await userService.add(userData as any);
+
+      const userId = created?.id;
       if (!userId) {
         return ctx.internalServerError('Felhasználó létrehozása sikertelen');
       }
 
-      if (company) {
-        try {
-          const companyId = await resolveCompanyId(strapi, company);
-          if (companyId) {
-            await strapi.entityService.update('api::company.company', companyId, {
-              data: {
-                user: { connect: [userId] },
-              } as any,
-            });
-          }
-        } catch (e) {
-          strapi.log.warn('[invite] Company assignment failed:', e);
-        }
-      }
-
-      if (roleId && roleId !== defaultRole?.id) {
-        try {
-          await userService.update('plugin::users-permissions.user', userId, {
-            data: { role: roleId } as any,
-          });
-        } catch (e) {
-          strapi.log.warn('[invite] Role update failed:', e);
-        }
-      }
-
       // Use users-permissions configured "Email address confirmation" template.
-      await strapi.plugin('users-permissions').service('user').sendConfirmationEmail(created);
+      await userService.sendConfirmationEmail(created);
 
       return ctx.send({
         success: true,
@@ -141,19 +154,20 @@ export default {
       return ctx.badRequest('Érvénytelen vagy hiányzó confirmation token');
     }
 
-    const strapi = (ctx as any).state?.strapi ?? (ctx as any).app;
-    if (!strapi) throw new Error('Strapi instance not available');
-    const userService = strapi.entityService;
+    const strapiInstance = strapi;
+    const userService = strapiInstance.plugin('users-permissions').service('user');
 
     try {
-      const users = await userService.findMany('plugin::users-permissions.user', {
-        filters: { confirmationToken: { $eq: confirmation.trim() } },
-        limit: 1,
+      const user = await strapiInstance.db.query(USER_UID).findOne({
+        where: { confirmationToken: confirmation.trim() },
       });
 
-      const user = users?.[0];
       if (!user) {
         return ctx.badRequest('Érvénytelen vagy lejárt megerősítési link');
+      }
+
+      if (user.confirmed) {
+        return ctx.badRequest('A felhasználó már megerősített');
       }
 
       // Check token expiry (24 hours from user creation/update)
@@ -167,12 +181,10 @@ export default {
 
       const resetToken = generateToken();
 
-      await userService.update('plugin::users-permissions.user', user.id, {
-        data: {
-          confirmed: true,
-          confirmationToken: null,
-          resetPasswordToken: resetToken,
-        } as any,
+      await userService.edit(user.id, {
+        confirmed: true,
+        confirmationToken: null,
+        resetPasswordToken: resetToken,
       });
 
       return ctx.send({
@@ -198,22 +210,20 @@ export default {
       return ctx.badRequest('userId kötelező');
     }
 
-    const strapi = (ctx as any).state?.strapi ?? (ctx as any).app;
-    if (!strapi) throw new Error('Strapi instance not available');
-    const userService = strapi.entityService;
+    const strapiInstance = strapi;
+    const userService = strapiInstance.plugin('users-permissions').service('user');
 
     try {
-      const users = await userService.findMany('plugin::users-permissions.user', {
-        filters: {
+      const numericUserId = parseNumericId(userId);
+      const user = await strapiInstance.db.query(USER_UID).findOne({
+        where: {
           $or: [
-            { id: { $eq: userId } },
-            { documentId: { $eq: userId } },
-          ],
+            numericUserId ? { id: numericUserId } : null,
+            { documentId: { $eq: String(userId) } },
+          ].filter(Boolean) as any,
         },
-        limit: 1,
       });
 
-      const user = users?.[0];
       if (!user) {
         return ctx.notFound('Felhasználó nem található');
       }
@@ -222,21 +232,8 @@ export default {
         return ctx.badRequest('A felhasználó már megerősített');
       }
 
-      // Generate new confirmation token if not exists
-      let userData = user;
-
-      if (!user.confirmationToken) {
-        const newToken = generateToken();
-        await userService.update('plugin::users-permissions.user', user.id, {
-          data: {
-            confirmationToken: newToken,
-          } as any,
-        });
-        userData = await userService.findOne('plugin::users-permissions.user', user.id);
-      }
-
       // Send confirmation email
-      await strapi.plugin('users-permissions').service('user').sendConfirmationEmail(userData);
+      await userService.sendConfirmationEmail(user);
 
       return ctx.send({
         success: true,
