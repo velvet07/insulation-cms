@@ -15,7 +15,7 @@ function generateRandomPassword(): string {
 // 24 hours in milliseconds
 const CONFIRMATION_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
-export default (plugin: any) => {
+module.exports = (plugin: any) => {
   plugin.controllers.auth.invite = async (ctx: any) => {
     const authHeader = ctx.request?.headers?.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
