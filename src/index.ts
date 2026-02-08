@@ -8,6 +8,14 @@ const defaultPhotoCategories = [
   { name: 'Hőtermelő', order: 4, required: true },
 ];
 
+const defaultMaterials = [
+  { name: 'Szigetelés 10 cm', category: 'insulation', thickness_cm: 'cm10', coverage_per_roll: 9.24, rolls_per_pallet: 24 },
+  { name: 'Szigetelés 12.5 cm', category: 'insulation', thickness_cm: 'cm12_5', coverage_per_roll: 7.68, rolls_per_pallet: 24 },
+  { name: 'Szigetelés 15 cm', category: 'insulation', thickness_cm: 'cm15', coverage_per_roll: 6.12, rolls_per_pallet: 24 },
+  { name: 'Gőzfólia', category: 'vapor_barrier', coverage_per_roll: 60, rolls_per_pallet: 24 },
+  { name: 'Légáteresztő fólia', category: 'breathable_membrane', coverage_per_roll: 75, rolls_per_pallet: 24 },
+];
+
 export default {
   /**
    * An asynchronous register function that runs before
@@ -117,6 +125,41 @@ export default {
     } catch (error: any) {
       // Ha a content type még nem létezik, nem csinálunk semmit
       console.warn('⚠️  Photo category content type may not exist yet:', error.message);
+    }
+
+    // Create default materials if they don't exist
+    try {
+      console.log('🔍 Checking Material content type...');
+      const materialService = strapi.documents('api::material.material');
+      
+      for (const materialData of defaultMaterials) {
+        try {
+          const existing = await materialService.findMany({
+            filters: { 
+              name: { $eq: materialData.name },
+              category: { $eq: materialData.category }
+            },
+            limit: 1,
+          });
+
+          if (existing && existing.length > 0) {
+            console.log(`⏭️  Material "${materialData.name}" already exists, skipping...`);
+            continue;
+          }
+
+          await materialService.create({
+            data: materialData as any,
+          });
+
+          console.log(`✅ Created default material: "${materialData.name}"`);
+        } catch (error: any) {
+          console.error(`❌ Error creating material "${materialData.name}":`, error.message);
+        }
+      }
+      
+      console.log('✅ Material bootstrap completed');
+    } catch (error: any) {
+      console.error('⚠️  Material content type bootstrap error:', error.message);
     }
   },
 };
