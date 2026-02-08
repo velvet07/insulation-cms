@@ -19,8 +19,11 @@ import {
   Menu,
   X,
   FileCheck,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { usePermission, type PermissionModule } from '@/lib/contexts/permission-context';
+import { useTheme } from '@/lib/contexts/theme-context';
 
 interface NavItem {
   title: string;
@@ -75,6 +78,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
   const { user, clearAuth, token } = useAuthStore();
   const { can } = usePermission();
+  const { theme, setTheme } = useTheme();
   const [isCheckingUser, setIsCheckingUser] = useState(true);
 
   // Use the helper function for consistent subcontractor checking
@@ -206,8 +210,37 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             )}
           </nav>
 
-          {/* User info and logout */}
-          <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+          {/* User info, theme toggle and logout - flex-shrink-0 so it stays visible above fold */}
+          <div className="flex-shrink-0 p-4 border-t border-gray-200 dark:border-gray-700 space-y-3">
+          {/* Theme toggle */}
+          <div className="grid grid-cols-2 gap-1 p-1 bg-gray-100 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700">
+            <button
+              type="button"
+              onClick={() => setTheme('light')}
+              className={cn(
+                'flex items-center justify-center gap-2 py-1.5 text-xs font-medium rounded-md transition-all',
+                theme === 'light'
+                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+              )}
+            >
+              <Sun className="h-3.5 w-3.5" />
+              Világos
+            </button>
+            <button
+              type="button"
+              onClick={() => setTheme('dark')}
+              className={cn(
+                'flex items-center justify-center gap-2 py-1.5 text-xs font-medium rounded-md transition-all',
+                theme === 'dark'
+                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+              )}
+            >
+              <Moon className="h-3.5 w-3.5" />
+              Sötét
+            </button>
+          </div>
             <div className="mb-3">
               <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
                 {user?.email || user?.username}
