@@ -2,33 +2,7 @@
  * Users-permissions plugin extension.
  * Adds invite flow: create user, send confirmation email, confirm + reset token endpoint.
  */
-import type { Core } from '@strapi/strapi';
 import crypto from 'node:crypto';
-
-const FRONTEND_BASE_URL = process.env.FRONTEND_URL || 'https://app.thermodesk.eu';
-const CONFIRMATION_URL = `${FRONTEND_BASE_URL}/email-confirmation`;
-
-// Email template (matches "Email address confirmation" in admin)
-const EMAIL_TEMPLATE = {
-  subject: 'ThermoDesk – E-mail cím megerősítése',
-  text: `Üdvözlünk!
-
-Az adminisztrátor létrehozta a fiókodat a ThermoDesk rendszerben.
-
-A fiók aktiválásához kérjük, erősítsd meg az e-mail címedet az alábbi hivatkozásra kattintva.
-
-${CONFIRMATION_URL}?confirmation=<%= CODE %>
-
-Ha nem te kérted ezt a fiókot, kérjük, hagyd figyelmen kívül ezt az üzenetet.
-
-Köszönjük.`,
-  html: `<p>Üdvözlünk!</p>
-<p>Az adminisztrátor létrehozta a fiókodat a ThermoDesk rendszerben.</p>
-<p>A fiók aktiválásához kérjük, erősítsd meg az e-mail címedet az alábbi hivatkozásra kattintva.</p>
-<p><a href="<%= URL %>?confirmation=<%= CODE %>"><%= URL %>?confirmation=<%= CODE %></a></p>
-<p>Ha nem te kérted ezt a fiókot, kérjük, hagyd figyelmen kívül ezt az üzenetet.</p>
-<p>Köszönjük.</p>`,
-};
 
 function generateToken(): string {
   return crypto.randomBytes(32).toString('hex');
@@ -74,8 +48,6 @@ export default (plugin: any) => {
       }
 
       const tempPassword = generateRandomPassword();
-      const confirmationToken = generateToken();
-
       const defaultRole = await strapi.db.query('plugin::users-permissions.role').findOne({
         where: { type: 'authenticated' },
       });
@@ -87,7 +59,6 @@ export default (plugin: any) => {
         password: tempPassword,
         confirmed: false,
         blocked: false,
-        confirmationToken,
         role: roleId,
       };
 
@@ -125,14 +96,8 @@ export default (plugin: any) => {
         }
       }
 
-      const url = CONFIRMATION_URL;
-      const code = confirmationToken;
-
-      await strapi.plugins['email'].services.email.sendTemplatedEmail(
-        { to: email.trim().toLowerCase() },
-        EMAIL_TEMPLATE,
-        { URL: url, CODE: code }
-      );
+      // Use users-permissions configured "Email address confirmation" template.
+      await strapi.plugin('users-permissions').service('user').sendConfirmationEmail(created);
 
       return ctx.send({
         success: true,
@@ -197,7 +162,6 @@ export default (plugin: any) => {
   const contentApi = plugin.routes?.['content-api'];
   if (contentApi && Array.isArray(contentApi.routes)) {
     contentApi.routes.push(
-    ...contentApiRoutes,
       {
         method: 'POST',
         path: '/auth/invite',

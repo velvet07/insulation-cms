@@ -23,7 +23,7 @@ export default factories.createCoreController('api::photo.photo', ({ strapi }) =
 
     // Entity Service API findMany
     const photos = await strapi.entityService.findMany('api::photo.photo', {
-      filters: query.filters || {},
+      filters: (query.filters as any) || {},
       sort: sort as any,
       populate: ['file', 'category', 'project', 'uploaded_by'],
       ...(query.pagination ? { pagination: query.pagination } : {}),

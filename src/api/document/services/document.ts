@@ -716,7 +716,7 @@ export default factories.createCoreService('api::document.document', ({ strapi }
             timestamp: new Date().toISOString(),
           },
           signed_at: new Date().toISOString(),
-        },
+        } as any,
       });
 
       await unlink(tempPdfPath).catch(() => {});
