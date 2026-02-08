@@ -11,6 +11,26 @@ function generateRandomPassword(): string {
 // 24 hours in milliseconds
 const CONFIRMATION_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
+async function resolveCompanyId(strapi: any, company: string | number): Promise<number | null> {
+  const companyId = typeof company === 'string' ? company.trim() : company;
+  if (!companyId) return null;
+
+  if (typeof companyId === 'number') return companyId;
+  if (/^\d+$/.test(companyId)) return parseInt(companyId, 10);
+
+  const found = await strapi.entityService.findMany('api::company.company', {
+    filters: {
+      $or: [
+        { id: { $eq: companyId } },
+        { documentId: { $eq: companyId } },
+      ],
+    },
+    limit: 1,
+  });
+
+  return found?.[0]?.id ?? null;
+}
+
 export default {
   async invite(ctx: any) {
     const authHeader = ctx.request?.headers?.authorization;
@@ -30,7 +50,7 @@ export default {
 
     const strapi = (ctx as any).state?.strapi ?? (ctx as any).app;
     if (!strapi) throw new Error('Strapi instance not available');
-    const userService = strapi.documents('plugin::users-permissions.user');
+    const userService = strapi.entityService;
 
     try {
       const existing = await userService.findMany({
@@ -61,7 +81,7 @@ export default {
         role: roleId,
       };
 
-      const created = await userService.create({
+      const created = await userService.create('plugin::users-permissions.user', {
         data: userData as any,
       });
 
@@ -72,13 +92,14 @@ export default {
 
       if (company) {
         try {
-          const companyService = strapi.documents('api::company.company');
-          await companyService.update({
-            documentId: String(company),
-            data: {
-              user: { connect: [userId] },
-            } as any,
-          });
+          const companyId = await resolveCompanyId(strapi, company);
+          if (companyId) {
+            await strapi.entityService.update('api::company.company', companyId, {
+              data: {
+                user: { connect: [userId] },
+              } as any,
+            });
+          }
         } catch (e) {
           strapi.log.warn('[invite] Company assignment failed:', e);
         }
@@ -86,8 +107,7 @@ export default {
 
       if (roleId && roleId !== defaultRole?.id) {
         try {
-          await userService.update({
-            documentId: String(userId),
+          await userService.update('plugin::users-permissions.user', userId, {
             data: { role: roleId } as any,
           });
         } catch (e) {
@@ -123,10 +143,10 @@ export default {
 
     const strapi = (ctx as any).state?.strapi ?? (ctx as any).app;
     if (!strapi) throw new Error('Strapi instance not available');
-    const userService = strapi.documents('plugin::users-permissions.user');
+    const userService = strapi.entityService;
 
     try {
-      const users = await userService.findMany({
+      const users = await userService.findMany('plugin::users-permissions.user', {
         filters: { confirmationToken: { $eq: confirmation.trim() } },
         limit: 1,
       });
@@ -147,8 +167,7 @@ export default {
 
       const resetToken = generateToken();
 
-      await userService.update({
-        documentId: String(user.documentId ?? user.id),
+      await userService.update('plugin::users-permissions.user', user.id, {
         data: {
           confirmed: true,
           confirmationToken: null,
@@ -181,10 +200,10 @@ export default {
 
     const strapi = (ctx as any).state?.strapi ?? (ctx as any).app;
     if (!strapi) throw new Error('Strapi instance not available');
-    const userService = strapi.documents('plugin::users-permissions.user');
+    const userService = strapi.entityService;
 
     try {
-      const users = await userService.findMany({
+      const users = await userService.findMany('plugin::users-permissions.user', {
         filters: {
           $or: [
             { id: { $eq: userId } },
@@ -208,15 +227,12 @@ export default {
 
       if (!user.confirmationToken) {
         const newToken = generateToken();
-        await userService.update({
-          documentId: String(user.documentId ?? user.id),
+        await userService.update('plugin::users-permissions.user', user.id, {
           data: {
             confirmationToken: newToken,
           } as any,
         });
-        userData = await userService.findOne({
-          documentId: String(user.documentId ?? user.id),
-        });
+        userData = await userService.findOne('plugin::users-permissions.user', user.id);
       }
 
       // Send confirmation email
