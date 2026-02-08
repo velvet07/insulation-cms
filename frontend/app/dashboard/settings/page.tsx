@@ -133,7 +133,7 @@ export default function SettingsPage() {
 
   // Queries
   const { data: companies = [], isLoading } = useQuery({
-    queryKey: ['companies', user?.id, userCompany?.id],
+    queryKey: ['companies', 'settings', isAdmin ? 'admin' : userCompanyId],
     queryFn: async () => {
       if (isAdmin) {
         return await companiesApi.getAll();
@@ -150,29 +150,37 @@ export default function SettingsPage() {
       }
       return [];
     },
-    enabled: !!user,
+    enabled: !!user && (isAdmin || !!userCompany),
+    staleTime: 1000 * 60 * 5, // 5 minutes - avoid refetch on every focus
+    refetchOnWindowFocus: false,
   });
 
   const { data: mainContractors = [] } = useQuery({
     queryKey: ['companies', 'main_contractors'],
     queryFn: () => companiesApi.getAll({ type: 'main_contractor' }),
     enabled: isAdmin,
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
   });
 
   const { data: categories = [], isLoading: isLoadingCategories } = useQuery({
     queryKey: ['photo-categories'],
     queryFn: () => photoCategoriesApi.getAll(),
     enabled: can('settings', 'manage_photo_categories'),
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
   });
 
   const { data: materials = [], isLoading: isLoadingMaterials } = useQuery({
     queryKey: ['materials'],
     queryFn: () => materialsApi.getAll(),
     enabled: can('settings', 'manage_materials'),
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
   });
 
   const { data: users = [], isLoading: isLoadingUsers } = useQuery({
-    queryKey: ['users', user?.id, companies.length, userCompany?.id],
+    queryKey: ['users', 'settings', isAdmin ? 'admin' : userCompanyId, companies.length],
     queryFn: async () => {
       if (isAdmin) {
         return await usersApi.getAll();
@@ -188,7 +196,9 @@ export default function SettingsPage() {
         return Array.from(new Map(ownUsers.map(u => [u.id, u])).values());
       }
     },
-    enabled: !!user && (isAdmin || !!userCompany),
+    enabled: !!user && (isAdmin || !!userCompany) && companies.length > 0,
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
   });
 
   const visibleUsers = useMemo(() => {
@@ -200,6 +210,8 @@ export default function SettingsPage() {
     queryKey: ['roles'],
     queryFn: getRoles,
     enabled: can('settings', 'manage_users'),
+    staleTime: 1000 * 60 * 10, // 10 minutes - roles rarely change
+    refetchOnWindowFocus: false,
   });
 
   const roles = rolesData?.roles || [];

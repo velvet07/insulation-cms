@@ -175,6 +175,8 @@ export default function ProjectsPage() {
     queryKey: ['company', userCompanyId, 'with-subs'],
     queryFn: () => companiesApi.getOne(userCompanyId!, 'subcontractors'),
     enabled: !!userCompanyId,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    refetchOnWindowFocus: false,
   });
 
   // Use fetched company data (has type field populated), falling back to user.company
@@ -214,6 +216,8 @@ export default function ProjectsPage() {
     queryKey: ['projects', filters],
     queryFn: () => projectsApi.getAll(filters),
     enabled: canFetchProjects,
+    staleTime: 1000 * 30, // 30 seconds - projects list should be relatively fresh
+    refetchOnWindowFocus: true, // Refetch on focus to show new projects
   });
 
   const allProjects = projectsResponse?.data || [];
