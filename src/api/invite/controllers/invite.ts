@@ -192,11 +192,16 @@ export default {
 
       const resetToken = generateToken();
 
-      await userService.edit(user.id, {
-        confirmed: true,
-        confirmationToken: null,
-        resetPasswordToken: resetToken,
+      // Use entityService to ensure confirmed field is updated
+      await strapiInstance.entityService.update(USER_UID, user.id, {
+        data: {
+          confirmed: true,
+          confirmationToken: null,
+          resetPasswordToken: resetToken,
+        },
       });
+
+      strapi.log.info(`[confirmAndRequestReset] User ${user.email} confirmed and reset token generated`);
 
       return ctx.send({
         success: true,
