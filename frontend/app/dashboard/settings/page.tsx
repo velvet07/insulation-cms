@@ -561,7 +561,13 @@ export default function SettingsPage() {
     if (isAdmin && userRole !== undefined) {
       data.role = userRole;
     }
-    if (userPassword) data.password = userPassword;
+    if (userPassword) {
+      data.password = userPassword;
+      // If user is not confirmed and we're setting a password, confirm them
+      if (!editingUser.confirmed) {
+        data.confirmed = true;
+      }
+    }
     updateUserMutation.mutate({ id: editingUser.id!, data });
   };
 
@@ -847,7 +853,12 @@ export default function SettingsPage() {
         {/* User Dialog */}
         <Dialog open={isUserDialogOpen} onOpenChange={setIsUserDialogOpen}>
           <DialogContent>
-            <DialogHeader><DialogTitle>{editingUser ? 'Szerkesztés' : 'Új felhasználó'}</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle>{editingUser ? 'Szerkesztés' : 'Új felhasználó'}</DialogTitle>
+              <DialogDescription>
+                {editingUser ? 'Felhasználó adatainak módosítása' : 'Új felhasználó meghívása e-mailben'}
+              </DialogDescription>
+            </DialogHeader>
             <div className="space-y-4">
               <div><Label>Felhasználónév</Label><Input value={userUsername} onChange={e => setUserUsername(e.target.value)} placeholder="Min. 3 karakter" /></div>
               <div><Label>Email</Label><Input type="email" value={userEmail} onChange={e => setUserEmail(e.target.value)} placeholder="email@example.com" /></div>
@@ -874,7 +885,7 @@ export default function SettingsPage() {
               {isAdmin && (
                 <div>
                   <Label>Szerepkör</Label>
-                  <Select value={userRole?.toString()} onValueChange={(v) => setUserRole(parseInt(v))}>
+                  <Select value={userRole?.toString() || ''} onValueChange={(v) => setUserRole(parseInt(v))}>
                     <SelectTrigger><SelectValue placeholder="Válassz szerepkört" /></SelectTrigger>
                     <SelectContent>
                       {roles.map((r: any) => <SelectItem key={r.id} value={r.id.toString()}>{r.name}</SelectItem>)}
@@ -985,7 +996,12 @@ export default function SettingsPage() {
         {/* Category Dialog */}
         <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
           <DialogContent>
-            <DialogHeader><DialogTitle>{editingCategory ? 'Szerkesztés' : 'Új kategória'}</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle>{editingCategory ? 'Szerkesztés' : 'Új kategória'}</DialogTitle>
+              <DialogDescription>
+                {editingCategory ? 'Fénykép kategória módosítása' : 'Új fénykép kategória létrehozása'}
+              </DialogDescription>
+            </DialogHeader>
             <div className="space-y-4">
               <div><Label>Név</Label><Input value={categoryName} onChange={e => setCategoryName(e.target.value)} /></div>
               <div className="flex items-center gap-2"><Checkbox checked={categoryRequired} onCheckedChange={c => setCategoryRequired(c === true)} id="req" /><Label htmlFor="req">Kötelező</Label></div>
@@ -1026,7 +1042,12 @@ export default function SettingsPage() {
         {/* Material Dialog */}
         <Dialog open={isMaterialDialogOpen} onOpenChange={setIsMaterialDialogOpen}>
           <DialogContent>
-            <DialogHeader><DialogTitle>{editingMaterial ? 'Szerkesztés' : 'Új anyag'}</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle>{editingMaterial ? 'Szerkesztés' : 'Új anyag'}</DialogTitle>
+              <DialogDescription>
+                {editingMaterial ? 'Anyag adatainak módosítása' : 'Új anyagtípus létrehozása'}
+              </DialogDescription>
+            </DialogHeader>
             <div className="space-y-4">
               <div><Label>Név</Label><Input value={materialName} onChange={e => setMaterialName(e.target.value)} /></div>
               <div>

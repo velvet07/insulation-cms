@@ -152,14 +152,14 @@ export const usersApi = {
 
       // 1. Update basic fields if any
       if (Object.keys(cleanData).length > 0) {
-        console.log('[usersApi.update] Updating basic fields:', cleanData);
+        debugLog('api', '[usersApi.update] Updating fields');
         const response = await strapiApi.put(`/users/${id}`, cleanData);
         updatedUser = response.data;
       }
 
       // 2. Update company separately using custom endpoint if provided
       if (data.company !== undefined) {
-        console.log('[usersApi.update] Updating company separately');
+        debugLog('api', '[usersApi.update] Updating company');
         updatedUser = await usersApi.assignUserToCompany(id, data.company);
       }
 
