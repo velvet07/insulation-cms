@@ -415,9 +415,9 @@ export default factories.createCoreService('api::document.document', ({ strapi }
       let userCompanyId = null;
       if (userId) {
         try {
-          const user = (await strapi.entityService.findOne('plugin::users-permissions.user', userId, {
+          const user = await strapi.entityService.findOne('plugin::users-permissions.user', userId, {
             populate: ['company'],
-          })) as any;
+          });
           userCompanyId = user?.company?.id || null;
           if (userCompanyId) {
             strapi.log.info(`Document will be associated with user's company: ${userCompanyId}`);
@@ -716,7 +716,7 @@ export default factories.createCoreService('api::document.document', ({ strapi }
             timestamp: new Date().toISOString(),
           },
           signed_at: new Date().toISOString(),
-        } as any,
+        },
       });
 
       await unlink(tempPdfPath).catch(() => {});
