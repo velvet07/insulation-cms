@@ -72,17 +72,11 @@ function ForgotPasswordContent() {
       await authApi.forgotPassword(values.email);
       setEmailSuccess(true);
     } catch (err: unknown) {
-      const message =
-        err && typeof err === 'object' && 'response' in err
-          ? (err as { response?: { data?: { error?: { message?: string }; message?: string } } }).response?.data
-              ?.error?.message ||
-            (err as { response?: { data?: { message?: string } } }).response?.data?.message
-          : null;
-      setEmailError(
-        message && typeof message === 'string'
-          ? message
-          : 'Hiba történt a kérés során. Kérjük, próbálja újra később.'
-      );
+      console.error('[forgot-password] Email request error:', err);
+      const ax = err as { response?: { data?: { error?: { message?: string }; message?: string }; status?: number }; message?: string };
+      const apiMessage = ax.response?.data?.error?.message ?? ax.response?.data?.message;
+      const fallback = ax.message && typeof ax.message === 'string' ? ax.message : 'Hiba történt a kérés során. Kérjük, próbálja újra később.';
+      setEmailError(typeof apiMessage === 'string' ? apiMessage : fallback);
     } finally {
       setEmailLoading(false);
     }
@@ -100,17 +94,11 @@ function ForgotPasswordContent() {
       });
       setResetSuccess(true);
     } catch (err: unknown) {
-      const message =
-        err && typeof err === 'object' && 'response' in err
-          ? (err as { response?: { data?: { error?: { message?: string }; message?: string } } }).response?.data
-              ?.error?.message ||
-            (err as { response?: { data?: { message?: string } } }).response?.data?.message
-          : null;
-      setResetError(
-        message && typeof message === 'string'
-          ? message
-          : 'A jelszó visszaállítása sikertelen. A link lejárt vagy érvénytelen. Kérj új linket.'
-      );
+      console.error('[forgot-password] Reset password error:', err);
+      const ax = err as { response?: { data?: { error?: { message?: string }; message?: string }; status?: number }; message?: string };
+      const apiMessage = ax.response?.data?.error?.message ?? ax.response?.data?.message;
+      const fallback = ax.message && typeof ax.message === 'string' ? ax.message : 'A jelszó visszaállítása sikertelen. A link lejárt vagy érvénytelen. Kérj új linket.';
+      setResetError(typeof apiMessage === 'string' ? apiMessage : fallback);
     } finally {
       setResetLoading(false);
     }
