@@ -16,6 +16,8 @@ function generateRandomPassword(): string {
 const CONFIRMATION_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
 export default (plugin: any) => {
+  strapi.log.info('>>> Users-Permissions Extension LOADED <<<');
+
   // Ensure controllers structure exists
   if (!plugin.controllers) plugin.controllers = {};
   if (!plugin.controllers.auth) plugin.controllers.auth = {};
