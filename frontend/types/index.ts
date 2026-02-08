@@ -46,6 +46,8 @@ export interface User extends StrapiEntity {
   username?: string;
   name?: string;
   phone?: string;
+  confirmed?: boolean;
+  blocked?: boolean;
   role?: UserRole | 'admin' | 'foovallalkozo' | 'alvallalkozo' | 'manager' | 'worker' | string;
   tenant?: Tenant;
   company?: Company;
