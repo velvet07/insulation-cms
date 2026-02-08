@@ -328,6 +328,10 @@ export default function SettingsPage() {
       setIsMaterialDialogOpen(false);
       setEditingMaterial(null);
       setMaterialName('');
+      setMaterialCategory('insulation');
+      setMaterialThickness(undefined);
+      setMaterialCoverage('');
+      setMaterialRollsPerPallet('24');
     },
   });
 
@@ -338,6 +342,10 @@ export default function SettingsPage() {
       setIsMaterialDialogOpen(false);
       setEditingMaterial(null);
       setMaterialName('');
+      setMaterialCategory('insulation');
+      setMaterialThickness(undefined);
+      setMaterialCoverage('');
+      setMaterialRollsPerPallet('24');
     },
   });
 
@@ -1018,7 +1026,15 @@ export default function SettingsPage() {
             <CardHeader>
               <div className="flex justify-between">
                 <CardTitle className="flex gap-2"><Package className="h-5 w-5" /> Anyagtípusok</CardTitle>
-                <Button onClick={() => { setIsMaterialDialogOpen(true); setEditingMaterial(null); }}><Plus className="h-4 w-4 mr-2" /> Új anyag</Button>
+                <Button onClick={() => { 
+                  setIsMaterialDialogOpen(true); 
+                  setEditingMaterial(null);
+                  setMaterialName('');
+                  setMaterialCategory('insulation');
+                  setMaterialThickness(undefined);
+                  setMaterialCoverage('');
+                  setMaterialRollsPerPallet('24');
+                }}><Plus className="h-4 w-4 mr-2" /> Új anyag</Button>
               </div>
             </CardHeader>
             <CardContent>
@@ -1030,7 +1046,15 @@ export default function SettingsPage() {
                       <TableCell>{m.name}</TableCell>
                       <TableCell>{materialCategoryLabels[m.category as Material['category']]}</TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" onClick={() => { setEditingMaterial(m); setMaterialName(m.name); setIsMaterialDialogOpen(true); }}><Edit className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="sm" onClick={() => { 
+                          setEditingMaterial(m); 
+                          setMaterialName(m.name);
+                          setMaterialCategory(m.category);
+                          setMaterialThickness(m.thickness_cm);
+                          setMaterialCoverage(m.coverage_per_roll?.toString() || '');
+                          setMaterialRollsPerPallet(m.rolls_per_pallet?.toString() || '24');
+                          setIsMaterialDialogOpen(true); 
+                        }}><Edit className="h-4 w-4" /></Button>
                         <Button variant="ghost" size="sm" onClick={() => handleMaterialDelete(m)}><Trash2 className="h-4 w-4 text-red-600" /></Button>
                       </TableCell>
                     </TableRow>
