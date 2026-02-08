@@ -333,4 +333,15 @@ export const authApi = {
     const response = await authApiClient.post<LoginResponse>('/auth/reset-password', data);
     return response.data;
   },
+
+  // Confirm email and get reset token (invite flow)
+  confirmEmailAndRequestReset: async (
+    confirmation: string
+  ): Promise<{ success: boolean; code: string; message: string }> => {
+    const response = await authApiClient.post<{ success: boolean; code: string; message: string }>(
+      '/invite/confirm-and-request-reset',
+      { confirmation }
+    );
+    return response.data;
+  },
 };
