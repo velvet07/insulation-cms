@@ -53,6 +53,8 @@ export default function TemplatesPage() {
       }
       return templatesApi.getAll(userCompanyId ? { company: userCompanyId } : undefined);
     },
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    refetchOnWindowFocus: false,
   });
 
   const deleteMutation = useMutation({
