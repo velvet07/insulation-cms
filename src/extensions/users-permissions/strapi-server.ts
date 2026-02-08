@@ -255,7 +255,7 @@ export default (plugin: any) => {
     contentApi.routes.push(
       {
         method: 'POST',
-        path: '/auth/invite',
+        path: '/invite',
         handler: 'invite.invite',
         config: {
           auth: false,
@@ -264,7 +264,7 @@ export default (plugin: any) => {
       },
       {
         method: 'POST',
-        path: '/auth/confirm-and-request-reset',
+        path: '/invite/confirm-and-request-reset',
         handler: 'invite.confirmAndRequestReset',
         config: {
           auth: false,
@@ -273,7 +273,7 @@ export default (plugin: any) => {
       },
       {
         method: 'POST',
-        path: '/auth/resend-confirmation',
+        path: '/invite/resend-confirmation',
         handler: 'invite.resendConfirmation',
         config: {
           auth: false,

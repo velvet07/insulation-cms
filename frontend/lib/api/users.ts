@@ -187,13 +187,13 @@ export const usersApi = {
     company?: number | string | null;
     role?: number | string;
   }): Promise<{ success: boolean; message: string; user: { id: string | number; username: string; email: string; confirmed: boolean } }> => {
-    const response = await strapiApi.post('/auth/invite', data);
+    const response = await strapiApi.post('/invite', data);
     return response.data;
   },
 
   // Resend confirmation email
   resendConfirmation: async (userId: string | number): Promise<{ success: boolean; message: string }> => {
-    const response = await strapiApi.post('/auth/resend-confirmation', { userId });
+    const response = await strapiApi.post('/invite/resend-confirmation', { userId });
     return response.data;
   },
 };
