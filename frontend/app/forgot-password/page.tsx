@@ -87,11 +87,13 @@ function ForgotPasswordContent() {
     setResetLoading(true);
     setResetError(null);
     try {
-      await authApi.resetPassword({
+      console.log('[forgot-password] Resetting password with code:', code);
+      const response = await authApi.resetPassword({
         code,
         password: values.password,
         passwordConfirmation: values.passwordConfirmation,
       });
+      console.log('[forgot-password] Reset password response:', response);
       setResetSuccess(true);
     } catch (err: unknown) {
       console.error('[forgot-password] Reset password error:', err);

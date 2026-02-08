@@ -98,6 +98,7 @@ export default {
       }
 
       const tempPassword = generateRandomPassword();
+      strapi.log.info(`[invite] Generated temp password for ${emailValue}: ${tempPassword}`);
       const roleId = await resolveRoleId(strapiInstance, role);
       if (!roleId) {
         return ctx.badRequest('Érvénytelen role');
