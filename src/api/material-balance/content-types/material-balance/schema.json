@@ -23,23 +23,13 @@
     },
     "status": {
       "type": "enumeration",
-      "enum": [
-        "surplus",
-        "balanced",
-        "deficit"
-      ],
+      "enum": ["surplus", "balanced", "deficit"],
       "default": "balanced"
     },
     "user": {
       "type": "relation",
       "relation": "manyToOne",
       "target": "plugin::users-permissions.user"
-    },
-    "company": {
-      "type": "relation",
-      "relation": "manyToOne",
-      "target": "api::company.company",
-      "inversedBy": "material_balances"
     },
     "material": {
       "type": "relation",
