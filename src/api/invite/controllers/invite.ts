@@ -118,15 +118,25 @@ export default {
         role: roleId,
       };
 
-      if (companyId) {
-        userData.company = companyId;
-      }
-
       const created = await userService.add(userData as any);
 
       const userId = created?.id;
       if (!userId) {
         return ctx.internalServerError('Felhasználó létrehozása sikertelen');
+      }
+
+      // Assign company separately (Strapi v5 relation handling)
+      if (companyId) {
+        try {
+          await strapiInstance.entityService.update(USER_UID, userId, {
+            data: {
+              company: companyId,
+            },
+          });
+        } catch (companyError: any) {
+          strapi.log.error('[invite] Failed to assign company:', companyError);
+          // Continue anyway - user is created, company can be set later
+        }
       }
 
       // Use users-permissions configured "Email address confirmation" template.
