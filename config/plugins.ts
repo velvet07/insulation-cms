@@ -1,4 +1,4 @@
-// Path: 
+// Path:
 module.exports = ({ env }) => ({
   email: {
     config: {

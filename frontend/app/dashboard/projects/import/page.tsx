@@ -166,6 +166,12 @@ export default function ProjectImportPage() {
       const companyType = userCompany?.type;
       const parentCompany = userCompany?.parent_company;
 
+      if (!companyId) {
+        throw new Error(
+          'A projektek importálásához kötelező fővállalkozót (company) rendelni a felhasználóhoz.'
+        );
+      }
+
       for (let i = 0; i < validRows.length; i++) {
         const row = validRows[i];
         setImportProgress(Math.round(((i + 1) / validRows.length) * 100));

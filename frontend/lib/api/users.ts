@@ -179,4 +179,21 @@ export const usersApi = {
   delete: async (id: string | number): Promise<void> => {
     await strapiApi.delete(`/users/${id}`);
   },
+
+  // Invite user (creates with confirmed=false, sends confirmation email)
+  invite: async (data: {
+    username: string;
+    email: string;
+    company?: number | string | null;
+    role?: number | string;
+  }): Promise<{ success: boolean; message: string; user: { id: string | number; username: string; email: string; confirmed: boolean } }> => {
+    const response = await strapiApi.post('/invite', data);
+    return response.data;
+  },
+
+  // Resend confirmation email
+  resendConfirmation: async (userId: string | number): Promise<{ success: boolean; message: string }> => {
+    const response = await strapiApi.post('/invite/resend-confirmation', { userId });
+    return response.data;
+  },
 };
