@@ -906,6 +906,8 @@ export default function SettingsPage() {
                     usersApi.resendConfirmation(editingUser.id)
                       .then(() => {
                         alert('Megerősítő e-mail újraküldve');
+                        setIsUserDialogOpen(false);
+                        setEditingUser(null);
                       })
                       .catch((err) => {
                         alert(err?.response?.data?.error?.message || 'Hiba történt az e-mail újraküldése során');
