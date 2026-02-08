@@ -116,6 +116,7 @@ export default {
         confirmed: false,
         blocked: false,
         role: roleId,
+        provider: 'local',
       };
 
       const created = await userService.add(userData as any);
