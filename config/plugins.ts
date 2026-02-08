@@ -12,4 +12,11 @@ module.exports = ({ env }) => ({
       },
     },
   },
+  'users-permissions': {
+    config: {
+      email: {
+        confirmation_redirect_url: `${env('CLIENT_URL')}/email-confirmation`,
+      },
+    },
+  },
 });
