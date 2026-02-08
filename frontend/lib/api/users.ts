@@ -190,4 +190,10 @@ export const usersApi = {
     const response = await strapiApi.post('/auth/invite', data);
     return response.data;
   },
+
+  // Resend confirmation email
+  resendConfirmation: async (userId: string | number): Promise<{ success: boolean; message: string }> => {
+    const response = await strapiApi.post('/auth/resend-confirmation', { userId });
+    return response.data;
+  },
 };

@@ -886,7 +886,24 @@ export default function SettingsPage() {
                 </div>
               )}
             </div>
-            <DialogFooter>
+            <DialogFooter className="gap-2">
+              {editingUser && !editingUser.confirmed && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    if (!editingUser?.id) return;
+                    usersApi.resendConfirmation(editingUser.id)
+                      .then(() => {
+                        alert('Megerősítő e-mail újraküldve');
+                      })
+                      .catch((err) => {
+                        alert(err?.response?.data?.error?.message || 'Hiba történt az e-mail újraküldése során');
+                      });
+                  }}
+                >
+                  Meghívó újraküldése
+                </Button>
+              )}
               <Button
                 onClick={editingUser ? handleUserUpdate : handleUserCreate}
                 disabled={inviteUserMutation.isPending || updateUserMutation.isPending}
