@@ -103,6 +103,8 @@ export default function SettingsPage() {
   const [userUsername, setUserUsername] = useState('');
   const [userEmail, setUserEmail] = useState('');
   const [userPassword, setUserPassword] = useState('');
+  const [userPasswordConfirm, setUserPasswordConfirm] = useState('');
+  const [userPasswordError, setUserPasswordError] = useState('');
   const [selectedUserCompany, setSelectedUserCompany] = useState<string>('');
   const [userRole, setUserRole] = useState<number | undefined>(undefined);
 
@@ -345,6 +347,8 @@ export default function SettingsPage() {
       setUserUsername('');
       setUserEmail('');
       setUserPassword('');
+      setUserPasswordConfirm('');
+      setUserPasswordError('');
     },
   });
 
@@ -357,6 +361,8 @@ export default function SettingsPage() {
       setUserUsername('');
       setUserEmail('');
       setUserPassword('');
+      setUserPasswordConfirm('');
+      setUserPasswordError('');
     },
   });
 
@@ -374,6 +380,27 @@ export default function SettingsPage() {
     if (userRole === authenticatedRoleId) return;
     setUserRole(authenticatedRoleId);
   }, [isUserDialogOpen, isAdmin, editingUser, authenticatedRoleId, userRole]);
+
+  const validateUserPassword = (isCreating: boolean) => {
+    if (!userPassword && !userPasswordConfirm) {
+      if (isCreating) {
+        setUserPasswordError('A jelszó kötelező');
+        return false;
+      }
+      setUserPasswordError('');
+      return true;
+    }
+    if (!userPassword || !userPasswordConfirm) {
+      setUserPasswordError('A jelszót kétszer kell megadni');
+      return false;
+    }
+    if (userPassword !== userPasswordConfirm) {
+      setUserPasswordError('A jelszavak nem egyeznek');
+      return false;
+    }
+    setUserPasswordError('');
+    return true;
+  };
 
   // Handlers
   const onSubmit = (data: CompanyFormValues) => {
@@ -458,6 +485,7 @@ export default function SettingsPage() {
   };
 
   const handleUserCreate = () => {
+    if (!validateUserPassword(true)) return;
     const roleToSend = isAdmin ? userRole : authenticatedRoleId;
     const payload: any = {
       username: userUsername,
@@ -471,6 +499,7 @@ export default function SettingsPage() {
 
   const handleUserUpdate = () => {
     if (!editingUser) return;
+    if (!validateUserPassword(false)) return;
     const data: any = { username: userUsername, email: userEmail, company: selectedUserCompany || null };
     // Admin can update role
     if (isAdmin && userRole !== undefined) {
@@ -480,9 +509,13 @@ export default function SettingsPage() {
     updateUserMutation.mutate({ id: editingUser.id!, data });
   };
 
-  const handleUserDelete = (user: User) => {
+  const handleUserDelete = (userItem: User) => {
+    if (userItem?.id === user?.id) {
+      alert('Saját felhasználó nem törölhető');
+      return;
+    }
     if (confirm('Biztosan törölni szeretnéd?')) {
-      deleteUserMutation.mutate(user.id!);
+      deleteUserMutation.mutate(userItem.id!);
     }
   };
 
@@ -694,7 +727,7 @@ export default function SettingsPage() {
                     </Button>
                   )}
                   {can('settings', 'manage_users') && (
-                    <Button onClick={() => { setIsUserDialogOpen(true); setEditingUser(null); }}>
+                    <Button onClick={() => { setIsUserDialogOpen(true); setEditingUser(null); setUserPassword(''); setUserPasswordConfirm(''); setUserPasswordError(''); }}>
                       <Plus className="h-4 w-4 mr-2" />
                       Új felhasználó
                     </Button>
@@ -730,8 +763,8 @@ export default function SettingsPage() {
                       <TableCell className="text-right">
                         {can('settings', 'manage_users') && (
                           <>
-                            <Button variant="ghost" size="sm" onClick={() => { setEditingUser(userItem); setUserUsername(userItem.username || ''); setUserEmail(userItem.email); setSelectedUserCompany((userItem.company as any)?.documentId || (userItem.company as any)?.id?.toString() || ''); setUserRole(typeof userItem.role === 'object' ? (userItem.role as any)?.id : undefined); setIsUserDialogOpen(true); }}><Edit className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="sm" onClick={() => handleUserDelete(userItem)}><Trash2 className="h-4 w-4 text-red-600" /></Button>
+                            <Button variant="ghost" size="sm" onClick={() => { setEditingUser(userItem); setUserUsername(userItem.username || ''); setUserEmail(userItem.email); setSelectedUserCompany((userItem.company as any)?.documentId || (userItem.company as any)?.id?.toString() || ''); setUserRole(typeof userItem.role === 'object' ? (userItem.role as any)?.id : undefined); setUserPassword(''); setUserPasswordConfirm(''); setUserPasswordError(''); setIsUserDialogOpen(true); }}><Edit className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="sm" disabled={userItem.id === user?.id} title={userItem.id === user?.id ? 'Saját felhasználó nem törölhető' : 'Törlés'} onClick={() => handleUserDelete(userItem)}><Trash2 className="h-4 w-4 text-red-600" /></Button>
                           </>
                         )}
                       </TableCell>
@@ -750,7 +783,9 @@ export default function SettingsPage() {
             <div className="space-y-4">
               <div><Label>Felhasználónév</Label><Input value={userUsername} onChange={e => setUserUsername(e.target.value)} /></div>
               <div><Label>Email</Label><Input value={userEmail} onChange={e => setUserEmail(e.target.value)} /></div>
-              <div><Label>Jelszó</Label><Input type="password" value={userPassword} onChange={e => setUserPassword(e.target.value)} /></div>
+              <div><Label>Jelszó</Label><Input type="password" value={userPassword} onChange={e => { setUserPassword(e.target.value); if (userPasswordError) setUserPasswordError(''); }} /></div>
+              <div><Label>Jelszó megerősítése</Label><Input type="password" value={userPasswordConfirm} onChange={e => { setUserPasswordConfirm(e.target.value); if (userPasswordError) setUserPasswordError(''); }} /></div>
+              {userPasswordError && <p className="text-xs text-red-500">{userPasswordError}</p>}
               <div>
                 <Label>Cég</Label>
                 <Select value={selectedUserCompany} onValueChange={setSelectedUserCompany}>
