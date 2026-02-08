@@ -25,6 +25,10 @@
       "required": true,
       "default": "subcontractor"
     },
+    "is_active": {
+      "type": "boolean",
+      "default": true
+    },
     "tax_number": {
       "type": "string"
     },

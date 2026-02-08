@@ -81,6 +81,8 @@ export default function SettingsPage() {
   const queryClient = useQueryClient();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState<string | null>(null);
+  const [companyToDelete, setCompanyToDelete] = useState<Company | null>(null);
+  const [companyDeleteMode, setCompanyDeleteMode] = useState<'delete' | 'deactivate' | null>(null);
 
   // Photo category management states
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
@@ -287,6 +289,11 @@ export default function SettingsPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['companies'] }),
   });
 
+  const deactivateCompanyMutation = useMutation({
+    mutationFn: (id: string) => companiesApi.update(id, { is_active: false }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['companies'] }),
+  });
+
   const createCategoryMutation = useMutation({
     mutationFn: ({ name, required }: { name: string; required: boolean }) => photoCategoriesApi.create({ name, required, order: categories.length }),
     onSuccess: () => {
@@ -431,10 +438,33 @@ export default function SettingsPage() {
     }
   };
 
-  const handleDelete = (companyId: string) => {
-    if (confirm('Biztosan törölni szeretnéd ezt a céget?')) {
-      deleteMutation.mutate(companyId);
+  const handleDeleteRequest = (company: Company) => {
+    const companyId = (company.documentId || company.id?.toString() || '').toString();
+    const ownCompanyId = (userCompany?.documentId || userCompany?.id?.toString() || '').toString();
+    const isOwnMainContractor = company.type === 'main_contractor' && companyId && ownCompanyId && companyId === ownCompanyId;
+
+    if (isOwnMainContractor) {
+      alert('Saját cég nem törölhető');
+      return;
     }
+
+    setCompanyDeleteMode(company.type === 'subcontractor' ? 'deactivate' : 'delete');
+    setCompanyToDelete(company);
+  };
+
+  const handleCompanyDeleteConfirm = () => {
+    if (!companyToDelete || !companyDeleteMode) return;
+    const identifier = (companyToDelete.documentId || companyToDelete.id?.toString() || '').toString();
+    if (!identifier) return;
+
+    if (companyDeleteMode === 'deactivate') {
+      deactivateCompanyMutation.mutate(identifier);
+    } else {
+      deleteMutation.mutate(identifier);
+    }
+
+    setCompanyToDelete(null);
+    setCompanyDeleteMode(null);
   };
 
   const handleCategoryCreate = () => {
@@ -703,7 +733,15 @@ export default function SettingsPage() {
                       <TableCell>{companyTypeLabels[company.type]}</TableCell>
                       <TableCell className="text-right">
                         <Button variant="ghost" size="sm" onClick={() => handleEdit(company.documentId || company.id.toString())}><Edit className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleDelete(company.documentId || company.id.toString())}><Trash2 className="h-4 w-4 text-red-600" /></Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={company.type === 'main_contractor' && (company.documentId || company.id?.toString())?.toString() === (userCompany?.documentId || userCompany?.id?.toString())?.toString()}
+                          title={company.type === 'subcontractor' ? 'Inaktiválás' : 'Törlés'}
+                          onClick={() => handleDeleteRequest(company)}
+                        >
+                          <Trash2 className="h-4 w-4 text-red-600" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -831,6 +869,25 @@ export default function SettingsPage() {
             <DialogFooter>
               <Button variant="outline" onClick={() => setUserToDelete(null)}>Mégse</Button>
               <Button variant="destructive" onClick={handleUserDeleteConfirm}>Törlés</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!companyToDelete} onOpenChange={(open) => { if (!open) { setCompanyToDelete(null); setCompanyDeleteMode(null); } }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{companyDeleteMode === 'deactivate' ? 'Alvállalkozó inaktiválása' : 'Cég törlése'}</DialogTitle>
+              <DialogDescription>
+                {companyDeleteMode === 'deactivate'
+                  ? 'Biztosan inaktiválni szeretnéd ezt az alvállalkozót?'
+                  : 'Biztosan törölni szeretnéd ezt a céget?'}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setCompanyToDelete(null); setCompanyDeleteMode(null); }}>Mégse</Button>
+              <Button variant="destructive" onClick={handleCompanyDeleteConfirm}>
+                {companyDeleteMode === 'deactivate' ? 'Inaktiválás' : 'Törlés'}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

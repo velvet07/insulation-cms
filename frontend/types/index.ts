@@ -23,6 +23,7 @@ export interface StrapiEntity {
 export interface Company extends StrapiEntity {
   name: string;
   type: 'main_contractor' | 'subcontractor';
+  is_active?: boolean;
   tax_number?: string;
   address?: string;
   billing_price_per_sqm?: number;
