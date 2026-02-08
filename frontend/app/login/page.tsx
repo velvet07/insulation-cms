@@ -175,6 +175,15 @@ export default function LoginPage() {
                 >
                   {isLoading ? 'Bejelentkezés...' : 'Bejelentkezés'}
                 </Button>
+
+                <p className="text-center text-sm text-muted-foreground">
+                  <a
+                    href="https://app.thermodesk.eu/forgot-password/"
+                    className="underline underline-offset-2 hover:no-underline"
+                  >
+                    Elfelejtett jelszó?
+                  </a>
+                </p>
               </form>
             </Form>
           </CardContent>
