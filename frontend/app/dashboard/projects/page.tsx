@@ -22,6 +22,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { projectsApi, type ProjectFilters, type PaginationMeta } from '@/lib/api/projects';
 import type { Project, Company } from '@/types';
 import { companiesApi } from '@/lib/api/companies';
@@ -154,6 +162,7 @@ export default function ProjectsPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
 
   // Get user company ID
   const userCompanyId = useMemo(() => {
@@ -382,20 +391,24 @@ export default function ProjectsPage() {
   };
 
   const handleDelete = async (project: Project) => {
-    if (confirm('Biztosan törölni szeretné ezt a projektet?')) {
-      try {
-        // Use documentId if available (Strapi v5), otherwise use id
-        const identifier = project.documentId || project.id;
-        await projectsApi.delete(identifier);
-        // Refetch projects
-        queryClient.invalidateQueries({ queryKey: ['projects'] });
-      } catch (error: any) {
-        console.error('Error deleting project:', error);
-        const errorMessage = error?.message || 'Hiba történt a projekt törlése során.';
-        alert(errorMessage);
-        // Don't redirect on error
-      }
+    try {
+      // Use documentId if available (Strapi v5), otherwise use id
+      const identifier = project.documentId || project.id;
+      await projectsApi.delete(identifier);
+      // Refetch projects
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+    } catch (error: any) {
+      console.error('Error deleting project:', error);
+      const errorMessage = error?.message || 'Hiba történt a projekt törlése során.';
+      alert(errorMessage);
+      // Don't redirect on error
     }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!projectToDelete) return;
+    await handleDelete(projectToDelete);
+    setProjectToDelete(null);
   };
 
   return (
@@ -593,7 +606,7 @@ export default function ProjectsPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleDelete(project)}
+                            onClick={() => setProjectToDelete(project)}
                             title="Törlés"
                           >
                             <Trash2 className="h-4 w-4 text-red-500" />
@@ -694,6 +707,19 @@ export default function ProjectsPage() {
             </div>
           </div>
         )}
+
+        <Dialog open={!!projectToDelete} onOpenChange={(open) => { if (!open) setProjectToDelete(null); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Projekt törlése</DialogTitle>
+              <DialogDescription>Biztosan törölni szeretné ezt a projektet?</DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setProjectToDelete(null)}>Mégse</Button>
+              <Button variant="destructive" onClick={handleDeleteConfirm}>Törlés</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </DashboardLayout>
     </ProtectedRoute>
   );

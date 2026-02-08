@@ -13,6 +13,14 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   Form,
   FormControl,
   FormField,
@@ -115,6 +123,7 @@ export default function ProjectDetailPage() {
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isSubcontractorDialogOpen, setIsSubcontractorDialogOpen] = useState(false);
   const [isRevisionDialogOpen, setIsRevisionDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [revisionNotes, setRevisionNotes] = useState('');
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleStartTime, setScheduleStartTime] = useState('08:00');
@@ -266,9 +275,12 @@ export default function ProjectDetailPage() {
   });
 
   const handleDelete = () => {
-    if (confirm('Biztosan törölni szeretné ezt a projektet?')) {
-      deleteMutation.mutate();
-    }
+    deleteMutation.mutate();
+  };
+
+  const handleDeleteConfirm = () => {
+    handleDelete();
+    setIsDeleteDialogOpen(false);
   };
 
   const [isSavingContract, setIsSavingContract] = useState(false);
@@ -791,7 +803,7 @@ export default function ProjectDetailPage() {
                 </Button>
               )}
               {can('projects', 'delete') && (
-                <Button variant="outline" onClick={handleDelete}>
+                <Button variant="outline" onClick={() => setIsDeleteDialogOpen(true)}>
                   <Trash2 className="mr-2 h-4 w-4" />
                   Törlés
                 </Button>
@@ -1504,6 +1516,19 @@ export default function ProjectDetailPage() {
             </CardContent>
           </Card>
         )}
+
+        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Projekt törlése</DialogTitle>
+              <DialogDescription>Biztosan törölni szeretné ezt a projektet?</DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>Mégse</Button>
+              <Button variant="destructive" onClick={handleDeleteConfirm}>Törlés</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </DashboardLayout>
     </ProtectedRoute>
   );

@@ -107,6 +107,7 @@ export default function SettingsPage() {
   const [userPasswordError, setUserPasswordError] = useState('');
   const [selectedUserCompany, setSelectedUserCompany] = useState<string>('');
   const [userRole, setUserRole] = useState<number | undefined>(undefined);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
   const isAdmin = useMemo(() => isAdminRole(user), [user]);
 
@@ -514,9 +515,13 @@ export default function SettingsPage() {
       alert('Saját felhasználó nem törölhető');
       return;
     }
-    if (confirm('Biztosan törölni szeretnéd?')) {
-      deleteUserMutation.mutate(userItem.id!);
-    }
+    deleteUserMutation.mutate(userItem.id!);
+  };
+
+  const handleUserDeleteConfirm = () => {
+    if (!userToDelete) return;
+    handleUserDelete(userToDelete);
+    setUserToDelete(null);
   };
 
   const companyTypeLabels: Record<string, string> = {
@@ -764,7 +769,7 @@ export default function SettingsPage() {
                         {can('settings', 'manage_users') && (
                           <>
                             <Button variant="ghost" size="sm" onClick={() => { setEditingUser(userItem); setUserUsername(userItem.username || ''); setUserEmail(userItem.email); setSelectedUserCompany((userItem.company as any)?.documentId || (userItem.company as any)?.id?.toString() || ''); setUserRole(typeof userItem.role === 'object' ? (userItem.role as any)?.id : undefined); setUserPassword(''); setUserPasswordConfirm(''); setUserPasswordError(''); setIsUserDialogOpen(true); }}><Edit className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="sm" disabled={userItem.id === user?.id} title={userItem.id === user?.id ? 'Saját felhasználó nem törölhető' : 'Törlés'} onClick={() => handleUserDelete(userItem)}><Trash2 className="h-4 w-4 text-red-600" /></Button>
+                            <Button variant="ghost" size="sm" disabled={userItem.id === user?.id} title={userItem.id === user?.id ? 'Saját felhasználó nem törölhető' : 'Törlés'} onClick={() => setUserToDelete(userItem)}><Trash2 className="h-4 w-4 text-red-600" /></Button>
                           </>
                         )}
                       </TableCell>
@@ -813,6 +818,19 @@ export default function SettingsPage() {
             </div>
             <DialogFooter>
               <Button onClick={editingUser ? handleUserUpdate : handleUserCreate}>Mentés</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!userToDelete} onOpenChange={(open) => { if (!open) setUserToDelete(null); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Felhasználó törlése</DialogTitle>
+              <DialogDescription>Biztosan törölni szeretnéd ezt a felhasználót?</DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setUserToDelete(null)}>Mégse</Button>
+              <Button variant="destructive" onClick={handleUserDeleteConfirm}>Törlés</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
