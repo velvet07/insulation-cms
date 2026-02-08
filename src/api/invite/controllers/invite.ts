@@ -97,7 +97,6 @@ export default {
         return ctx.badRequest('A felhasználónév vagy e-mail cím már használatban van');
       }
 
-      const tempPassword = generateRandomPassword();
       const roleId = await resolveRoleId(strapiInstance, role);
       if (!roleId) {
         return ctx.badRequest('Érvénytelen role');
@@ -108,20 +107,27 @@ export default {
         return ctx.badRequest('Érvénytelen company');
       }
 
-      const userData: Record<string, unknown> = {
+      // Create user directly via db query (not userService) to avoid password requirement
+      const confirmationToken = generateToken();
+      
+      const userData: Record<string, any> = {
         username: usernameValue,
         email: emailValue,
-        password: tempPassword,
         confirmed: false,
         blocked: false,
         role: roleId,
+        confirmationToken,
+        provider: 'local',
       };
 
       if (companyId) {
         userData.company = companyId;
       }
 
-      const created = await userService.add(userData as any);
+      const created = await strapiInstance.db.query(USER_UID).create({
+        data: userData,
+        populate: ['role'],
+      });
 
       const userId = created?.id;
       if (!userId) {
