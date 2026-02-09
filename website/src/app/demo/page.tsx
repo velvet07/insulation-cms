@@ -23,14 +23,6 @@ export default function DemoPage() {
 
     try {
       await submitDemoRequest(formData);
-
-      // Send email notifications
-      await fetch('/api/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'demo', ...formData }),
-      });
-
       setSuccess(true);
       setFormData({
         name: '',

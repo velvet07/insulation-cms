@@ -34,13 +34,6 @@ export default function RootLayout({
   return (
     <html lang="hu" className="dark">
       <head>
-        <script
-          id="Cookiebot"
-          src="https://consent.cookiebot.com/uc.js"
-          data-cbid="f0db53aa-116c-41d2-acfb-5d62855c6555"
-          type="text/javascript"
-          async
-        />
         <link
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
