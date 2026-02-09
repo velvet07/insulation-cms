@@ -252,6 +252,25 @@ export default function AszfPage() {
               meg a Felhasználó által az adott évben fizetett szolgáltatási díj összegét. A Szolgáltató nem felel
               közvetett károkért, elmaradt haszonért vagy következményi károkért.
             </p>
+
+            <h3 className="text-white text-xl font-bold mt-6 mb-3">9.4. Adatmentés és adatvesztésből eredő felelősség kizárása</h3>
+            <p>
+              (1) A Szolgáltató a Szolgáltatás keretében tárolt adatokról saját felelősségére naponta automatikus
+              mentést készít. A mentés a Szolgáltató által meghatározott technikai és szervezeti intézkedések szerint,
+              rendszeres időközönként történik.
+            </p>
+            <p className="mt-4">
+              (2) A Szolgáltató az adatvesztésből eredő károkért – akár a szolgáltatás nyújtásából, akár a program
+              (alkalmazás) működéséből, technikai hiba, meghibásodás vagy bármely más okból következett-e az adatvesztés –
+              felelősséget nem vállal. A Felhasználó kifejezetten tudomásul veszi, hogy az adatvesztésből származó
+              közvetlen vagy közvetett kárért, ideértve az elmaradt haszont és a következményi károkat, a Szolgáltató
+              nem felel.
+            </p>
+            <p className="mt-4">
+              (3) A Felek kikötik, hogy egymással szemben adatvesztésből vagy a Szolgáltatás hibás, hiányos vagy
+              megszakadt működéséből eredő károkért – köztük elmaradt haszon és következményi kár tekintetében –
+              peres vagy egyéb jogérvényesítési eljárást nem indítanak, és ilyen alapú követelést nem érvényesítenek.
+            </p>
           </section>
 
           {/* 10. Adatvédelem */}
