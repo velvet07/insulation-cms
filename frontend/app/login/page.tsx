@@ -184,6 +184,19 @@ export default function LoginPage() {
                     Elfelejtett jelszó?
                   </a>
                 </p>
+
+                <p className="text-center text-sm text-muted-foreground">
+                  A program használatával elfogadom az{' '}
+                  <a
+                    href="https://www.thermodesk.eu/aszf"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline underline-offset-2 hover:no-underline"
+                  >
+                    Általános szerződési feltételeket
+                  </a>
+                  .
+                </p>
               </form>
             </Form>
           </CardContent>
