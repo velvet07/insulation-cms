@@ -1,4 +1,24 @@
 import type { Core } from '@strapi/strapi';
+import PizZip from 'pizzip';
+
+/**
+ * Sablon DOCX-ból kiolvassa, mely aláírás tokenek ({%signature1}, {%signature2}) szerepelnek.
+ * XML tageket stripeli, hogy a Word run-szétbontás ne okozzon problémát.
+ */
+function detectSignatureTokensInDocx(docxBuffer: Buffer): { has1: boolean; has2: boolean } {
+  try {
+    const zip = new PizZip(docxBuffer);
+    const xmlFiles = ['word/document.xml', 'word/header1.xml', 'word/header2.xml', 'word/footer1.xml', 'word/footer2.xml'];
+    let plainText = '';
+    for (const fn of xmlFiles) {
+      const f = zip.file(fn);
+      if (f) plainText += f.asText().replace(/<[^>]+>/g, '') + ' ';
+    }
+    return { has1: /signature1/.test(plainText), has2: /signature2/.test(plainText) };
+  } catch {
+    return { has1: true, has2: true };
+  }
+}
 
 const defaultPhotoCategories = [
   { name: 'Külső képek', order: 0, required: true },
@@ -160,6 +180,52 @@ export default {
       console.log('✅ Material bootstrap completed');
     } catch (error: any) {
       console.error('⚠️  Material content type bootstrap error:', error.message);
+    }
+
+    // Template signature flags auto-detect: parse DOCX for all templates
+    try {
+      const allTemplates = await strapi.entityService.findMany('api::template.template', {
+        populate: ['template_file'],
+      });
+
+      if (allTemplates && allTemplates.length > 0) {
+        const serverUrl = strapi.config.get('server.url') || 'https://cms.emermedia.eu';
+        let updated = 0;
+
+        for (const tpl of allTemplates as any[]) {
+          if (!tpl.template_file || !tpl.template_file.url) continue;
+
+          try {
+            const fileUrl = tpl.template_file.url.startsWith('http')
+              ? tpl.template_file.url
+              : `${serverUrl}${tpl.template_file.url}`;
+
+            const resp = await fetch(fileUrl);
+            if (!resp.ok) continue;
+
+            const buf = Buffer.from(await resp.arrayBuffer());
+            const { has1, has2 } = detectSignatureTokensInDocx(buf);
+
+            if (tpl.require_signature1 !== has1 || tpl.require_signature2 !== has2) {
+              await strapi.entityService.update('api::template.template', tpl.id, {
+                data: { require_signature1: has1, require_signature2: has2 },
+              });
+              updated++;
+              console.log(`📝 Template "${tpl.name}" signature flags: sig1=${has1}, sig2=${has2}`);
+            }
+          } catch (err: any) {
+            console.warn(`⚠️  Template "${tpl.name}" signature detect failed: ${err.message}`);
+          }
+        }
+
+        if (updated > 0) {
+          console.log(`✅ Updated ${updated} template(s) signature flags from DOCX`);
+        } else {
+          console.log('✅ All template signature flags up to date');
+        }
+      }
+    } catch (error: any) {
+      console.warn('⚠️  Template signature bootstrap error:', error.message);
     }
   },
 };

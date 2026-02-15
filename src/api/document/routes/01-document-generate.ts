@@ -25,5 +25,25 @@ export default {
         middlewares: [],
       },
     },
+    {
+      method: 'POST',
+      path: '/documents/sign-pades',
+      handler: 'api::document.document.signPades',
+      config: {
+        auth: false,
+        policies: [],
+        middlewares: [],
+      },
+    },
+    {
+      method: 'GET',
+      path: '/documents/:documentId/verify-signatures',
+      handler: 'api::document.document.verifySignatures',
+      config: {
+        auth: false,
+        policies: [],
+        middlewares: [],
+      },
+    },
   ],
 };

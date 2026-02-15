@@ -30,10 +30,12 @@ export default factories.createCoreController('api::document.document', ({ strap
 
       return ctx.created({ data: document });
     } catch (error: any) {
-      strapi.log.error('Error in generate controller:', error);
-      strapi.log.error('Error message:', error.message);
-      strapi.log.error('Error stack:', error.stack);
-      return ctx.badRequest(error.message || 'Hiba történt a dokumentum generálása során');
+      strapi.log.error('Error in generate controller:', error?.message ?? String(error));
+      if (error?.stack) strapi.log.error('Stack:', error.stack);
+      if (error?.properties?.errors) {
+        strapi.log.error('Docxtemplater errors:', JSON.stringify(error.properties.errors, null, 2));
+      }
+      return ctx.badRequest(error?.message || 'Hiba történt a dokumentum generálása során');
     }
   },
 
@@ -60,6 +62,71 @@ export default factories.createCoreController('api::document.document', ({ strap
     } catch (error: any) {
       strapi.log.error('Error in regenerateWithSignature controller:', error);
       return ctx.badRequest(error.message || 'Hiba történt a dokumentum újragenerálása során');
+    }
+  },
+
+  /**
+   * eIDAS AES PAdES digitális aláírás alkalmazása
+   */
+  async signPades(ctx) {
+    try {
+      const {
+        documentId,
+        signerRole,
+        signerName,
+        signerEmail,
+        companyName,
+        visualSignature,
+      } = ctx.request.body.data || ctx.request.body;
+
+      // Validáció
+      if (!documentId || !signerRole || !signerName || !signerEmail) {
+        return ctx.badRequest('documentId, signerRole, signerName és signerEmail kötelező');
+      }
+      if (!['contractor', 'client'].includes(signerRole)) {
+        return ctx.badRequest('signerRole értéke "contractor" vagy "client" kell legyen');
+      }
+
+      strapi.log.info('PAdES sign request:', { documentId, signerRole, signerName, signerEmail });
+
+      // @ts-ignore
+      const document = await strapi.service('api::document.document').signDocumentPades({
+        documentId,
+        signerRole,
+        signerName,
+        signerEmail,
+        companyName,
+        visualSignature,
+      });
+
+      strapi.log.info('PAdES signature applied successfully:', document.documentId || document.id);
+
+      return { data: document };
+    } catch (error: any) {
+      strapi.log.error('Error in signPades controller:', error);
+      strapi.log.error('Error message:', error.message);
+      return ctx.badRequest(error.message || 'Hiba történt a PAdES aláírás során');
+    }
+  },
+
+  /**
+   * Dokumentum aláírásainak ellenőrzése
+   */
+  async verifySignatures(ctx) {
+    try {
+      const { documentId } = ctx.params;
+
+      if (!documentId) {
+        return ctx.badRequest('documentId kötelező');
+      }
+
+      // @ts-ignore
+      const result = await strapi.service('api::document.document').verifyDocumentSignatures(documentId);
+
+      return { data: result };
+    } catch (error: any) {
+      strapi.log.error('Error in verifySignatures controller:', error);
+      return ctx.badRequest(error.message || 'Hiba történt az aláírás ellenőrzése során');
     }
   },
 

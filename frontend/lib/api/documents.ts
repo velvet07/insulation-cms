@@ -1,5 +1,5 @@
 import { strapiApi, unwrapStrapiResponse, unwrapStrapiArrayResponse } from './strapi';
-import type { Document, StrapiResponse } from '@/types';
+import type { Document, StrapiResponse, PadesSignRequest, SignatureVerificationResult } from '@/types';
 
 export interface DocumentFilters {
   project?: number | string;
@@ -201,6 +201,46 @@ export const documentsApi = {
         const errorMessage = error.response.data?.error?.message ||
           JSON.stringify(error.response.data) ||
           'Hiba történt a dokumentum újragenerálása során';
+        throw new Error(errorMessage);
+      }
+      throw error;
+    }
+  },
+
+  // PAdES digitális aláírás (eIDAS AES)
+  signPades: async (request: PadesSignRequest) => {
+    try {
+      const response = await strapiApi.post<StrapiResponse<Document>>(
+        '/documents/sign-pades',
+        { data: request }
+      );
+      return unwrapStrapiResponse(response);
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { error?: { message?: string } } }; message?: string };
+      if (err.response) {
+        console.error('Strapi API Error:', err.response.data);
+        const errorMessage = err.response.data?.error?.message ||
+          JSON.stringify(err.response.data) ||
+          'Hiba történt a digitális aláírás során';
+        throw new Error(errorMessage);
+      }
+      throw error;
+    }
+  },
+
+  // PAdES aláírás verifikáció
+  verifySignatures: async (documentId: string | number) => {
+    try {
+      const response = await strapiApi.get<StrapiResponse<SignatureVerificationResult>>(
+        `/documents/${documentId}/verify-signatures`
+      );
+      return unwrapStrapiResponse(response);
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { error?: { message?: string } }; status?: number }; message?: string };
+      if (err.response) {
+        console.error('Strapi API Error:', err.response.data);
+        const errorMessage = err.response.data?.error?.message ||
+          'Hiba történt az aláírás ellenőrzése során';
         throw new Error(errorMessage);
       }
       throw error;

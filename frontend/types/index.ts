@@ -143,6 +143,42 @@ export interface ProjectAuditLogEntry {
   module?: string; // Modul neve (pl. 'Szerződés adatok', 'Dokumentumok', 'Fényképek', stb.)
 }
 
+// Digital Signature Types (eIDAS/AES PAdES)
+export interface DigitalSignatureRecord {
+  signer_role: 'contractor' | 'client';
+  signer_name: string;
+  signer_email: string;
+  signed_at: string;
+  certificate_fingerprint: string;
+  document_hash_before_sign: string;
+  visual_signature_included: boolean;
+}
+
+export interface PadesSignRequest {
+  documentId: string | number;
+  signerRole: 'contractor' | 'client';
+  signerName: string;
+  signerEmail: string;
+  companyName?: string;
+  visualSignature?: string; // base64 PNG
+}
+
+export interface SignatureVerificationResult {
+  valid: boolean;
+  signatures: Array<{
+    signer_name: string;
+    signer_email: string;
+    signer_role: string;
+    signed_at: string;
+    certificate_valid: boolean;
+    certificate_fingerprint: string;
+    document_integrity: boolean;
+    visual_signature_included: boolean;
+  }>;
+  document_status: string;
+  verification_date: string;
+}
+
 // Document Types
 export type DocumentType = 
   | 'felmerolap'
@@ -161,8 +197,13 @@ export interface Document extends StrapiEntity {
   file_size?: number;
   signed: boolean;
   requires_signature?: boolean;
+  /** Generáláskor a sablon DOCX alapján; ha nincs (régi doc), a template mezők számítanak. */
+  requires_signature1?: boolean;
+  requires_signature2?: boolean;
   signature_data?: string | { signature1: string; signature2: string }; // Base64 encoded image (single) vagy objektum (dual)
   signed_at?: string;
+  digital_signatures?: DigitalSignatureRecord[];
+  signature_version?: 'legacy_visual' | 'pades_aes';
   project?: Project;
   company?: Company | string | number | null; // Tulajdonos (céges dokumentum); null = nincs beállítva
   uploaded_by?: User;
@@ -209,6 +250,10 @@ export interface Template extends StrapiEntity {
   tokens?: string[]; // Elérhető tokenek listája
   tenant?: Tenant;
   company?: Company | string | number; // Fővállalkozó (main_contractor)
+  /** Ha false, a sablonban nincs {%signature1} – csak ügyfél aláír. Alapértelmezett true. */
+  require_signature1?: boolean;
+  /** Ha false, a sablonban nincs {%signature2} – csak fővállalkozó aláír. Alapértelmezett true. */
+  require_signature2?: boolean;
 }
 
 export const TEMPLATE_TYPE_LABELS: Record<TemplateType, string> = {

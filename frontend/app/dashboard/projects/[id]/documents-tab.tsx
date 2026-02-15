@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useRef, useEffect } from 'react';
+import { useMemo, useState, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
@@ -30,9 +30,10 @@ import {
 } from '@/components/ui/dialog';
 import { documentsApi } from '@/lib/api/documents';
 import { templatesApi } from '@/lib/api/templates';
-import { DOCUMENT_TYPE_LABELS, TEMPLATE_TYPE_LABELS, type Document, type Template, type Project, type Company } from '@/types';
-import { Plus, Download, Trash2, FileText, Loader2, PenTool, X, Check, Upload, Edit } from 'lucide-react';
+import { DOCUMENT_TYPE_LABELS, TEMPLATE_TYPE_LABELS, type Document, type Template, type Project, type Company, type DigitalSignatureRecord, type SignatureVerificationResult } from '@/types';
+import { Plus, Download, Trash2, FileText, Loader2, PenTool, X, Check, Upload, Edit, Shield, ShieldCheck, ShieldAlert, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { SignaturePad, SignaturePadHandle } from '@/components/ui/signature-pad';
+import { SignerIdentityForm } from '@/components/ui/signer-identity-form';
 import dynamic from 'next/dynamic';
 
 // Dynamically import PdfViewer to avoid SSR issues with DOMMatrix
@@ -44,6 +45,22 @@ import { useAuthStore } from '@/lib/store/auth';
 import { createAuditLogEntry, addAuditLogEntry } from '@/lib/utils/audit-log';
 import { projectsApi } from '@/lib/api/projects';
 import { isAdminRole } from '@/lib/utils/user-role';
+
+// PAdES aláírási flow state machine
+type SigningStep =
+  | 'idle'
+  | 'contractor_identity'    // fővállalkozó adatai form
+  | 'contractor_signature'   // fővállalkozó rajzol
+  | 'contractor_signing'     // API hívás folyamatban
+  | 'client_identity'        // ügyfél adatai form
+  | 'client_signature'       // ügyfél rajzol
+  | 'client_signing'         // API hívás folyamatban
+  | 'complete';              // mindkét aláírás kész
+
+interface SignerData {
+  name: string;
+  email: string;
+}
 
 interface DocumentsTabProps {
   project: Project;
@@ -67,6 +84,19 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
   const signature2Ref = useRef<SignaturePadHandle>(null);
   const [hasSignature1, setHasSignature1] = useState(false);
   const [hasSignature2, setHasSignature2] = useState(false);
+
+  // PAdES signing flow state
+  const [signingStep, setSigningStep] = useState<SigningStep>('idle');
+  const [contractorData, setContractorData] = useState<SignerData | null>(null);
+  const [clientData, setClientData] = useState<SignerData | null>(null);
+  const [signingError, setSigningError] = useState<string | null>(null);
+
+  // Verifikáció state
+  const [verifyDialogOpen, setVerifyDialogOpen] = useState(false);
+  const [verifyingDocumentId, setVerifyingDocumentId] = useState<string | number | null>(null);
+  const [verificationResult, setVerificationResult] = useState<SignatureVerificationResult | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
 
   const projectId = project.documentId || project.id;
 
@@ -117,6 +147,14 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
       return templateCompanyId === mainContractorId;
     });
   }, [templates, isAdmin, mainContractorId]);
+
+  const signingTemplate = useMemo(
+    () => (selectedDocumentForSignature ? templates.find((t) => t.type === selectedDocumentForSignature.type) : null),
+    [selectedDocumentForSignature, templates]
+  );
+  // Dokumentumra generáláskor mentve (sablon tokenek alapján); ha nincs (régi doc), template alapján
+  const requireSig1 = selectedDocumentForSignature?.requires_signature1 ?? (signingTemplate?.require_signature1 !== false);
+  const requireSig2 = selectedDocumentForSignature?.requires_signature2 ?? (signingTemplate?.require_signature2 !== false);
 
   const generateMutation = useMutation({
     mutationFn: async (templateIds: string | string[]) => {
@@ -518,17 +556,199 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
     }
   };
 
-  const handleSign = (document: Document) => {
+  const handleSign = useCallback((document: Document) => {
+    const templateForDoc = templates.find((t) => t.type === document.type);
+    const requireSig1 = document.requires_signature1 ?? (templateForDoc?.require_signature1 !== false);
+    const requireSig2 = document.requires_signature2 ?? (templateForDoc?.require_signature2 !== false);
+    if (!requireSig1 && !requireSig2) {
+      return; // Nem jelenítjük meg a gombot, de extra védelmeként
+    }
+
     setSelectedDocumentForSignature(document);
-    
-    // Scroll to signature section
+    setSigningError(null);
+
+    const hasClientSig = document.digital_signatures?.some(
+      (s: DigitalSignatureRecord) => s.signer_role === 'client'
+    );
+    const hasContractorSig = document.digital_signatures?.some(
+      (s: DigitalSignatureRecord) => s.signer_role === 'contractor'
+    );
+
+    if (requireSig1 && !requireSig2) {
+      setSigningStep(hasContractorSig ? 'complete' : 'contractor_identity');
+    } else if (requireSig2 && !requireSig1) {
+      setSigningStep(hasClientSig ? 'complete' : 'client_identity');
+    } else {
+      setSigningStep(hasClientSig ? 'contractor_identity' : 'client_identity');
+    }
+
     setTimeout(() => {
       const signatureSection = window.document.getElementById('signature-section');
       if (signatureSection) {
         signatureSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     }, 100);
-  };
+  }, [templates]);
+
+  const resetSigningFlow = useCallback(() => {
+    setSelectedDocumentForSignature(null);
+    setSigningStep('idle');
+    setContractorData(null);
+    setClientData(null);
+    setSigningError(null);
+    setHasSignature1(false);
+    setHasSignature2(false);
+  }, []);
+
+  // PAdES signing mutation
+  const padesSignMutation = useMutation({
+    mutationFn: async ({
+      documentId,
+      signerRole,
+      signerName,
+      signerEmail,
+      visualSignature,
+    }: {
+      documentId: string | number;
+      signerRole: 'contractor' | 'client';
+      signerName: string;
+      signerEmail: string;
+      visualSignature?: string;
+    }) => {
+      // Cég neve a projektből
+      const companyName =
+        project.company && typeof project.company === 'object'
+          ? (project.company as Company).name
+          : undefined;
+
+      return documentsApi.signPades({
+        documentId,
+        signerRole,
+        signerName,
+        signerEmail,
+        companyName,
+        visualSignature: visualSignature || undefined,
+      });
+    },
+    onSuccess: async (_result: Document, variables: { documentId: string | number; signerRole: 'contractor' | 'client'; signerName: string; signerEmail: string; visualSignature?: string }) => {
+      // Audit log bejegyzés
+      const roleLabel = variables.signerRole === 'contractor' ? 'Fővállalkozó' : 'Ügyfél';
+      const auditLogEntry = createAuditLogEntry(
+        'document_signed',
+        user,
+        `Dokumentum digitálisan aláírva (PAdES/AES): ${selectedDocumentForSignature?.file_name} — Aláíró: ${variables.signerName} (${variables.signerEmail}), Szerep: ${roleLabel}`
+      );
+      auditLogEntry.module = 'Dokumentumok';
+
+      try {
+        const currentProject = await projectsApi.getOne(projectId);
+        const updatedAuditLog = addAuditLogEntry(currentProject.audit_log, auditLogEntry);
+        await projectsApi.update(projectId, { audit_log: updatedAuditLog });
+      } catch (error: unknown) {
+        const err = error as { message?: string };
+        if (!err?.message?.includes('Invalid key audit_log')) {
+          console.error('Error updating audit log:', error);
+        }
+      }
+
+      // Invalidate queries
+      queryClient.invalidateQueries({ queryKey: ['documents', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+
+      // Következő lépés: dokumentumra mentett (sablon tokenek) vagy template alapján
+      const tpl = templates.find((t) => t.type === selectedDocumentForSignature?.type);
+      const requireSig1 = selectedDocumentForSignature?.requires_signature1 ?? (tpl?.require_signature1 !== false);
+      if (variables.signerRole === 'client') {
+        if (requireSig1) {
+          setSigningStep('contractor_identity');
+        } else {
+          setSigningStep('complete');
+          setTimeout(() => resetSigningFlow(), 3000);
+        }
+      } else {
+        setSigningStep('complete');
+        setTimeout(() => resetSigningFlow(), 3000);
+      }
+    },
+    onError: (error: unknown) => {
+      const err = error as { message?: string };
+      console.error('PAdES signing error:', error);
+      setSigningError(err?.message || 'Hiba történt a digitális aláírás során');
+      // Visszalépünk az identitás lépésre
+      if (signingStep === 'client_signing') {
+        setSigningStep('client_identity');
+      } else if (signingStep === 'contractor_signing') {
+        setSigningStep('contractor_identity');
+      }
+    },
+  });
+
+  const handleContractorIdentitySubmit = useCallback(
+    (data: SignerData) => {
+      setContractorData(data);
+      setSigningStep('contractor_signature');
+      setSigningError(null);
+    },
+    []
+  );
+
+  const handleClientIdentitySubmit = useCallback(
+    (data: SignerData) => {
+      setClientData(data);
+      setSigningStep('client_signature');
+      setSigningError(null);
+    },
+    []
+  );
+
+  const handleContractorSign = useCallback(() => {
+    if (!selectedDocumentForSignature || !contractorData) return;
+    const sig = signature1Ref.current?.getSignatureData();
+    const documentId = selectedDocumentForSignature.documentId || selectedDocumentForSignature.id;
+
+    setSigningStep('contractor_signing');
+    padesSignMutation.mutate({
+      documentId,
+      signerRole: 'contractor',
+      signerName: contractorData.name,
+      signerEmail: contractorData.email,
+      visualSignature: sig || undefined,
+    });
+  }, [selectedDocumentForSignature, contractorData, padesSignMutation]);
+
+  const handleClientSign = useCallback(() => {
+    if (!selectedDocumentForSignature || !clientData) return;
+    const sig = signature2Ref.current?.getSignatureData();
+    const documentId = selectedDocumentForSignature.documentId || selectedDocumentForSignature.id;
+
+    setSigningStep('client_signing');
+    padesSignMutation.mutate({
+      documentId,
+      signerRole: 'client',
+      signerName: clientData.name,
+      signerEmail: clientData.email,
+      visualSignature: sig || undefined,
+    });
+  }, [selectedDocumentForSignature, clientData, padesSignMutation]);
+
+  // Verifikáció
+  const handleVerifySignatures = useCallback(async (documentId: string | number) => {
+    setVerifyingDocumentId(documentId);
+    setVerifyDialogOpen(true);
+    setIsVerifying(true);
+    setVerifyError(null);
+    setVerificationResult(null);
+
+    try {
+      const result = await documentsApi.verifySignatures(documentId);
+      setVerificationResult(result);
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      setVerifyError(err?.message || 'Hiba történt az aláírás ellenőrzése során');
+    } finally {
+      setIsVerifying(false);
+    }
+  }, []);
 
   const getDocumentUrl = (document: Document): string | null => {
     // Próbáljuk meg több módon is a fájl URL-t
@@ -556,64 +776,6 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
     const cleanUrl = fileUrl.startsWith('/') ? fileUrl : `/${fileUrl}`;
     const fullUrl = `${strapiUrl}${cleanUrl}`;
     return fullUrl;
-  };
-
-  const saveSignature = async (signatureData: string | { signature1: string; signature2?: string }) => {
-    if (!selectedDocumentForSignature) return;
-
-    try {
-      // Strapi v5-ben a documentId-t használjuk, ha van, különben az id-t
-      const documentId = selectedDocumentForSignature.documentId || selectedDocumentForSignature.id;
-      if (!documentId) {
-        throw new Error('Dokumentum ID nem található');
-      }
-
-      // Újrageneráljuk a dokumentumot az aláírással
-      try {
-        await documentsApi.regenerateWithSignature(documentId, signatureData);
-      } catch (error: any) {
-        // Ha a hiba csak a response formátummal kapcsolatos (ctx.ok), de a művelet sikeres volt,
-        // akkor is invalidáljuk a query-ket, mert a backend valószínűleg elvégezte a műveletet
-        console.warn('Warning during signature regeneration (may have succeeded):', error);
-        // Folytatjuk, hogy invalidáljuk a query-ket
-      }
-
-      // Audit log bejegyzés
-      const auditLogEntry = createAuditLogEntry(
-        'document_signed',
-        user,
-        `Dokumentum aláírva: ${selectedDocumentForSignature.file_name}`
-      );
-      auditLogEntry.module = 'Dokumentumok';
-
-      try {
-        const currentProject = await projectsApi.getOne(projectId);
-        const updatedAuditLog = addAuditLogEntry(currentProject.audit_log, auditLogEntry);
-
-        try {
-          await projectsApi.update(projectId, {
-            audit_log: updatedAuditLog,
-          });
-        } catch (error: any) {
-          if (!error?.message?.includes('Invalid key audit_log')) {
-            console.error('Error updating audit log:', error);
-          }
-        }
-      } catch (error: any) {
-        console.warn('Error updating audit log:', error);
-      }
-
-      // Mindig invalidáljuk a query-ket, hogy frissüljön a UI
-      queryClient.invalidateQueries({ queryKey: ['documents', projectId] });
-      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
-      setSelectedDocumentForSignature(null);
-      // Sikeres aláírás - nincs alert
-    } catch (error: any) {
-      console.error('Error saving signature:', error);
-      // Még hiba esetén is invalidáljuk a query-ket, mert lehet, hogy a backend elvégezte
-      queryClient.invalidateQueries({ queryKey: ['documents', projectId] });
-      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
-    }
   };
 
   const handleDownload = async (document: Document) => {
@@ -991,6 +1153,43 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
                       <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
                         Rendben
                       </span>
+                    ) : document.signature_version === 'pades_aes' ? (
+                      (() => {
+                        const sigCount = document.digital_signatures?.length || 0;
+                        const tplForStatus = templates.find((t) => t.type === document.type);
+                        const req1 = document.requires_signature1 ?? (tplForStatus?.require_signature1 !== false);
+                        const req2 = document.requires_signature2 ?? (tplForStatus?.require_signature2 !== false);
+                        const totalRequired = (req1 ? 1 : 0) + (req2 ? 1 : 0);
+                        const isFullySigned = sigCount >= totalRequired || document.signed;
+                        if (isFullySigned) {
+                          return (
+                            <span
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400"
+                              title={
+                                document.digital_signatures
+                                  ?.map((s: DigitalSignatureRecord) => `${s.signer_name} (${s.signer_email}) — ${new Date(s.signed_at).toLocaleString('hu-HU')}`)
+                                  .join('\n') || ''
+                              }
+                            >
+                              <ShieldCheck className="h-3.5 w-3.5" />
+                              Digitálisan aláírt (AES)
+                            </span>
+                          );
+                        }
+                        return (
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
+                            title={
+                              document.digital_signatures
+                                ?.map((s: DigitalSignatureRecord) => `${s.signer_name} (${s.signer_role === 'contractor' ? 'Fővállalkozó' : 'Ügyfél'})`)
+                                .join(', ') || ''
+                            }
+                          >
+                            <Shield className="h-3.5 w-3.5" />
+                            Részben aláírt ({sigCount}/{totalRequired})
+                          </span>
+                        );
+                      })()
                     ) : document.signed ? (
                       <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
                         Aláírva
@@ -1006,24 +1205,37 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
-                      {!isUploaded && !document.signed && (
+                      {/* Aláírás gomb: csak ha a sablon igényel aláírást, és nincs feltöltött / teljesen aláírt */}
+                      {!isUploaded && !document.signed && (() => {
+                        const tpl = templates.find((t) => t.type === document.type);
+                        const req1 = document.requires_signature1 ?? (tpl?.require_signature1 !== false);
+                        const req2 = document.requires_signature2 ?? (tpl?.require_signature2 !== false);
+                        const needsSign = req1 || req2;
+                        return needsSign ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleSign(document)}
+                            title={
+                              document.signature_version === 'pades_aes' && (document.digital_signatures?.length || 0) > 0
+                                ? 'Fővállalkozó aláírása (folytatás)'
+                                : 'Digitális aláírás (PAdES/AES)'
+                            }
+                          >
+                            <PenTool className="h-4 w-4 text-blue-500" />
+                          </Button>
+                        ) : null;
+                      })()}
+                      {/* Verifikáció gomb: PAdES aláírt dokumentumoknál */}
+                      {document.signature_version === 'pades_aes' && (document.digital_signatures?.length || 0) > 0 && (
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => handleSign(document)}
-                          title="Aláírás"
+                          onClick={() => handleVerifySignatures(document.documentId || document.id)}
+                          title="Aláírás ellenőrzése"
                         >
-                          <PenTool className="h-4 w-4 text-blue-500" />
+                          <ShieldCheck className="h-4 w-4 text-emerald-500" />
                         </Button>
-                      )}
-                      {document.signed && document.signature_data && typeof document.signature_data === 'string' && (
-                        <div className="flex items-center gap-2">
-                          <img 
-                            src={document.signature_data} 
-                            alt="Aláírás" 
-                            className="h-8 w-auto border border-gray-300 rounded"
-                          />
-                        </div>
                       )}
                       <Button
                         variant="ghost"
@@ -1176,146 +1388,358 @@ export function DocumentsTab({ project }: DocumentsTabProps) {
         </div>
       )}
 
-      {/* Aláírás Section (nem Dialog) */}
-      {selectedDocumentForSignature && (
+      {/* PAdES Aláírási Section (State Machine) */}
+      {selectedDocumentForSignature && signingStep !== 'idle' && (
         <div id="signature-section" className="border-t pt-6 mt-6 space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-lg font-semibold">Dokumentum aláírása</h3>
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <Shield className="h-5 w-5 text-blue-600" />
+                Dokumentum digitális aláírása (PAdES/AES)
+              </h3>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                Tekintse meg a dokumentumot, majd ha minden rendben, írja alá az alábbi mezőben.
+                {selectedDocumentForSignature.file_name} — eIDAS AES kompatibilis kriptográfiai aláírás
               </p>
             </div>
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setSelectedDocumentForSignature(null)}
+              onClick={resetSigningFlow}
               className="h-8 w-8"
+              disabled={signingStep === 'contractor_signing' || signingStep === 'client_signing'}
             >
               <X className="h-4 w-4" />
             </Button>
           </div>
 
-          {/* PDF Preview - teljes szélességű */}
+          {/* Progress indicator – csak a sablon által igényelt lépések */}
+          <div className="flex items-center gap-2 text-sm">
+            {requireSig2 && (
+              <>
+                <div className={`flex items-center gap-1 ${
+                  signingStep.startsWith('client') ? 'text-blue-600 font-medium' : 
+                  signingStep === 'contractor_identity' || signingStep === 'contractor_signature' || signingStep === 'contractor_signing' || signingStep === 'complete'
+                    ? 'text-green-600' : 'text-gray-400'
+                }`}>
+                  {signingStep === 'contractor_identity' || signingStep === 'contractor_signature' || signingStep === 'contractor_signing' || signingStep === 'complete' ? (
+                    <CheckCircle2 className="h-4 w-4" />
+                  ) : (
+                    <span className="w-5 h-5 rounded-full border-2 flex items-center justify-center text-xs font-bold">1</span>
+                  )}
+                  Ügyfél
+                </div>
+                {requireSig1 && <div className="w-8 h-px bg-gray-300 dark:bg-gray-600" />}
+              </>
+            )}
+            {requireSig1 && (
+              <div className={`flex items-center gap-1 ${
+                signingStep.startsWith('contractor') ? 'text-blue-600 font-medium' : 
+                signingStep === 'complete' ? 'text-green-600' : 'text-gray-400'
+              }`}>
+                {signingStep === 'complete' ? (
+                  <CheckCircle2 className="h-4 w-4" />
+                ) : (
+                  <span className="w-5 h-5 rounded-full border-2 flex items-center justify-center text-xs font-bold">{requireSig2 ? '2' : '1'}</span>
+                )}
+                Fővállalkozó
+              </div>
+            )}
+          </div>
+
+          {/* Hibaüzenet */}
+          {signingError && (
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-3 flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
+              <p className="text-sm text-red-700 dark:text-red-300">{signingError}</p>
+            </div>
+          )}
+
+          {/* PDF Preview */}
           <div className="border rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-900">
             <div className="p-4 border-b bg-white dark:bg-gray-800">
               <p className="text-sm font-medium">
                 {selectedDocumentForSignature.file_name || 'Dokumentum megtekintése'}
               </p>
             </div>
-              <div className="bg-gray-100 dark:bg-gray-900 p-4" style={{ minHeight: '600px' }}>
-                {(() => {
-                  const documentUrl = getDocumentUrl(selectedDocumentForSignature);
-                  if (!documentUrl) {
-                    return (
-                      <div className="flex items-center justify-center h-full text-gray-500 p-8" style={{ minHeight: '600px' }}>
-                        <p>A dokumentum fájl még nem elérhető.</p>
-                      </div>
-                    );
-                  }
-                  
-                  // PDF megjelenítés react-pdf-vel (PDF.js)
+            <div className="bg-gray-100 dark:bg-gray-900 p-4" style={{ minHeight: '400px' }}>
+              {(() => {
+                const documentUrl = getDocumentUrl(selectedDocumentForSignature);
+                if (!documentUrl) {
                   return (
-                    <PdfViewer url={documentUrl} className="min-h-[600px]" />
+                    <div className="flex items-center justify-center h-full text-gray-500 p-8" style={{ minHeight: '400px' }}>
+                      <p>A dokumentum fájl még nem elérhető.</p>
+                    </div>
                   );
-                })()}
-              </div>
+                }
+                return <PdfViewer url={documentUrl} className="min-h-[400px]" />;
+              })()}
+            </div>
           </div>
 
-          {/* Aláírási mezők */}
-          <div className="max-w-4xl mx-auto space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Kivitelező aláírása */}
-              <div className="border rounded-lg p-6 bg-white dark:bg-gray-800">
-                <h4 className="text-md font-semibold mb-2">Kivitelező aláírása</h4>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                  Az aláírás a sablon {'{%signature1}'} helyére kerül.
-                </p>
-                <SignaturePad
-                  ref={signature1Ref}
-                  onChange={(has) => setHasSignature1(has)}
-                  initialSignature={
-                    selectedDocumentForSignature.signature_data
-                      ? (typeof selectedDocumentForSignature.signature_data === 'object'
-                          ? (selectedDocumentForSignature.signature_data as any).signature1
-                          : selectedDocumentForSignature.signature_data)
-                      : null
-                  }
-                  width={350}
-                  height={100}
-                />
-              </div>
+          {/* Step: Client Identity (ELSŐ lépés) */}
+          {signingStep === 'client_identity' && (
+            <div className="max-w-lg mx-auto">
+              <SignerIdentityForm
+                signerRole="client"
+                defaultName={project.client_name || ''}
+                defaultEmail={project.client_email || ''}
+                onSubmit={handleClientIdentitySubmit}
+                onCancel={resetSigningFlow}
+              />
+            </div>
+          )}
 
-              {/* Ügyfél aláírása */}
+          {/* Step: Client Signature */}
+          {signingStep === 'client_signature' && clientData && (
+            <div className="max-w-2xl mx-auto space-y-4">
               <div className="border rounded-lg p-6 bg-white dark:bg-gray-800">
-                <h4 className="text-md font-semibold mb-2">Ügyfél aláírása</h4>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                  Az aláírás a sablon {'{%signature2}'} helyére kerül.
-                </p>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h4 className="text-md font-semibold">Ügyfél vizuális aláírása</h4>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Aláíró: {clientData.name} ({clientData.email})
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSigningStep('client_identity')}
+                  >
+                    Adatok módosítása
+                  </Button>
+                </div>
                 <SignaturePad
                   ref={signature2Ref}
                   onChange={(has) => setHasSignature2(has)}
-                  initialSignature={
-                    selectedDocumentForSignature.signature_data && typeof selectedDocumentForSignature.signature_data === 'object'
-                      ? (selectedDocumentForSignature.signature_data as any).signature2
-                      : null
-                  }
-                  width={350}
-                  height={100}
+                  width={500}
+                  height={150}
                 />
               </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={resetSigningFlow}>
+                  <X className="mr-2 h-4 w-4" />
+                  Mégse
+                </Button>
+                <Button onClick={handleClientSign}>
+                  <Shield className="mr-2 h-4 w-4" />
+                  Ügyfél aláírása (PAdES)
+                </Button>
+              </div>
             </div>
+          )}
 
-            {/* Közös mentés gomb */}
-            <div className="flex justify-end gap-2 pt-4 border-t">
-              <Button 
-                variant="outline" 
-                onClick={() => {
-                  setSelectedDocumentForSignature(null);
-                  setHasSignature1(false);
-                  setHasSignature2(false);
-                }}
-              >
-                <X className="mr-2 h-4 w-4" />
-                Mégse
-              </Button>
-              <Button
-                onClick={() => {
-                  // Exportáljuk a canvas-okat
-                  const sig1 = signature1Ref.current?.getSignatureData();
-                  const sig2 = signature2Ref.current?.getSignatureData();
-                  
-                  // Elküldjük az aláírás(ok)at - üres aláírás is megengedett
-                  if (sig1 && sig2) {
-                    // Mindkét aláírás megvan
-                    saveSignature({
-                      signature1: sig1,
-                      signature2: sig2,
-                    });
-                  } else if (sig1) {
-                    // Csak az első aláírás
-                    saveSignature(sig1);
-                  } else if (sig2) {
-                    // Csak a második aláírás (signature1 üres, de van signature2)
-                    saveSignature({
-                      signature1: '', // Placeholder
-                      signature2: sig2,
-                    });
-                  } else {
-                    // Nincs aláírás egyáltalán - warning, de folytatás
-                    const confirmed = confirm('Nincs aláírás a dokumentumon. Folytatja?');
-                    if (confirmed) {
-                      saveSignature(''); // Üres aláírás
-                    }
-                  }
-                }}
-              >
-                Dokumentum aláírása
+          {/* Step: Client Signing (loading) */}
+          {signingStep === 'client_signing' && (
+            <div className="flex flex-col items-center justify-center py-12 space-y-4">
+              <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Ügyfél digitális aláírása folyamatban...
+              </p>
+              <p className="text-xs text-gray-400">
+                Tanúsítvány generálás → PDF hash → PAdES aláírás alkalmazása
+              </p>
+            </div>
+          )}
+
+          {/* Step: Contractor Identity (MÁSODIK lépés) */}
+          {signingStep === 'contractor_identity' && (
+            <div className="max-w-lg mx-auto space-y-4">
+              {/* Ügyfél kész jelzés */}
+              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md p-3 flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                <p className="text-sm text-green-700 dark:text-green-300">
+                  Ügyfél aláírása kész. Most a fővállalkozó következik.
+                </p>
+              </div>
+              <SignerIdentityForm
+                signerRole="contractor"
+                defaultName={user?.name || user?.username || ''}
+                defaultEmail={user?.email || ''}
+                onSubmit={handleContractorIdentitySubmit}
+                onCancel={resetSigningFlow}
+              />
+            </div>
+          )}
+
+          {/* Step: Contractor Signature */}
+          {signingStep === 'contractor_signature' && contractorData && (
+            <div className="max-w-2xl mx-auto space-y-4">
+              <div className="border rounded-lg p-6 bg-white dark:bg-gray-800">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h4 className="text-md font-semibold">Fővállalkozó vizuális aláírása</h4>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Aláíró: {contractorData.name} ({contractorData.email})
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSigningStep('contractor_identity')}
+                  >
+                    Adatok módosítása
+                  </Button>
+                </div>
+                <SignaturePad
+                  ref={signature1Ref}
+                  onChange={(has) => setHasSignature1(has)}
+                  width={500}
+                  height={150}
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={resetSigningFlow}>
+                  <X className="mr-2 h-4 w-4" />
+                  Mégse
+                </Button>
+                <Button onClick={handleContractorSign}>
+                  <Shield className="mr-2 h-4 w-4" />
+                  Fővállalkozó aláírása (PAdES)
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Step: Contractor Signing (loading) */}
+          {signingStep === 'contractor_signing' && (
+            <div className="flex flex-col items-center justify-center py-12 space-y-4">
+              <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Fővállalkozó digitális aláírása folyamatban...
+              </p>
+              <p className="text-xs text-gray-400">
+                Tanúsítvány generálás → PDF hash → PAdES aláírás alkalmazása
+              </p>
+            </div>
+          )}
+
+          {/* Step: Complete */}
+          {signingStep === 'complete' && (
+            <div className="flex flex-col items-center justify-center py-12 space-y-4">
+              <div className="p-4 rounded-full bg-green-100 dark:bg-green-900/30">
+                <ShieldCheck className="h-10 w-10 text-green-600 dark:text-green-400" />
+              </div>
+              <h4 className="text-lg font-semibold text-green-700 dark:text-green-400">
+                Mindkét fél digitálisan aláírta a dokumentumot
+              </h4>
+              <p className="text-sm text-gray-500 dark:text-gray-400 text-center max-w-md">
+                A dokumentum eIDAS AES kompatibilis PAdES aláírásokkal van ellátva.
+                Az aláírások ellenőrizhetők Adobe Acrobat Reader-ben.
+              </p>
+              <Button variant="outline" onClick={resetSigningFlow}>
+                Bezárás
               </Button>
             </div>
-          </div>
+          )}
         </div>
       )}
+
+      {/* Verifikáció Dialog */}
+      <Dialog open={verifyDialogOpen} onOpenChange={setVerifyDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-emerald-500" />
+              Aláírás ellenőrzése
+            </DialogTitle>
+            <DialogDescription>
+              A dokumentumon lévő digitális aláírások verifikációja
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {isVerifying && (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-blue-500 mr-3" />
+                <span className="text-sm text-gray-500">Ellenőrzés folyamatban...</span>
+              </div>
+            )}
+
+            {verifyError && (
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-3 flex items-start gap-2">
+                <ShieldAlert className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
+                <p className="text-sm text-red-700 dark:text-red-300">{verifyError}</p>
+              </div>
+            )}
+
+            {verificationResult && (
+              <>
+                {/* Összesítő */}
+                <div className={`rounded-md p-4 flex items-center gap-3 ${
+                  verificationResult.valid
+                    ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                    : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+                }`}>
+                  {verificationResult.valid ? (
+                    <CheckCircle2 className="h-6 w-6 text-green-500" />
+                  ) : (
+                    <ShieldAlert className="h-6 w-6 text-red-500" />
+                  )}
+                  <div>
+                    <p className={`font-medium text-sm ${
+                      verificationResult.valid ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'
+                    }`}>
+                      {verificationResult.valid
+                        ? 'Dokumentum integritás: Rendben'
+                        : 'Dokumentum módosítva vagy érvénytelen aláírás!'}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {verificationResult.signatures.length} aláírás ellenőrizve
+                    </p>
+                  </div>
+                </div>
+
+                {/* Aláírások listája */}
+                <div className="space-y-3">
+                  {verificationResult.signatures.map((sig, idx) => (
+                    <div
+                      key={idx}
+                      className="border rounded-md p-3 space-y-2"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-sm">{sig.signer_name}</span>
+                        {sig.certificate_valid && sig.document_integrity ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-green-600">
+                            <CheckCircle2 className="h-3 w-3" /> Érvényes
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-xs text-red-600">
+                            <ShieldAlert className="h-3 w-3" /> Érvénytelen
+                          </span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500">
+                        <span>Szerepkör:</span>
+                        <span>{sig.signer_role === 'client' ? 'Ügyfél' : sig.signer_role === 'contractor' ? 'Fővállalkozó' : sig.signer_role}</span>
+                        <span>E-mail:</span>
+                        <span className="font-mono">{sig.signer_email}</span>
+                        <span>Aláírva:</span>
+                        <span>{sig.signed_at ? new Date(sig.signed_at).toLocaleString('hu-HU') : '-'}</span>
+                        <span>Tanúsítvány:</span>
+                        <span>{sig.certificate_valid ? '✓ Érvényes' : '✗ Érvénytelen'}</span>
+                        <span>Integritás:</span>
+                        <span>{sig.document_integrity ? '✓ Rendben' : '✗ Módosított!'}</span>
+                        {sig.certificate_fingerprint && (
+                          <>
+                            <span>Ujjlenyomat:</span>
+                            <span className="font-mono text-[10px] break-all">{sig.certificate_fingerprint.substring(0, 24)}...</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setVerifyDialogOpen(false)}>
+              Bezárás
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

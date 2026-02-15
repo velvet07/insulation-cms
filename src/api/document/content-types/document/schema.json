@@ -44,6 +44,12 @@
       "type": "boolean",
       "default": true
     },
+    "requires_signature1": {
+      "type": "boolean"
+    },
+    "requires_signature2": {
+      "type": "boolean"
+    },
     "signature_data": {
       "type": "json"
     },
@@ -71,6 +77,18 @@
       "type": "relation",
       "relation": "manyToOne",
       "target": "plugin::users-permissions.user"
+    },
+    "digital_signatures": {
+      "type": "json",
+      "default": []
+    },
+    "signature_version": {
+      "type": "enumeration",
+      "enum": [
+        "legacy_visual",
+        "pades_aes"
+      ],
+      "default": "legacy_visual"
     }
   }
 }

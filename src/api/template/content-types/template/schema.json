@@ -50,6 +50,58 @@
       "type": "media",
       "multiple": false,
       "required": false
+    },
+    "signature1_anchor": {
+      "type": "enumeration",
+      "enum": ["bottom-left", "bottom-right", "bottom-center", "custom"],
+      "default": "bottom-right"
+    },
+    "signature1_page": {
+      "type": "integer",
+      "default": -1
+    },
+    "signature1_x": {
+      "type": "float"
+    },
+    "signature1_y": {
+      "type": "float",
+      "default": 80
+    },
+    "signature2_anchor": {
+      "type": "enumeration",
+      "enum": ["bottom-left", "bottom-right", "bottom-center", "custom"],
+      "default": "bottom-right"
+    },
+    "signature2_page": {
+      "type": "integer",
+      "default": -1
+    },
+    "signature2_x": {
+      "type": "float"
+    },
+    "signature2_y": {
+      "type": "float",
+      "default": 80
+    },
+    "signature1_max_width": {
+      "type": "float"
+    },
+    "signature1_max_height": {
+      "type": "float"
+    },
+    "signature2_max_width": {
+      "type": "float"
+    },
+    "signature2_max_height": {
+      "type": "float"
+    },
+    "require_signature1": {
+      "type": "boolean",
+      "default": true
+    },
+    "require_signature2": {
+      "type": "boolean",
+      "default": true
     }
   }
 }

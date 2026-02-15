@@ -1,61 +1,50 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Document, Page, pdfjs } from 'react-pdf';
-
-// React-pdf stílusok importálása
-import 'react-pdf/dist/Page/TextLayer.css';
-import 'react-pdf/dist/Page/AnnotationLayer.css';
-
-// PDF.js worker beállítása - react-pdf által használt verzióval
-if (typeof window !== 'undefined') {
-  // Használjuk a react-pdf által használt pdfjs-dist verzióját
-  pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
-}
 
 interface PdfViewerProps {
   url: string;
   className?: string;
 }
 
+/**
+ * PDF megjelenítő — a böngésző beépített PDF viewer-jét használja iframe-ben,
+ * a Next.js API proxy-n keresztül (CORS-mentes, qpdf titkosítást is kezeli).
+ */
 export function PdfViewer({ url, className = '' }: PdfViewerProps) {
-  const [numPages, setNumPages] = useState<number | null>(null);
-  const [pageNumber, setPageNumber] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [scale, setScale] = useState(1.5);
+  const [error, setError] = useState(false);
 
-  // Memoizált options a felesleges újratöltés elkerülésére
-  const documentOptions = useMemo(() => ({
-    cMapUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/cmaps/`,
-    cMapPacked: true,
-  }), []);
+  // Proxy URL: a szerver oldalon tölti le a PDF-et (nincs CORS, nincs encryption probléma)
+  // A fájlnév az URL path-ban van, hogy a böngésző PDF viewer azt jelenítse meg címként
+  const proxyUrl = useMemo(() => {
+    if (!url) return '';
+    const segments = url.split('/');
+    const filename = segments[segments.length - 1] || 'document.pdf';
+    return `/api/pdf-proxy/${encodeURIComponent(filename)}?url=${encodeURIComponent(url)}`;
+  }, [url]);
 
-  function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
-    setNumPages(numPages);
-    setLoading(false);
-    setError(null);
-  }
-
-  function onDocumentLoadError(error: Error) {
-    console.error('PDF load error:', error);
-    setError('A PDF nem tölthető be. Kérjük, próbálja meg letölteni.');
-    setLoading(false);
+  if (!url) {
+    return (
+      <div className={`flex items-center justify-center h-96 ${className}`}>
+        <p className="text-gray-500">Nincs PDF URL megadva.</p>
+      </div>
+    );
   }
 
   return (
     <div className={`w-full ${className}`}>
-      {loading && (
-        <div className="flex items-center justify-center h-96">
+      {loading && !error && (
+        <div className="flex items-center justify-center h-24">
           <p className="text-gray-500">PDF betöltése...</p>
         </div>
       )}
       
       {error && (
         <div className="flex flex-col items-center justify-center h-96 p-8">
-          <p className="text-red-500 mb-4">{error}</p>
+          <p className="text-red-500 mb-4">A PDF nem tölthető be az előnézetben.</p>
           <a
-            href={url}
+            href={proxyUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="text-blue-600 underline"
@@ -65,74 +54,17 @@ export function PdfViewer({ url, className = '' }: PdfViewerProps) {
         </div>
       )}
 
-      <div className="flex flex-col items-center w-full">
-        {numPages && numPages > 1 && (
-          <div className="mb-4 flex items-center gap-4">
-            <button
-              onClick={() => setPageNumber((prev) => Math.max(1, prev - 1))}
-              disabled={pageNumber <= 1}
-              className="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded disabled:opacity-50"
-            >
-              Előző
-            </button>
-            <span className="text-sm text-gray-600 dark:text-gray-400">
-              {pageNumber} / {numPages}
-            </span>
-            <button
-              onClick={() => setPageNumber((prev) => Math.min(numPages, prev + 1))}
-              disabled={pageNumber >= numPages}
-              className="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded disabled:opacity-50"
-            >
-              Következő
-            </button>
-            <div className="flex items-center gap-2 ml-4">
-              <button
-                onClick={() => setScale((prev) => Math.max(0.5, prev - 0.1))}
-                className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 rounded"
-              >
-                -
-              </button>
-              <span className="text-sm text-gray-600 dark:text-gray-400 min-w-[60px] text-center">
-                {Math.round(scale * 100)}%
-              </span>
-              <button
-                onClick={() => setScale((prev) => Math.min(3, prev + 0.1))}
-                className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 rounded"
-              >
-                +
-              </button>
-            </div>
-          </div>
-        )}
-
-        {!error && (
-          <div className="w-full border rounded-lg overflow-auto bg-gray-50 dark:bg-gray-900 flex justify-center p-4" style={{ maxHeight: '80vh' }}>
-            <Document
-              file={url}
-              onLoadSuccess={onDocumentLoadSuccess}
-              onLoadError={onDocumentLoadError}
-              loading={
-                <div className="flex items-center justify-center h-96">
-                  <p className="text-gray-500">PDF betöltése...</p>
-                </div>
-              }
-              options={documentOptions}
-            >
-              {!loading && (
-                <Page
-                  key={`page-${pageNumber}-${scale}`}
-                  pageNumber={pageNumber}
-                  scale={scale}
-                  renderTextLayer={true}
-                  renderAnnotationLayer={true}
-                  className="shadow-lg mx-auto"
-                  width={undefined}
-                />
-              )}
-            </Document>
-          </div>
-        )}
-      </div>
+      <iframe
+        src={proxyUrl}
+        className={`w-full border-0 rounded-lg bg-gray-50 dark:bg-gray-900 ${loading ? 'h-0 overflow-hidden' : ''}`}
+        style={{ minHeight: loading ? 0 : '600px', height: loading ? 0 : '80vh' }}
+        title="PDF előnézet"
+        onLoad={() => setLoading(false)}
+        onError={() => {
+          setError(true);
+          setLoading(false);
+        }}
+      />
     </div>
   );
 }
