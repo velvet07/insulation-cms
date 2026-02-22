@@ -1,95 +1,74 @@
 # ThermoDesk
 
-Komplex CRM rendszer padlásfödém szigetelési projektek kezelésére.
+Full-stack CRM system for managing insulation projects — scheduling, material tracking, document generation, billing, and role-based access for contractors and subcontractors.
 
-## 🚀 Tech Stack
+**Portfolio project** — built as a real-world demonstration of a complete business application.
+
+## Tech Stack
 
 - **Frontend:** Next.js 16 (App Router) + TypeScript + Tailwind CSS + shadcn/ui
-- **Backend:** Strapi CMS (Self-Hosted)
-- **Deployment:** Self-Hosted VPS (PM2 + Nginx)
+- **Backend:** Strapi 5 CMS (headless, self-hosted)
+- **Database:** PostgreSQL
+- **Deployment:** VPS (PM2 + Nginx)
 
-## 📁 Projekt Struktúra
+## Features
+
+- Project lifecycle management (draft → scheduled → in progress → completed)
+- Role-based access control (admin, main contractor, subcontractor)
+- Document generation from DOCX templates (contracts, survey forms)
+- Material inventory tracking with per-contractor balances
+- Photo management with categorized uploads
+- Calendar events tied to projects
+- Billing records and project-level financials
+- Excel project import
+- ZIP export with structured folder layout
+- Hungarian locale (HUF currency, date formats, UI language)
+
+## Project Structure
 
 ```
 insulation-crm/
 ├── frontend/              # Next.js frontend
-│   ├── app/              # App Router pages
-│   ├── components/        # React komponensek
-│   ├── lib/              # Utilities, API clients
-│   └── types/            # TypeScript típusok
-├── src/                   # Strapi backend (self-hosted)
-│   ├── api/              # Strapi content types
-│   └── ...
-├── strapi-export/         # Strapi API fájlok (schemas, routes, controllers, services)
-├── docs/                  # Dokumentáció
-└── deploy.sh              # Deployment script
+│   ├── app/               # App Router pages (dashboard, projects, etc.)
+│   ├── components/        # React components (shadcn/ui based)
+│   ├── lib/               # API clients, utilities, hooks
+│   └── types/             # TypeScript type definitions
+├── src/                   # Strapi backend
+│   ├── api/               # Content types, controllers, routes, services
+│   └── extensions/        # Users-permissions customizations
+├── config/                # Strapi configuration (database, server, plugins)
+├── public/                # Static assets
+└── database/              # SQLite (dev) / PostgreSQL (prod)
 ```
 
-## 🛠️ Development Setup
+## Local Development
 
-### Előfeltételek
+### Prerequisites
 
 - Node.js 20+
-- npm vagy yarn
+- npm
 
-### Lokális Fejlesztés
-
-#### Frontend
+### Setup
 
 ```bash
-# 1. Projekt klónozása
+# Clone
 git clone https://github.com/velvet07/insulation-cms.git
 cd insulation-cms
 
-# 2. Frontend függőségek telepítése
+# Backend (Strapi)
+npm install
+npm run develop
+# → http://localhost:1337/admin
+
+# Frontend (Next.js)
 cd frontend
 npm install
-
-# 3. Environment változók beállítása
 cp .env.example .env.local
-# Szerkeszd a .env.local fájlt és add hozzá a Strapi API token-t
-
-# 4. Development szerver indítása
+# Edit .env.local with your Strapi API URL and token
 npm run dev
+# → http://localhost:3000
 ```
 
-A frontend elérhető: `http://localhost:3000`
+## License
 
-#### Strapi Backend
-
-```bash
-# Strapi development szerver
-npm run develop
-# vagy
-npm run dev
-```
-
-A Strapi admin elérhető: `http://localhost:1337/admin`
-
-## 📦 Deployment
-
-Részletes deployment útmutató: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
-
-### Gyors Deploy
-
-```bash
-# Szerveren
-./deploy.sh
-```
-
-## 📚 Dokumentáció
-
-- [Teljes Projekt Terv](docs/PADLASFODERM_CRM_PROJECT_PLAN.md)
-- [Fejlesztési Útmutató](docs/DEVELOPMENT_GUIDE.md)
-- [Deployment Guide](docs/DEPLOYMENT.md)
-- [Strapi Setup](docs/STRAPI_STATUS.md)
-
-## 🔗 Linkek
-
-- **Strapi Backend:** https://cms.emermedia.eu
-- **Strapi Admin:** https://cms.emermedia.eu/admin
-- **Frontend (Production):** https://app.emermedia.eu (vagy más domain)
-
-## 📝 License
-
-Private project
+MIT
