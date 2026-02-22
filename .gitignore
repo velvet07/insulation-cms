@@ -40,6 +40,8 @@ next-env.d.ts
 # IDE
 .vscode/
 .idea/
+.cursor/
+.claude/
 *.swp
 *.swo
 *~
@@ -70,7 +72,6 @@ logs/
 .pm2/
 
 # Strapi
-strapi-export/node_modules/
 license.txt
 exports
 .strapi
@@ -103,3 +104,22 @@ nbproject
 .eslintcache
 
 strapi_backup/
+
+# Internal docs, templates, guides
+docs/
+CLAUDE.MD
+GIT_SETUP.md
+VERCEL_SETUP.md
+
+# Deployment & webhook
+deploy.sh
+webhook/
+
+# Debug/test scripts
+check-*.sh
+check-*.js
+test-*.js
+
+# Assets & exports
+logo/
+strapi-export/
